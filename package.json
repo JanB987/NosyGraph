@@ -1,0 +1,14 @@
+{
+  "name": "nosygraph",
+  "version": "0.2.0",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.js",
+    "build": "node esbuild.config.js production"
+  },
+  "devDependencies": {
+    "esbuild": "^0.19.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

@@ -1,0 +1,66 @@
+import { TFile } from "obsidian";
+import {
+  DEFAULT_GROUP_PROPERTY_KEYS,
+  type GroupPropertyKeys,
+  normalizeGroupPropertyKeys,
+  readConfiguredProperty
+} from "./NoteTypePropertyKeys";
+
+export type GroupOperator = "equals" | "contains" | "exists";
+
+export class O3GraphGroup {
+  file: TFile;
+  property: string;
+  operator: GroupOperator;
+  value: unknown;
+  color: string;
+  colorExplicit: boolean;
+  icon: string;
+
+  constructor(file: TFile, fm: any, propertyKeys: Partial<GroupPropertyKeys> = DEFAULT_GROUP_PROPERTY_KEYS) {
+    const keys = normalizeGroupPropertyKeys(propertyKeys);
+    const read = (key: keyof GroupPropertyKeys): unknown =>
+      readConfiguredProperty(fm, keys, DEFAULT_GROUP_PROPERTY_KEYS, key);
+    this.file = file;
+    this.property = String(read("property") ?? "").trim();
+    this.operator = (read("operator") ?? "equals") as GroupOperator;
+    this.value = read("value");
+    const rawColor = read("color");
+    this.colorExplicit = rawColor !== undefined && rawColor !== null && String(rawColor).trim() !== "";
+    this.color = String(rawColor ?? "#888888").trim() || "#888888";
+    this.icon = String(read("icon") ?? "").trim();
+  }
+
+  matches(frontmatter: any): boolean {
+    if (!frontmatter) return false;
+
+    const propValue = this.readPropertyValue(frontmatter);
+
+    switch (this.operator) {
+      case "exists":
+        return propValue !== undefined;
+      case "equals":
+        return propValue === this.value;
+      case "contains":
+        if (Array.isArray(propValue)) {
+          return propValue.includes(this.value);
+        }
+        if (typeof propValue === "string") {
+          return propValue.includes(String(this.value ?? ""));
+        }
+        return false;
+      default:
+        return false;
+    }
+  }
+
+  private readPropertyValue(frontmatter: Record<string, unknown>): unknown {
+    const target = String(this.property ?? "").trim().toLowerCase();
+    for (const [key, value] of Object.entries(frontmatter ?? {})) {
+      if (String(key ?? "").trim().toLowerCase() === target) {
+        return value;
+      }
+    }
+    return undefined;
+  }
+}

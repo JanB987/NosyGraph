@@ -1,4 +1,5 @@
 node_modules/
+Bases - Graph-View/
 data.json
 *.map
 .DS_Store

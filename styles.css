@@ -1,0 +1,94 @@
+/*! /* @settings
+name: NosyGraph
+id: nosygraph
+settings:
+  -
+    id: o3-graph-lens-fill
+    title: Graph lens fill
+    description: Default opaque fill color for graph lenses without explicit graphContainer_Color or inherited group color.
+    type: variable-color
+    format: hex
+    default: '#24324a'
+  -
+    id: o3-graph-lens-opacity
+    title: Graph lens body opacity
+    description: Opacity of the graph lens body fill. Lower values make objects behind lenses more visible.
+    type: variable-number-slider
+    default: 0.9
+    min: 0
+    max: 1
+    step: 0.05
+  -
+    id: o3-graph-lens-border
+    title: Graph lens border
+    description: Default border color for graph lenses without explicit graphContainer_Color or inherited group color.
+    type: variable-color
+    format: hex
+    default: '#88a6ff'
+  -
+    id: o3-graph-lens-titlebar
+    title: Graph lens title bar
+    description: Default opaque title bar color for graph lenses without explicit graphContainer_Color or inherited group color.
+    type: variable-color
+    format: hex
+    default: '#2f4270'
+  -
+    id: o3-graph-lens-text
+    title: Graph lens text
+    description: Default text and label color for graph lenses without explicit graphContainer_Color or inherited group color.
+    type: variable-color
+    format: hex
+    default: '#ffffff'
+  -
+    id: o3-graph-lens-connector
+    title: Graph lens connector
+    description: Default connector line color for graph lenses without explicit graphContainer_Color or inherited group color.
+    type: variable-color
+    format: hex
+    default: '#88a6ff'
+  -
+    id: o3-graph-lens-button-fill
+    title: Graph lens button fill
+    description: Default fill color for graph lens close and maximize buttons.
+    type: variable-color
+    format: hex
+    default: '#3f5590'
+  -
+    id: o3-graph-lens-button-border
+    title: Graph lens button border
+    description: Default border color for graph lens close and maximize buttons.
+    type: variable-color
+    format: hex
+    default: '#c8d6ff'
+  -
+    id: o3-graph-lens-button-icon
+    title: Graph lens button icon
+    description: Default icon color for graph lens close and maximize buttons.
+    type: variable-color
+    format: hex
+    default: '#ffffff'
+*/
+
+body {
+  --o3-graph-lens-fill: #24324a;
+  --o3-graph-lens-opacity: 0.9;
+  --o3-graph-lens-border: #88a6ff;
+  --o3-graph-lens-titlebar: #2f4270;
+  --o3-graph-lens-text: #ffffff;
+  --o3-graph-lens-connector: #88a6ff;
+  --o3-graph-lens-button-fill: #3f5590;
+  --o3-graph-lens-button-border: #c8d6ff;
+  --o3-graph-lens-button-icon: #ffffff;
+}
+
+.o3-node-badge {
+  position: absolute;
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--interactive-accent);
+  color: white;
+  border-radius: 10px;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 10000;
+}
