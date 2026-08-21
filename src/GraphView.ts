@@ -1,4 +1,5 @@
 import { FileView, Menu, Notice, WorkspaceLeaf, type ViewStateResult, parsePropertyId, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
+import { setStyle } from "./domStyle";
 import {
   DIRECTION_GRAPH_LAYOUT_ID,
   FORCE_GRAPH_LAYOUT_ID,
@@ -708,8 +709,8 @@ export class BasesGraphView extends FileView {
     this.mountViewShell();
     this.installHeaderFileMenuHandlers();
     this.attachResizeObserver();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         this.initializeGraphAfterLayout();
       });
     });
@@ -899,7 +900,7 @@ export class BasesGraphView extends FileView {
     const width = this.viewContainer.clientWidth;
     const height = this.viewContainer.clientHeight;
     if (!width || !height) {
-      requestAnimationFrame(() => this.initializeGraphAfterLayout());
+      window.requestAnimationFrame(() => this.initializeGraphAfterLayout());
       return;
     }
 
@@ -1009,7 +1010,7 @@ export class BasesGraphView extends FileView {
   }
 
   private nextAnimationFrame(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
   }
 
   private delay(ms: number): Promise<void> {
@@ -2122,13 +2123,13 @@ export class BasesGraphView extends FileView {
     host.empty();
 
     const shell = host.createDiv();
-    shell.style.display = "grid";
-    shell.style.gridTemplateRows = "1fr";
-    shell.style.height = "100%";
+    setStyle(shell, "display", "grid");
+    setStyle(shell, "gridTemplateRows", "1fr");
+    setStyle(shell, "height", "100%");
 
-    this.viewContainer.style.position = "relative";
-    this.viewContainer.style.minHeight = "260px";
-    this.viewContainer.style.height = "100%";
+    setStyle(this.viewContainer, "position", "relative");
+    setStyle(this.viewContainer, "minHeight", "260px");
+    setStyle(this.viewContainer, "height", "100%");
     this.viewContainer.removeEventListener("dragover", this.onGraphDragOverBound);
     this.viewContainer.removeEventListener("drop", this.onGraphDropBound);
     this.viewContainer.addEventListener("dragover", this.onGraphDragOverBound);
@@ -2143,17 +2144,17 @@ export class BasesGraphView extends FileView {
     container.empty();
 
     const title = container.createDiv({ text: "Root Nodes" });
-    title.style.fontWeight = "600";
+    setStyle(title, "fontWeight", "600");
 
     const row = container.createDiv();
-    row.style.display = "flex";
-    row.style.gap = "8px";
+    setStyle(row, "display", "flex");
+    setStyle(row, "gap", "8px");
 
     const input = row.createEl("input", {
       type: "text",
       placeholder: "Type a note name or linkpath"
     });
-    input.style.flex = "1";
+    setStyle(input, "flex", "1");
     input.addEventListener("keydown", (evt) => {
       if (evt.key === "Enter") {
         evt.preventDefault();
@@ -2167,8 +2168,8 @@ export class BasesGraphView extends FileView {
     });
 
     const list = container.createDiv();
-    list.style.display = "grid";
-    list.style.gap = "4px";
+    setStyle(list, "display", "grid");
+    setStyle(list, "gap", "4px");
     this.rootInputEl = input;
     this.rootListEl = list;
 
@@ -2178,15 +2179,15 @@ export class BasesGraphView extends FileView {
 
   private renderLinkTypeMenuSections(container: HTMLElement): void {
     const panel = container.createDiv();
-    panel.style.display = "grid";
-    panel.style.gap = "8px";
+    setStyle(panel, "display", "grid");
+    setStyle(panel, "gap", "8px");
 
     const headerRow = panel.createDiv();
-    headerRow.style.display = "flex";
-    headerRow.style.justifyContent = "space-between";
-    headerRow.style.alignItems = "center";
+    setStyle(headerRow, "display", "flex");
+    setStyle(headerRow, "justifyContent", "space-between");
+    setStyle(headerRow, "alignItems", "center");
     const title = headerRow.createDiv({ text: "LinkTypes" });
-    title.style.fontWeight = "600";
+    setStyle(title, "fontWeight", "600");
     const createButton = headerRow.createEl("button", { text: "Create New" });
     createButton.addEventListener("click", () => {
       this.openCreateLinkTypeModal();
@@ -2231,8 +2232,8 @@ export class BasesGraphView extends FileView {
 
     if (selected.length === 0 && unselected.length === 0) {
       const empty = panel.createDiv({ text: "No link types found." });
-      empty.style.opacity = "0.7";
-      empty.style.fontSize = "12px";
+      setStyle(empty, "opacity", "0.7");
+      setStyle(empty, "fontSize", "12px");
       return;
     }
 
@@ -2247,12 +2248,12 @@ export class BasesGraphView extends FileView {
       const visibleActive = visibleSelectedByPath.has(String(linkType.file?.path ?? "").trim());
 
       const row = host.createDiv();
-      row.style.display = "grid";
-      row.style.gridTemplateColumns = options.showPropertyColumn ? "auto auto auto 1fr 1fr" : "auto auto auto 1fr";
-      row.style.gap = "8px";
-      row.style.alignItems = "center";
-      row.style.padding = "4px 0";
-      row.style.borderBottom = "1px solid var(--background-modifier-border-hover)";
+      setStyle(row, "display", "grid");
+      setStyle(row, "gridTemplateColumns", options.showPropertyColumn ? "auto auto auto 1fr 1fr" : "auto auto auto 1fr");
+      setStyle(row, "gap", "8px");
+      setStyle(row, "alignItems", "center");
+      setStyle(row, "padding", "4px 0");
+      setStyle(row, "borderBottom", "1px solid var(--background-modifier-border-hover)");
 
       const checkbox = row.createEl("input", { type: "checkbox" });
       checkbox.checked = active;
@@ -2294,22 +2295,22 @@ export class BasesGraphView extends FileView {
       });
 
       const labelCell = row.createDiv();
-      labelCell.style.display = "flex";
-      labelCell.style.alignItems = "center";
-      labelCell.style.gap = "4px";
+      setStyle(labelCell, "display", "flex");
+      setStyle(labelCell, "alignItems", "center");
+      setStyle(labelCell, "gap", "4px");
 
       const labelButton = labelCell.createEl("button", { text: String(linkType.key ?? "").trim() || property });
-      labelButton.style.fontSize = "12px";
-      labelButton.style.textAlign = "left";
-      labelButton.style.justifySelf = "start";
-      labelButton.style.padding = "2px 4px";
+      setStyle(labelButton, "fontSize", "12px");
+      setStyle(labelButton, "textAlign", "left");
+      setStyle(labelButton, "justifySelf", "start");
+      setStyle(labelButton, "padding", "2px 4px");
       labelButton.addEventListener("click", () => {
         this.openEditLinkTypeModal(linkType);
       });
 
       const openFileButton = labelCell.createEl("button", { text: "↗" });
-      openFileButton.style.fontSize = "11px";
-      openFileButton.style.padding = "1px 4px";
+      setStyle(openFileButton, "fontSize", "11px");
+      setStyle(openFileButton, "padding", "1px 4px");
       openFileButton.title = "Open LinkType note";
       openFileButton.addEventListener("click", () => {
         void this.openLinkTypeFile(linkType);
@@ -2317,22 +2318,22 @@ export class BasesGraphView extends FileView {
 
       if (options.showPropertyColumn) {
         const propertyEl = row.createDiv({ text: property });
-        propertyEl.style.fontSize = "12px";
-        propertyEl.style.opacity = "0.8";
+        setStyle(propertyEl, "fontSize", "12px");
+        setStyle(propertyEl, "opacity", "0.8");
       }
     };
 
     if (selected.length > 0) {
       const selectedHeader = panel.createDiv({ text: "Expansion active" });
-      selectedHeader.style.fontSize = "11px";
-      selectedHeader.style.fontWeight = "600";
-      selectedHeader.style.opacity = "0.8";
-      selectedHeader.style.textTransform = "uppercase";
-      selectedHeader.style.letterSpacing = "0.03em";
+      setStyle(selectedHeader, "fontSize", "11px");
+      setStyle(selectedHeader, "fontWeight", "600");
+      setStyle(selectedHeader, "opacity", "0.8");
+      setStyle(selectedHeader, "textTransform", "uppercase");
+      setStyle(selectedHeader, "letterSpacing", "0.03em");
 
       const selectedList = panel.createDiv();
-      selectedList.style.display = "grid";
-      selectedList.style.gap = "4px";
+      setStyle(selectedList, "display", "grid");
+      setStyle(selectedList, "gap", "4px");
       for (const linkType of selected) {
         renderLinkTypeRow(selectedList, linkType, { showPropertyColumn: true });
       }
@@ -2340,11 +2341,11 @@ export class BasesGraphView extends FileView {
 
     if (unselected.length > 0) {
       const unselectedHeader = panel.createDiv({ text: "Expansion inactive (grouped by property)" });
-      unselectedHeader.style.fontSize = "11px";
-      unselectedHeader.style.fontWeight = "600";
-      unselectedHeader.style.opacity = "0.8";
-      unselectedHeader.style.textTransform = "uppercase";
-      unselectedHeader.style.letterSpacing = "0.03em";
+      setStyle(unselectedHeader, "fontSize", "11px");
+      setStyle(unselectedHeader, "fontWeight", "600");
+      setStyle(unselectedHeader, "opacity", "0.8");
+      setStyle(unselectedHeader, "textTransform", "uppercase");
+      setStyle(unselectedHeader, "letterSpacing", "0.03em");
 
       const grouped = new Map<string, O3LinkType[]>();
       for (const linkType of unselected) {
@@ -2358,14 +2359,14 @@ export class BasesGraphView extends FileView {
       const properties = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
       for (const property of properties) {
         const propertyHeader = panel.createDiv({ text: property });
-        propertyHeader.style.fontSize = "12px";
-        propertyHeader.style.fontWeight = "600";
-        propertyHeader.style.paddingTop = "4px";
-        propertyHeader.style.opacity = "0.9";
+        setStyle(propertyHeader, "fontSize", "12px");
+        setStyle(propertyHeader, "fontWeight", "600");
+        setStyle(propertyHeader, "paddingTop", "4px");
+        setStyle(propertyHeader, "opacity", "0.9");
 
         const groupList = panel.createDiv();
-        groupList.style.display = "grid";
-        groupList.style.gap = "4px";
+        setStyle(groupList, "display", "grid");
+        setStyle(groupList, "gap", "4px");
         const groupItems = grouped.get(property) ?? [];
         for (const linkType of groupItems) {
           renderLinkTypeRow(groupList, linkType, { showPropertyColumn: false });
@@ -2376,35 +2377,35 @@ export class BasesGraphView extends FileView {
 
   private renderSourceLinkPropertySection(panel: HTMLElement): void {
     const section = panel.createDiv();
-    section.style.display = "grid";
-    section.style.gap = "4px";
-    section.style.paddingBottom = "8px";
-    section.style.borderBottom = "1px solid var(--background-modifier-border)";
+    setStyle(section, "display", "grid");
+    setStyle(section, "gap", "4px");
+    setStyle(section, "paddingBottom", "8px");
+    setStyle(section, "borderBottom", "1px solid var(--background-modifier-border)");
 
     const header = section.createDiv({ text: "Source links" });
-    header.style.fontSize = "11px";
-    header.style.fontWeight = "600";
-    header.style.opacity = "0.8";
-    header.style.textTransform = "uppercase";
-    header.style.letterSpacing = "0.03em";
+    setStyle(header, "fontSize", "11px");
+    setStyle(header, "fontWeight", "600");
+    setStyle(header, "opacity", "0.8");
+    setStyle(header, "textTransform", "uppercase");
+    setStyle(header, "letterSpacing", "0.03em");
 
     const active = new Set(this.activeRootNodeProperties.map((property) => String(property ?? "").trim().toLowerCase()));
     const properties = Array.from(new Set(this.sourceLinkProperties.map((property) => String(property ?? "").trim()).filter(Boolean)))
       .sort((a, b) => a.localeCompare(b));
     if (properties.length === 0) {
       const empty = section.createDiv({ text: "No source links found in this note." });
-      empty.style.fontSize = "12px";
-      empty.style.opacity = "0.7";
+      setStyle(empty, "fontSize", "12px");
+      setStyle(empty, "opacity", "0.7");
       return;
     }
 
     for (const property of properties) {
       const normalized = property.toLowerCase();
       const row = section.createDiv();
-      row.style.display = "grid";
-      row.style.gridTemplateColumns = "auto 1fr";
-      row.style.gap = "8px";
-      row.style.alignItems = "center";
+      setStyle(row, "display", "grid");
+      setStyle(row, "gridTemplateColumns", "auto 1fr");
+      setStyle(row, "gap", "8px");
+      setStyle(row, "alignItems", "center");
       const checkbox = row.createEl("input", { type: "checkbox" });
       checkbox.checked = active.has(normalized);
       checkbox.title = "Use links from this source property as graph root nodes";
@@ -2418,8 +2419,8 @@ export class BasesGraphView extends FileView {
         });
       });
       const label = row.createDiv({ text: property });
-      label.style.fontSize = "12px";
-      label.style.opacity = property === NONE_LINK_TYPE ? "0.78" : "0.9";
+      setStyle(label, "fontSize", "12px");
+      setStyle(label, "opacity", property === NONE_LINK_TYPE ? "0.78" : "0.9");
     }
   }
 
@@ -3290,17 +3291,17 @@ export class BasesGraphView extends FileView {
 
     if (this.viewStateModel.rootNodes.length === 0) {
       const empty = list.createDiv({ text: "No roots yet. Add a note to start." });
-      empty.style.opacity = "0.7";
-      empty.style.fontSize = "12px";
+      setStyle(empty, "opacity", "0.7");
+      setStyle(empty, "fontSize", "12px");
       return;
     }
 
     for (const root of this.viewStateModel.rootNodes) {
       const row = list.createDiv();
-      row.style.display = "flex";
-      row.style.alignItems = "center";
-      row.style.justifyContent = "space-between";
-      row.style.gap = "8px";
+      setStyle(row, "display", "flex");
+      setStyle(row, "alignItems", "center");
+      setStyle(row, "justifyContent", "space-between");
+      setStyle(row, "gap", "8px");
 
       row.createSpan({ text: root });
       const removeBtn = row.createEl("button", { text: "Remove" });
@@ -5213,7 +5214,7 @@ export class BasesGraphView extends FileView {
     if (typeof leaf.updateHeader === "function") {
       leaf.updateHeader();
     }
-    requestAnimationFrame(() => this.installHeaderFileMenuHandlers());
+    window.requestAnimationFrame(() => this.installHeaderFileMenuHandlers());
   }
 
   private installHeaderFileMenuHandlers(): void {
@@ -5221,7 +5222,7 @@ export class BasesGraphView extends FileView {
     if (!target || target === this.headerMenuTarget) return;
     this.uninstallHeaderFileMenuHandlers();
     this.headerMenuTarget = target;
-    target.style.cursor = "pointer";
+    setStyle(target, "cursor", "pointer");
     target.title = this.file ? `File menu: ${this.file.path}` : "File menu";
     target.addEventListener("click", this.onHeaderMenuClickBound);
     target.addEventListener("contextmenu", this.onHeaderMenuContextMenuBound);
@@ -6413,17 +6414,17 @@ export class BasesGraphView extends FileView {
 
     if (!this.errorEl) {
       this.errorEl = container.createDiv();
-      this.errorEl.style.position = "absolute";
-      this.errorEl.style.inset = "8px";
-      this.errorEl.style.zIndex = "10";
-      this.errorEl.style.padding = "10px";
-      this.errorEl.style.border = "1px solid var(--background-modifier-error)";
-      this.errorEl.style.background = "var(--background-primary)";
-      this.errorEl.style.color = "var(--text-error)";
-      this.errorEl.style.fontFamily = "var(--font-monospace)";
-      this.errorEl.style.fontSize = "12px";
-      this.errorEl.style.whiteSpace = "pre-wrap";
-      this.errorEl.style.pointerEvents = "auto";
+      setStyle(this.errorEl, "position", "absolute");
+      setStyle(this.errorEl, "inset", "8px");
+      setStyle(this.errorEl, "zIndex", "10");
+      setStyle(this.errorEl, "padding", "10px");
+      setStyle(this.errorEl, "border", "1px solid var(--background-modifier-error)");
+      setStyle(this.errorEl, "background", "var(--background-primary)");
+      setStyle(this.errorEl, "color", "var(--text-error)");
+      setStyle(this.errorEl, "fontFamily", "var(--font-monospace)");
+      setStyle(this.errorEl, "fontSize", "12px");
+      setStyle(this.errorEl, "whiteSpace", "pre-wrap");
+      setStyle(this.errorEl, "pointerEvents", "auto");
     }
 
     this.errorEl.setText(`Graph View error:\n${message}`);
@@ -6601,10 +6602,7 @@ export class BasesGraphView extends FileView {
     this.syncViewStateModelFromRuntime();
 
     try {
-      localStorage.setItem(
-        this.storageKey(key, "graphState"),
-        JSON.stringify(StateManager.serializeState(this.viewStateModel))
-      );
+      this.app.saveLocalStorage(this.storageKey(key, "graphState"), JSON.stringify(StateManager.serializeState(this.viewStateModel)));
 
       this.debug("persistStateToLocalStorage", {
         key,
@@ -6614,7 +6612,7 @@ export class BasesGraphView extends FileView {
         rootNodesCount: this.viewStateModel.rootNodes.length
       });
     } catch {
-      // Ignore localStorage failures for link-type runtime state.
+      // Ignore vault-scoped storage failures for link-type runtime state.
     }
   }
 
@@ -6622,7 +6620,7 @@ export class BasesGraphView extends FileView {
     const scopedKey = this.persistenceKey ?? this.resolvePersistenceKey();
 
     try {
-      const raw = localStorage.getItem(this.storageKey(scopedKey, suffix));
+      const raw = this.app.loadLocalStorage(this.storageKey(scopedKey, suffix));
       if (!raw) return null;
       this.debug("readLocalStorageValue:hit", {
         suffix,
@@ -6644,7 +6642,7 @@ export class BasesGraphView extends FileView {
 
   private loadConfigStore(): void {
     try {
-      const raw = localStorage.getItem(this.configStorageKey());
+      const raw = this.app.loadLocalStorage(this.configStorageKey());
       if (!raw) {
         this.configData = {};
         return;
@@ -6660,9 +6658,9 @@ export class BasesGraphView extends FileView {
 
   private persistConfigStore(): void {
     try {
-      localStorage.setItem(this.configStorageKey(), JSON.stringify(this.configData));
+      this.app.saveLocalStorage(this.configStorageKey(), JSON.stringify(this.configData));
     } catch {
-      // Ignore localStorage failures for config state.
+      // Ignore vault-scoped storage failures for config state.
     }
   }
 
@@ -6679,7 +6677,7 @@ export class BasesGraphView extends FileView {
     this.syncViewStateModelFromRuntime();
 
     // Writing to base config during active interaction can trigger view refreshes.
-    // Keep runtime changes in localStorage and persist to config only on unload.
+    // Keep runtime changes in vault-scoped storage and persist to config only on unload.
     if (!immediate) {
       if (this.linkTypePersistTimer !== null) {
         window.clearTimeout(this.linkTypePersistTimer);
@@ -7017,6 +7015,3 @@ export class BasesGraphView extends FileView {
     console.log(prefix, event);
   }
 }
-
-
-

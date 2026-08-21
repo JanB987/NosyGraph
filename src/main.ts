@@ -10,6 +10,7 @@ import { ObsidianGraphNodeOpenHandler } from "./ObsidianGraphNodeOpenHandler";
 import { ObsidianGraphRootInputHandler } from "./ObsidianGraphRootInputHandler";
 import { ObsidianGraphRootPropertyMutationHandler } from "./ObsidianGraphRootPropertyMutationHandler";
 import { ExportGraphImageModal } from "./ExportGraphImageModal";
+import { setStyle } from "./domStyle";
 import {
   DEFAULT_GRAPH_PROPERTY_KEYS,
   type GraphPropertyKeys,
@@ -128,7 +129,7 @@ export default class BasesGraphPlugin extends Plugin {
         )
     );
     this.addCommand({
-      id: "open-nosygraph",
+      id: "open-graph",
       name: "Open Graph",
       callback: async () => {
         const leaf = this.app.workspace.getMostRecentLeaf();
@@ -1050,16 +1051,16 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     this.containerEl.empty();
 
     const host = this.containerEl.createDiv({ cls: "o3-graph-transclusion" });
-    host.style.position = "relative";
-    host.style.display = "block";
-    host.style.width = "100%";
-    host.style.minWidth = "280px";
-    host.style.height = "420px";
-    host.style.minHeight = "320px";
-    host.style.border = "1px solid var(--background-modifier-border)";
-    host.style.borderRadius = "8px";
-    host.style.overflow = "hidden";
-    host.style.background = "var(--background-secondary)";
+    setStyle(host, "position", "relative");
+    setStyle(host, "display", "block");
+    setStyle(host, "width", "100%");
+    setStyle(host, "minWidth", "280px");
+    setStyle(host, "height", "420px");
+    setStyle(host, "minHeight", "320px");
+    setStyle(host, "border", "1px solid var(--background-modifier-border)");
+    setStyle(host, "borderRadius", "8px");
+    setStyle(host, "overflow", "hidden");
+    setStyle(host, "background", "var(--background-secondary)");
     this.hostEl = host;
 
     this.graphStateModel = await this.readGraphStateModelForEmbed();
@@ -1577,7 +1578,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     const scopeKey = BASES_GRAPH_VIEW;
     const storageKey = `nosygraph:${scopeKey}:graphState`;
     try {
-      const raw = localStorage.getItem(storageKey);
+      const raw = this.app.loadLocalStorage(storageKey);
       if (!raw) return {};
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object"
@@ -2046,7 +2047,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    containerEl.createEl("h3", { text: "Graph-capable note defaults" });
+    new Setting(containerEl).setName("Graph-capable note defaults").setHeading();
     containerEl.createEl("p", {
       text: "Defaults used when a graph-capable note does not define the matching frontmatter property. These settings are not written to the note automatically.",
       cls: "setting-item-description"
@@ -2082,7 +2083,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    containerEl.createEl("h3", { text: "Note class identifiers" });
+    new Setting(containerEl).setName("Note class identifiers").setHeading();
     containerEl.createEl("p", {
       text: "Configure which YAML property/value marks graph notes, LinkType notes, and group notes. Value matching ignores capitalization and may match inside arrays or wiki links.",
       cls: "setting-item-description"
@@ -2091,7 +2092,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
     this.addNoteTypeIdentifierSetting(containerEl, "LinkType notes", "Notes that define graph link types.", "linkType");
     this.addNoteTypeIdentifierSetting(containerEl, "Group notes", "Notes that define graph groups.", "group");
 
-    containerEl.createEl("h3", { text: "Graph note properties" });
+    new Setting(containerEl).setName("Graph note properties").setHeading();
     containerEl.createEl("p", {
       text: "Configure which YAML property names the plugin uses for graph notes and graph node notes. Existing default names remain readable as fallback; new writes use these configured names.",
       cls: "setting-item-description"
@@ -2129,7 +2130,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
     this.addGraphPropertySetting(containerEl, "Individual node size", "Node-note property that overrides a single node size.", "nodeIndividualSize");
     this.addGraphPropertySetting(containerEl, "Node icon", "Node-note property that stores an emoji/text icon or image link/path.", "graphIcon");
 
-    containerEl.createEl("h3", { text: "LinkType note properties" });
+    new Setting(containerEl).setName("LinkType note properties").setHeading();
     containerEl.createEl("p", {
       text: "Configure which YAML property names LinkType notes use. Existing default names remain readable as fallback; new LinkType writes use these configured names.",
       cls: "setting-item-description"
@@ -2152,7 +2153,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
     this.addLinkTypePropertySetting(containerEl, "Discovery", "Whether this LinkType can discover linked notes.", "linkDiscovery");
     this.addLinkTypePropertySetting(containerEl, "Duplicate nodes", "Whether this LinkType creates duplicate expansion nodes.", "linkDuplicateNodes");
 
-    containerEl.createEl("h3", { text: "Group note properties" });
+    new Setting(containerEl).setName("Group note properties").setHeading();
     containerEl.createEl("p", {
       text: "Configure which YAML property names group notes use. Existing default names remain readable as fallback.",
       cls: "setting-item-description"
@@ -2214,7 +2215,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
             await this.plugin.savePluginSettings();
           });
         text.inputEl.rows = 3;
-        text.inputEl.style.width = "100%";
+        setStyle(text.inputEl, "width", "100%");
       });
   }
 

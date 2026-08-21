@@ -1,4 +1,5 @@
 import { Modal, Notice, TFile, type App } from "obsidian";
+import { setStyle } from "./domStyle";
 
 type RootInputItem =
   | { kind: "file"; file: TFile; score: number }
@@ -46,13 +47,13 @@ class GraphRootInputModal extends Modal {
       type: "text",
       placeholder: "Type a note name..."
     });
-    this.inputEl.style.width = "100%";
-    this.inputEl.style.boxSizing = "border-box";
-    this.inputEl.style.marginBottom = "8px";
+    setStyle(this.inputEl, "width", "100%");
+    setStyle(this.inputEl, "boxSizing", "border-box");
+    setStyle(this.inputEl, "marginBottom", "8px");
 
     this.listEl = this.contentEl.createDiv();
-    this.listEl.style.maxHeight = "320px";
-    this.listEl.style.overflowY = "auto";
+    setStyle(this.listEl, "maxHeight", "320px");
+    setStyle(this.listEl, "overflowY", "auto");
 
     this.inputEl.addEventListener("input", () => {
       this.query = this.inputEl.value;
@@ -126,18 +127,18 @@ class GraphRootInputModal extends Modal {
 
     if (this.items.length === 0) {
       const empty = this.listEl.createDiv({ text: "Type a note name to search or create a note." });
-      empty.style.color = "var(--text-muted)";
-      empty.style.padding = "8px 4px";
+      setStyle(empty, "color", "var(--text-muted)");
+      setStyle(empty, "padding", "8px 4px");
       return;
     }
 
     for (let index = 0; index < this.items.length; index++) {
       const item = this.items[index];
       const row = this.listEl.createDiv();
-      row.style.padding = "6px 8px";
-      row.style.borderRadius = "6px";
-      row.style.cursor = "pointer";
-      row.style.background = index === this.selectedIndex ? "var(--background-modifier-hover)" : "";
+      setStyle(row, "padding", "6px 8px");
+      setStyle(row, "borderRadius", "6px");
+      setStyle(row, "cursor", "pointer");
+      setStyle(row, "background", index === this.selectedIndex ? "var(--background-modifier-hover)" : "");
       row.addEventListener("mouseenter", () => {
         this.selectedIndex = index;
         this.renderItems();
@@ -150,13 +151,13 @@ class GraphRootInputModal extends Modal {
       if (item.kind === "create") {
         row.createDiv({ text: `Create ${item.title}` });
         const note = row.createDiv({ text: "New markdown note" });
-        note.style.color = "var(--text-muted)";
-        note.style.fontSize = "12px";
+        setStyle(note, "color", "var(--text-muted)");
+        setStyle(note, "fontSize", "12px");
       } else {
         row.createDiv({ text: item.file.basename });
         const path = row.createDiv({ text: item.file.path });
-        path.style.color = "var(--text-muted)";
-        path.style.fontSize = "12px";
+        setStyle(path, "color", "var(--text-muted)");
+        setStyle(path, "fontSize", "12px");
       }
     }
   }

@@ -5,6 +5,7 @@ import type { WorkspacePaneView } from "../ui/WorkspaceController";
 import type { GraphViewSidebarService } from "../plugins/GraphViewSidebarService";
 import type { LinkTypeDefinition } from "../link-types/types";
 import type { GroupDefinition, GroupEffects } from "../groups/types";
+import { setStyle } from "../domStyle";
 
 const GRAPH_SIDEBAR_MIN_WIDTH = 220;
 const GRAPH_SIDEBAR_MAX_WIDTH = 640;
@@ -65,7 +66,7 @@ export class GraphSidebarController {
         GRAPH_SIDEBAR_MAX_WIDTH,
         Math.max(GRAPH_SIDEBAR_MIN_WIDTH, Math.round(width)),
       );
-      paneView.graphSidebar.style.width = `${normalizedWidth}px`;
+      setStyle(paneView.graphSidebar, "width", `${normalizedWidth}px`);
     };
     applyGraphSidebarWidth(view.ui?.sidebar?.width ?? 320);
 
@@ -199,8 +200,8 @@ export class GraphSidebarController {
         applyGraphSidebarWidth(nextWidth);
       };
       const handleUp = () => {
-        globalThis.removeEventListener("mousemove", handleMove);
-        globalThis.removeEventListener("mouseup", handleUp);
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseup", handleUp);
         void this.options.updateView(document, (current) => ({
           ...current,
           ui: {
@@ -211,8 +212,8 @@ export class GraphSidebarController {
           },
         }), { skipPaneRender: true });
       };
-      globalThis.addEventListener("mousemove", handleMove);
-      globalThis.addEventListener("mouseup", handleUp);
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleUp);
     };
     paneView.graphRefocusButton.onclick = (event) => {
       event.preventDefault();

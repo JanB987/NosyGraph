@@ -378,4 +378,4 @@ Before publishing to the official Obsidian Community Plugins directory, test at 
 
 ## License
 
-Add a `LICENSE` file before publishing. MIT is a common choice for open Obsidian plugins, but choose the license that matches how you want others to use and contribute to the plugin.
+NosyGraph is released under the MIT License. See `LICENSE` for the full license text.

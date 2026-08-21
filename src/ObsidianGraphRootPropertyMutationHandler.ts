@@ -1,5 +1,6 @@
 import { Modal, Notice, TFile, type App } from "obsidian";
 import { extractInternalLinkCandidates, resolveWikiLinkArray } from "./linkResolver";
+import { setStyle } from "./domStyle";
 
 export interface GraphRootPropertyMutationRequest {
   ownerPath: string;
@@ -133,8 +134,8 @@ class RootPropertySelectionModal extends Modal {
     this.modalEl.addClass("o3-graph-root-property-modal");
     this.contentEl.createEl("h3", { text: "Add node under property" });
     const note = this.contentEl.createDiv({ text: this.ownerFile.basename });
-    note.style.color = "var(--text-muted)";
-    note.style.marginBottom = "8px";
+    setStyle(note, "color", "var(--text-muted)");
+    setStyle(note, "marginBottom", "8px");
     this.renderItems();
     this.scope.register([], "ArrowDown", (event) => {
       event.preventDefault();
@@ -164,10 +165,10 @@ class RootPropertySelectionModal extends Modal {
     for (let index = 0; index < this.propertyNames.length; index++) {
       const property = this.propertyNames[index];
       const row = list.createDiv({ text: property });
-      row.style.padding = "6px 8px";
-      row.style.borderRadius = "6px";
-      row.style.cursor = "pointer";
-      row.style.background = index === this.selectedIndex ? "var(--background-modifier-hover)" : "";
+      setStyle(row, "padding", "6px 8px");
+      setStyle(row, "borderRadius", "6px");
+      setStyle(row, "cursor", "pointer");
+      setStyle(row, "background", index === this.selectedIndex ? "var(--background-modifier-hover)" : "");
       row.addEventListener("mouseenter", () => {
         this.selectedIndex = index;
         this.renderItems();

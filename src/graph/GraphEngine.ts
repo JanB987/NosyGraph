@@ -201,7 +201,7 @@ export class GraphEngine {
     canvas.addEventListener("mouseleave", this.handleMouseUp);
     canvas.addEventListener("wheel", this.handleWheel, { passive: false });
     canvas.addEventListener("dblclick", this.handleDoubleClick);
-    globalThis.addEventListener("resize", this.handleResize);
+    window.addEventListener("resize", this.handleResize);
     this.requestAnimationLoop();
   }
 
@@ -218,7 +218,7 @@ export class GraphEngine {
       this.canvas.removeEventListener("wheel", this.handleWheel);
       this.canvas.removeEventListener("dblclick", this.handleDoubleClick);
     }
-    globalThis.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("resize", this.handleResize);
     this.connectionPreview?.clear();
     this.canvas = undefined;
     this.ctx = undefined;
@@ -444,7 +444,7 @@ export class GraphEngine {
     const tick = (timestamp: number): void => {
       const targetFrameIntervalMs = this.getTargetFrameIntervalMs();
       if (timestamp - this.lastAnimationFrameAt < targetFrameIntervalMs) {
-        this.animationFrameId = requestAnimationFrame(tick);
+        this.animationFrameId = window.requestAnimationFrame(tick);
         return;
       }
       this.lastAnimationFrameAt = timestamp;
@@ -455,10 +455,10 @@ export class GraphEngine {
         this.animationFrameId = undefined;
         return;
       }
-      this.animationFrameId = requestAnimationFrame(tick);
+      this.animationFrameId = window.requestAnimationFrame(tick);
     };
 
-    this.animationFrameId = requestAnimationFrame(tick);
+    this.animationFrameId = window.requestAnimationFrame(tick);
   }
 
   private getTargetFrameIntervalMs(): number {
@@ -1314,8 +1314,8 @@ export class GraphEngine {
       return;
     }
 
-    const width = this.canvas.clientWidth || globalThis.innerWidth || 800;
-    const height = this.canvas.clientHeight || globalThis.innerHeight || 600;
+    const width = this.canvas.clientWidth || window.innerWidth || 800;
+    const height = this.canvas.clientHeight || window.innerHeight || 600;
 
     if (this.canvas.width !== width) {
       this.canvas.width = width;

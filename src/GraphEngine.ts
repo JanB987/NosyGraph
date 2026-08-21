@@ -5,6 +5,7 @@ import type { GraphEdge as ModelGraphEdge } from "./GraphModel";
 import type { O3GraphEmbeddedGraphState, O3GraphEmbeddedLensState, O3GraphNodeOrigin, O3GraphRuntimeNodeSnapshot, O3GraphRuntimeState } from "./O3GraphState";
 import type { O3LinkType } from "./O3LinkType";
 import { O3NodeBadge } from "./O3NodeBadge";
+import { setStyle } from "./domStyle";
 
 interface GraphNode {
   id: string;
@@ -899,23 +900,23 @@ export class GraphEngine {
     this.container.empty();
 
     this.container.classList.add("o3-graph-view");
-    this.container.style.position = "relative";
-    this.container.style.overflow = "hidden";
+    setStyle(this.container, "position", "relative");
+    setStyle(this.container, "overflow", "hidden");
     this.container.tabIndex = 0;
 
     this.canvas = document.createElement("canvas");
-    this.canvas.style.position = "absolute";
-    this.canvas.style.inset = "0";
-    this.canvas.style.zIndex = "0";
+    setStyle(this.canvas, "position", "absolute");
+    setStyle(this.canvas, "inset", "0");
+    setStyle(this.canvas, "zIndex", "0");
     this.container.appendChild(this.canvas);
 
     this.hoverPreviewTargetEl = document.createElement("div");
-    this.hoverPreviewTargetEl.style.position = "absolute";
-    this.hoverPreviewTargetEl.style.width = "1px";
-    this.hoverPreviewTargetEl.style.height = "1px";
-    this.hoverPreviewTargetEl.style.pointerEvents = "none";
-    this.hoverPreviewTargetEl.style.opacity = "0";
-    this.hoverPreviewTargetEl.style.zIndex = "1";
+    setStyle(this.hoverPreviewTargetEl, "position", "absolute");
+    setStyle(this.hoverPreviewTargetEl, "width", "1px");
+    setStyle(this.hoverPreviewTargetEl, "height", "1px");
+    setStyle(this.hoverPreviewTargetEl, "pointerEvents", "none");
+    setStyle(this.hoverPreviewTargetEl, "opacity", "0");
+    setStyle(this.hoverPreviewTargetEl, "zIndex", "1");
     this.container.appendChild(this.hoverPreviewTargetEl);
 
     this.ctx = this.canvas.getContext("2d")!;
@@ -1028,118 +1029,118 @@ export class GraphEngine {
 
   private initMenus() {
     const overlay = document.createElement("div");
-    overlay.style.position = "absolute";
-    overlay.style.top = "8px";
-    overlay.style.left = "8px";
-    overlay.style.zIndex = "2";
-    overlay.style.display = "block";
+    setStyle(overlay, "position", "absolute");
+    setStyle(overlay, "top", "8px");
+    setStyle(overlay, "left", "8px");
+    setStyle(overlay, "zIndex", "2");
+    setStyle(overlay, "display", "block");
     this.container.appendChild(overlay);
 
     const buttonRow = document.createElement("div");
-    buttonRow.style.display = "flex";
-    buttonRow.style.gap = "8px";
-    buttonRow.style.alignItems = "center";
+    setStyle(buttonRow, "display", "flex");
+    setStyle(buttonRow, "gap", "8px");
+    setStyle(buttonRow, "alignItems", "center");
     overlay.appendChild(buttonRow);
 
     this.menuButton = document.createElement("button");
     this.menuButton.type = "button";
     this.menuButton.textContent = "Link Types ";
-    this.menuButton.style.display = "flex";
-    this.menuButton.style.alignItems = "center";
-    this.menuButton.style.gap = "6px";
-    this.menuButton.style.padding = "6px 10px";
-    this.menuButton.style.cursor = "pointer";
+    setStyle(this.menuButton, "display", "flex");
+    setStyle(this.menuButton, "alignItems", "center");
+    setStyle(this.menuButton, "gap", "6px");
+    setStyle(this.menuButton, "padding", "6px 10px");
+    setStyle(this.menuButton, "cursor", "pointer");
     buttonRow.appendChild(this.menuButton);
 
     this.fitButton = document.createElement("button");
     this.fitButton.type = "button";
     this.fitButton.textContent = "⤢";
     this.fitButton.title = "Fit graph to content";
-    this.fitButton.style.position = "absolute";
-    this.fitButton.style.left = "8px";
-    this.fitButton.style.bottom = "8px";
-    this.fitButton.style.zIndex = "3";
-    this.fitButton.style.display = "inline-flex";
-    this.fitButton.style.alignItems = "center";
-    this.fitButton.style.justifyContent = "center";
-    this.fitButton.style.width = "30px";
-    this.fitButton.style.height = "30px";
-    this.fitButton.style.padding = "0";
-    this.fitButton.style.cursor = "pointer";
-    this.fitButton.style.fontSize = "16px";
-    this.fitButton.style.lineHeight = "1";
-    this.fitButton.style.borderRadius = "6px";
+    setStyle(this.fitButton, "position", "absolute");
+    setStyle(this.fitButton, "left", "8px");
+    setStyle(this.fitButton, "bottom", "8px");
+    setStyle(this.fitButton, "zIndex", "3");
+    setStyle(this.fitButton, "display", "inline-flex");
+    setStyle(this.fitButton, "alignItems", "center");
+    setStyle(this.fitButton, "justifyContent", "center");
+    setStyle(this.fitButton, "width", "30px");
+    setStyle(this.fitButton, "height", "30px");
+    setStyle(this.fitButton, "padding", "0");
+    setStyle(this.fitButton, "cursor", "pointer");
+    setStyle(this.fitButton, "fontSize", "16px");
+    setStyle(this.fitButton, "lineHeight", "1");
+    setStyle(this.fitButton, "borderRadius", "6px");
     this.container.appendChild(this.fitButton);
 
     this.menuCount = document.createElement("span");
     this.menuCount.textContent = "0";
-    this.menuCount.style.minWidth = "18px";
-    this.menuCount.style.height = "18px";
-    this.menuCount.style.padding = "0 6px";
-    this.menuCount.style.borderRadius = "999px";
-    this.menuCount.style.background = "var(--interactive-accent, #6b8cff)";
-    this.menuCount.style.color = "white";
-    this.menuCount.style.fontSize = "11px";
-    this.menuCount.style.lineHeight = "18px";
-    this.menuCount.style.textAlign = "center";
+    setStyle(this.menuCount, "minWidth", "18px");
+    setStyle(this.menuCount, "height", "18px");
+    setStyle(this.menuCount, "padding", "0 6px");
+    setStyle(this.menuCount, "borderRadius", "999px");
+    setStyle(this.menuCount, "background", "var(--interactive-accent, #6b8cff)");
+    setStyle(this.menuCount, "color", "white");
+    setStyle(this.menuCount, "fontSize", "11px");
+    setStyle(this.menuCount, "lineHeight", "18px");
+    setStyle(this.menuCount, "textAlign", "center");
     this.menuButton.appendChild(this.menuCount);
 
     this.menuPanel = document.createElement("div");
-    this.menuPanel.style.display = "none";
-    this.menuPanel.style.position = "absolute";
-    this.menuPanel.style.top = "36px";
-    this.menuPanel.style.left = "0";
-    this.menuPanel.style.width = "260px";
-    this.menuPanel.style.height = "360px";
-    this.menuPanel.style.overflow = "hidden";
-    this.menuPanel.style.resize = "both";
-    this.menuPanel.style.minWidth = "220px";
-    this.menuPanel.style.minHeight = "180px";
-    this.menuPanel.style.maxWidth = "min(90vw, 900px)";
-    this.menuPanel.style.maxHeight = "min(85vh, 900px)";
-    this.menuPanel.style.display = "none";
-    this.menuPanel.style.flexDirection = "column";
-    this.menuPanel.style.padding = "8px";
-    this.menuPanel.style.borderRadius = "8px";
-    this.menuPanel.style.border = "1px solid var(--background-modifier-border)";
-    this.menuPanel.style.background = "var(--background-primary)";
-    this.menuPanel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)";
+    setStyle(this.menuPanel, "display", "none");
+    setStyle(this.menuPanel, "position", "absolute");
+    setStyle(this.menuPanel, "top", "36px");
+    setStyle(this.menuPanel, "left", "0");
+    setStyle(this.menuPanel, "width", "260px");
+    setStyle(this.menuPanel, "height", "360px");
+    setStyle(this.menuPanel, "overflow", "hidden");
+    setStyle(this.menuPanel, "resize", "both");
+    setStyle(this.menuPanel, "minWidth", "220px");
+    setStyle(this.menuPanel, "minHeight", "180px");
+    setStyle(this.menuPanel, "maxWidth", "min(90vw, 900px)");
+    setStyle(this.menuPanel, "maxHeight", "min(85vh, 900px)");
+    setStyle(this.menuPanel, "display", "none");
+    setStyle(this.menuPanel, "flexDirection", "column");
+    setStyle(this.menuPanel, "padding", "8px");
+    setStyle(this.menuPanel, "borderRadius", "8px");
+    setStyle(this.menuPanel, "border", "1px solid var(--background-modifier-border)");
+    setStyle(this.menuPanel, "background", "var(--background-primary)");
+    setStyle(this.menuPanel, "boxShadow", "0 8px 24px rgba(0,0,0,0.2)");
     overlay.appendChild(this.menuPanel);
 
     this.settingsButton = document.createElement("button");
     this.settingsButton.type = "button";
     this.settingsButton.textContent = "⚙";
     this.settingsButton.title = "Graph settings";
-    this.settingsButton.style.display = "inline-flex";
-    this.settingsButton.style.alignItems = "center";
-    this.settingsButton.style.justifyContent = "center";
-    this.settingsButton.style.width = "30px";
-    this.settingsButton.style.height = "30px";
-    this.settingsButton.style.padding = "0";
-    this.settingsButton.style.fontSize = "16px";
-    this.settingsButton.style.lineHeight = "1";
-    this.settingsButton.style.borderRadius = "6px";
-    this.settingsButton.style.cursor = "pointer";
+    setStyle(this.settingsButton, "display", "inline-flex");
+    setStyle(this.settingsButton, "alignItems", "center");
+    setStyle(this.settingsButton, "justifyContent", "center");
+    setStyle(this.settingsButton, "width", "30px");
+    setStyle(this.settingsButton, "height", "30px");
+    setStyle(this.settingsButton, "padding", "0");
+    setStyle(this.settingsButton, "fontSize", "16px");
+    setStyle(this.settingsButton, "lineHeight", "1");
+    setStyle(this.settingsButton, "borderRadius", "6px");
+    setStyle(this.settingsButton, "cursor", "pointer");
     buttonRow.appendChild(this.settingsButton);
 
     this.settingsPanel = document.createElement("div");
-    this.settingsPanel.style.display = "none";
-    this.settingsPanel.style.position = "absolute";
-    this.settingsPanel.style.top = "36px";
-    this.settingsPanel.style.left = "0";
-    this.settingsPanel.style.width = "280px";
-    this.settingsPanel.style.padding = "10px";
-    this.settingsPanel.style.borderRadius = "8px";
-    this.settingsPanel.style.border = "1px solid var(--background-modifier-border)";
-    this.settingsPanel.style.background = "var(--background-primary)";
-    this.settingsPanel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)";
+    setStyle(this.settingsPanel, "display", "none");
+    setStyle(this.settingsPanel, "position", "absolute");
+    setStyle(this.settingsPanel, "top", "36px");
+    setStyle(this.settingsPanel, "left", "0");
+    setStyle(this.settingsPanel, "width", "280px");
+    setStyle(this.settingsPanel, "padding", "10px");
+    setStyle(this.settingsPanel, "borderRadius", "8px");
+    setStyle(this.settingsPanel, "border", "1px solid var(--background-modifier-border)");
+    setStyle(this.settingsPanel, "background", "var(--background-primary)");
+    setStyle(this.settingsPanel, "boxShadow", "0 8px 24px rgba(0,0,0,0.2)");
     overlay.appendChild(this.settingsPanel);
 
     this.badgeOverlay = document.createElement("div");
-    this.badgeOverlay.style.position = "absolute";
-    this.badgeOverlay.style.inset = "0";
-    this.badgeOverlay.style.zIndex = "1";
-    this.badgeOverlay.style.pointerEvents = "auto";
+    setStyle(this.badgeOverlay, "position", "absolute");
+    setStyle(this.badgeOverlay, "inset", "0");
+    setStyle(this.badgeOverlay, "zIndex", "1");
+    setStyle(this.badgeOverlay, "pointerEvents", "auto");
     this.badgeOverlay.draggable = false;
     this.container.appendChild(this.badgeOverlay);
     this.badgeOverlay.addEventListener("wheel", this.onWheelBound, { passive: false });
@@ -1152,30 +1153,30 @@ export class GraphEngine {
     this.badgeOverlay.addEventListener("dragend", this.onNativeDragEndBound);
 
     this.parentOverlay = document.createElement("div");
-    this.parentOverlay.style.position = "absolute";
-    this.parentOverlay.style.display = "none";
-    this.parentOverlay.style.zIndex = "4";
-    this.parentOverlay.style.minWidth = "220px";
-    this.parentOverlay.style.maxWidth = "300px";
-    this.parentOverlay.style.padding = "8px";
-    this.parentOverlay.style.borderRadius = "8px";
-    this.parentOverlay.style.border = "1px solid var(--background-modifier-border)";
-    this.parentOverlay.style.background = "var(--background-primary)";
-    this.parentOverlay.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)";
+    setStyle(this.parentOverlay, "position", "absolute");
+    setStyle(this.parentOverlay, "display", "none");
+    setStyle(this.parentOverlay, "zIndex", "4");
+    setStyle(this.parentOverlay, "minWidth", "220px");
+    setStyle(this.parentOverlay, "maxWidth", "300px");
+    setStyle(this.parentOverlay, "padding", "8px");
+    setStyle(this.parentOverlay, "borderRadius", "8px");
+    setStyle(this.parentOverlay, "border", "1px solid var(--background-modifier-border)");
+    setStyle(this.parentOverlay, "background", "var(--background-primary)");
+    setStyle(this.parentOverlay, "boxShadow", "0 8px 24px rgba(0,0,0,0.2)");
     this.container.appendChild(this.parentOverlay);
 
     this.menuSearch = document.createElement("input");
     this.menuSearch.type = "text";
     this.menuSearch.placeholder = "Search link types...";
-    this.menuSearch.style.width = "100%";
-    this.menuSearch.style.marginBottom = "8px";
-    this.menuSearch.style.display = this.disableDefaultLinkTypeList ? "none" : "block";
+    setStyle(this.menuSearch, "width", "100%");
+    setStyle(this.menuSearch, "marginBottom", "8px");
+    setStyle(this.menuSearch, "display", this.disableDefaultLinkTypeList ? "none" : "block");
     this.menuPanel.appendChild(this.menuSearch);
 
     this.menuList = document.createElement("div");
-    this.menuList.style.flex = "1";
-    this.menuList.style.minHeight = "0";
-    this.menuList.style.overflowY = "auto";
+    setStyle(this.menuList, "flex", "1");
+    setStyle(this.menuList, "minHeight", "0");
+    setStyle(this.menuList, "overflowY", "auto");
     this.menuPanel.appendChild(this.menuList);
 
     this.menuButton.addEventListener("mousedown", (e) => {
@@ -1223,8 +1224,8 @@ export class GraphEngine {
   }
 
   private syncPanelVisibility() {
-    this.menuPanel.style.display = this.menuOpen ? "flex" : "none";
-    this.settingsPanel.style.display = this.settingsOpen ? "block" : "none";
+    setStyle(this.menuPanel, "display", this.menuOpen ? "flex" : "none");
+    setStyle(this.settingsPanel, "display", this.settingsOpen ? "block" : "none");
   }
 
   // =========================
@@ -2503,19 +2504,19 @@ export class GraphEngine {
     badge.setAttribute("aria-label", badge.title);
     badge.dataset.o3ExpansionState = expanded ? "expanded" : "collapsed";
     badge.dataset.o3BadgePopulated = hasYamlLinks ? "true" : "false";
-    badge.style.background = background;
-    badge.style.color = this.getBadgeTextColor(baseColor, hasYamlLinks || expanded ? 1 : 0.86);
-    badge.style.border = `1px solid ${borderColor}`;
-    badge.style.boxShadow = expanded
+    setStyle(badge, "background", background);
+    setStyle(badge, "color", this.getBadgeTextColor(baseColor, hasYamlLinks || expanded ? 1 : 0.86));
+    setStyle(badge, "border", `1px solid ${borderColor}`);
+    setStyle(badge, "boxShadow", expanded
       ? (hasYamlLinks
         ? `0 0 0 1px ${this.hexToRgba(baseColor, 0.28)}, 0 2px 10px ${this.hexToRgba(baseColor, 0.32)}`
         : `0 0 0 1px ${this.hexToRgba(baseColor, 0.14)}, 0 2px 8px rgba(0,0,0,0.18)`)
-      : `0 2px 8px rgba(0,0,0,0.25), inset 0 0 0 1px ${this.hexToRgba(baseColor, 0.12)}`;
-    badge.style.opacity = hasYamlLinks ? "1" : "0.72";
-    badge.style.display = "inline-flex";
-    badge.style.alignItems = "center";
-    badge.style.whiteSpace = "nowrap";
-    badge.style.lineHeight = "1.2";
+      : `0 2px 8px rgba(0,0,0,0.25), inset 0 0 0 1px ${this.hexToRgba(baseColor, 0.12)}`);
+    setStyle(badge, "opacity", hasYamlLinks ? "1" : "0.72");
+    setStyle(badge, "display", "inline-flex");
+    setStyle(badge, "alignItems", "center");
+    setStyle(badge, "whiteSpace", "nowrap");
+    setStyle(badge, "lineHeight", "1.2");
   }
 
   private hasBadgeYamlLinks(sourcePath: string, linkType: string): boolean {
@@ -2761,8 +2762,8 @@ export class GraphEngine {
       }
     }
 
-    anchor.style.left = `${chosen.x}px`;
-    anchor.style.top = `${chosen.y}px`;
+    setStyle(anchor, "left", `${chosen.x}px`);
+    setStyle(anchor, "top", `${chosen.y}px`);
     occupiedRects.push({
       left: chosen.x,
       top: chosen.y,
@@ -2989,20 +2990,20 @@ export class GraphEngine {
     button.title = `${active ? "Collapse" : "Expand"} ${linkType}${hasYamlLinks ? "" : " (no YAML links)"}`;
     button.setAttribute("aria-label", button.title);
     button.dataset.o3BadgePopulated = hasYamlLinks ? "true" : "false";
-    button.style.background = background;
-    button.style.color = this.getBadgeTextColor(baseColor, hasYamlLinks || active ? 1 : 0.86);
-    button.style.border = `1px solid ${hasYamlLinks || active ? baseColor : this.hexToRgba(baseColor, 0.5)}`;
-    button.style.boxShadow = active
+    setStyle(button, "background", background);
+    setStyle(button, "color", this.getBadgeTextColor(baseColor, hasYamlLinks || active ? 1 : 0.86));
+    setStyle(button, "border", `1px solid ${hasYamlLinks || active ? baseColor : this.hexToRgba(baseColor, 0.5)}`);
+    setStyle(button, "boxShadow", active
       ? (hasYamlLinks
         ? `0 0 0 1px ${this.hexToRgba(baseColor, 0.28)}, 0 2px 10px ${this.hexToRgba(baseColor, 0.32)}`
         : `0 0 0 1px ${this.hexToRgba(baseColor, 0.14)}, 0 2px 8px rgba(0,0,0,0.18)`)
-      : `0 2px 8px rgba(0,0,0,0.25), inset 0 0 0 1px ${this.hexToRgba(baseColor, 0.12)}`;
-    button.style.opacity = hasYamlLinks ? "1" : "0.72";
-    button.style.padding = "0 8px";
-    button.style.height = "18px";
-    button.style.minHeight = "18px";
-    button.style.fontSize = "10px";
-    button.style.lineHeight = "16px";
+      : `0 2px 8px rgba(0,0,0,0.25), inset 0 0 0 1px ${this.hexToRgba(baseColor, 0.12)}`);
+    setStyle(button, "opacity", hasYamlLinks ? "1" : "0.72");
+    setStyle(button, "padding", "0 8px");
+    setStyle(button, "height", "18px");
+    setStyle(button, "minHeight", "18px");
+    setStyle(button, "fontSize", "10px");
+    setStyle(button, "lineHeight", "16px");
   }
 
   private clearCollapsePreview(): void {
@@ -3098,24 +3099,24 @@ export class GraphEngine {
 
     const button = document.createElement("button");
     button.type = "button";
-    button.style.position = "absolute";
-    button.style.transform = "translate(-50%, -50%)";
-    button.style.pointerEvents = "auto";
-    button.style.padding = "0 8px";
-    button.style.borderRadius = "999px";
-    button.style.display = "inline-flex";
-    button.style.alignItems = "center";
-    button.style.justifyContent = "center";
-    button.style.fontWeight = "700";
-    button.style.whiteSpace = "nowrap";
-    button.style.cursor = "pointer";
-    button.style.transition = "filter 80ms ease";
+    setStyle(button, "position", "absolute");
+    setStyle(button, "transform", "translate(-50%, -50%)");
+    setStyle(button, "pointerEvents", "auto");
+    setStyle(button, "padding", "0 8px");
+    setStyle(button, "borderRadius", "999px");
+    setStyle(button, "display", "inline-flex");
+    setStyle(button, "alignItems", "center");
+    setStyle(button, "justifyContent", "center");
+    setStyle(button, "fontWeight", "700");
+    setStyle(button, "whiteSpace", "nowrap");
+    setStyle(button, "cursor", "pointer");
+    setStyle(button, "transition", "filter 80ms ease");
     button.addEventListener("mouseenter", () => {
-      button.style.filter = "brightness(1.1)";
+      setStyle(button, "filter", "brightness(1.1)");
       this.updateCollapsePreviewForBadge(node.id, linkType);
     });
     button.addEventListener("mouseleave", () => {
-      button.style.filter = "";
+      setStyle(button, "filter", "");
       this.clearCollapsePreview();
     });
     ["mousedown", "mouseup", "click"].forEach(evt => {
@@ -3149,20 +3150,20 @@ export class GraphEngine {
     pin.type = "button";
     pin.textContent = "📌";
     pin.title = "Unpin node";
-    pin.style.position = "absolute";
-    pin.style.transform = "translate(-50%, -50%)";
-    pin.style.pointerEvents = "auto";
-    pin.style.cursor = "pointer";
-    pin.style.fontSize = "12px";
-    pin.style.lineHeight = "1";
-    pin.style.width = "18px";
-    pin.style.height = "18px";
-    pin.style.padding = "0";
-    pin.style.border = "none";
-    pin.style.borderRadius = "999px";
-    pin.style.background = "var(--background-primary)";
-    pin.style.boxShadow = "0 1px 4px rgba(0,0,0,0.3)";
-    pin.style.display = "block";
+    setStyle(pin, "position", "absolute");
+    setStyle(pin, "transform", "translate(-50%, -50%)");
+    setStyle(pin, "pointerEvents", "auto");
+    setStyle(pin, "cursor", "pointer");
+    setStyle(pin, "fontSize", "12px");
+    setStyle(pin, "lineHeight", "1");
+    setStyle(pin, "width", "18px");
+    setStyle(pin, "height", "18px");
+    setStyle(pin, "padding", "0");
+    setStyle(pin, "border", "none");
+    setStyle(pin, "borderRadius", "999px");
+    setStyle(pin, "background", "var(--background-primary)");
+    setStyle(pin, "boxShadow", "0 1px 4px rgba(0,0,0,0.3)");
+    setStyle(pin, "display", "block");
     ["mousedown", "mouseup", "click"].forEach(evt => {
       pin.addEventListener(evt, (e) => {
         e.stopPropagation();
@@ -3189,9 +3190,9 @@ export class GraphEngine {
     const sx = (renderedCenter.x + this.camera.x) * this.camera.zoom;
     const sy = (renderedCenter.y + this.camera.y) * this.camera.zoom;
     const radius = this.getRenderedNodeRadius(node) * this.camera.zoom;
-    pin.style.left = `${sx + radius + 7}px`;
-    pin.style.top = `${sy - radius - 7}px`;
-    pin.style.display = "block";
+    setStyle(pin, "left", `${sx + radius + 7}px`);
+    setStyle(pin, "top", `${sy - radius - 7}px`);
+    setStyle(pin, "display", "block");
   }
 
   private removePinIcon(node: GraphNode): void {
@@ -3214,19 +3215,19 @@ export class GraphEngine {
     button.type = "button";
     button.className = "o3-node-lens-button";
     button.textContent = "⌕";
-    button.style.position = "absolute";
-    button.style.transform = "translate(-50%, -50%)";
-    button.style.pointerEvents = "auto";
-    button.style.cursor = "pointer";
-    button.style.fontSize = "14px";
-    button.style.lineHeight = "1";
-    button.style.width = "18px";
-    button.style.height = "18px";
-    button.style.padding = "0";
-    button.style.borderRadius = "999px";
-    button.style.boxShadow = "0 1px 4px rgba(0,0,0,0.3)";
-    button.style.display = "block";
-    button.style.fontWeight = "700";
+    setStyle(button, "position", "absolute");
+    setStyle(button, "transform", "translate(-50%, -50%)");
+    setStyle(button, "pointerEvents", "auto");
+    setStyle(button, "cursor", "pointer");
+    setStyle(button, "fontSize", "14px");
+    setStyle(button, "lineHeight", "1");
+    setStyle(button, "width", "18px");
+    setStyle(button, "height", "18px");
+    setStyle(button, "padding", "0");
+    setStyle(button, "borderRadius", "999px");
+    setStyle(button, "boxShadow", "0 1px 4px rgba(0,0,0,0.3)");
+    setStyle(button, "display", "block");
+    setStyle(button, "fontWeight", "700");
     button.addEventListener("mousedown", (event) => {
       event.stopPropagation();
       event.preventDefault();
@@ -3265,19 +3266,19 @@ export class GraphEngine {
       || this.isRenderedPointCoveredByOtherGraphLens(node, renderedCenter.x, renderedCenter.y)
       || this.isRenderedPointCoveredByOtherGraphLens(node, iconWorldX, iconWorldY)
     ) {
-      button.style.display = "none";
+      setStyle(button, "display", "none");
       return;
     }
     button.title = expanded ? "Close graph lens" : "Open graph lens";
     button.setAttribute("aria-label", button.title);
-    button.style.left = `${sx - radius - 7}px`;
-    button.style.top = `${sy - radius - 7}px`;
-    button.style.border = expanded
+    setStyle(button, "left", `${sx - radius - 7}px`);
+    setStyle(button, "top", `${sy - radius - 7}px`);
+    setStyle(button, "border", expanded
       ? "1px solid var(--interactive-accent)"
-      : "1px solid var(--background-modifier-border)";
-    button.style.background = expanded ? "var(--interactive-accent)" : "var(--background-primary)";
-    button.style.color = expanded ? "var(--text-on-accent)" : "var(--text-muted)";
-    button.style.display = "block";
+      : "1px solid var(--background-modifier-border)");
+    setStyle(button, "background", expanded ? "var(--interactive-accent)" : "var(--background-primary)");
+    setStyle(button, "color", expanded ? "var(--text-on-accent)" : "var(--text-muted)");
+    setStyle(button, "display", "block");
   }
 
   private isRenderedPointInsideNodeLens(node: GraphNode, x: number, y: number): boolean {
@@ -3700,15 +3701,15 @@ export class GraphEngine {
         neededKeys.add(key);
 
         const button = this.ensureBadgeButton(node, linkType);
-        button.style.width = "auto";
-        button.style.minWidth = "unset";
-        button.style.height = "18px";
-        button.style.minHeight = "18px";
-        button.style.fontSize = "10px";
-        button.style.lineHeight = "16px";
-        button.style.left = `${x}px`;
-        button.style.top = `${y}px`;
-        button.style.display = "block";
+        setStyle(button, "width", "auto");
+        setStyle(button, "minWidth", "unset");
+        setStyle(button, "height", "18px");
+        setStyle(button, "minHeight", "18px");
+        setStyle(button, "fontSize", "10px");
+        setStyle(button, "lineHeight", "16px");
+        setStyle(button, "left", `${x}px`);
+        setStyle(button, "top", `${y}px`);
+        setStyle(button, "display", "block");
         this.setBadgeButtonVisualState(button, node.id, linkType);
       }
     }
@@ -3765,10 +3766,10 @@ export class GraphEngine {
         const anchor = document.createElement("div");
         anchor.className = "o3-node-badge-anchor";
         anchor.dataset.o3ExpansionKey = expansionKey;
-        anchor.style.position = "absolute";
-        anchor.style.left = `${desiredX}px`;
-        anchor.style.top = `${desiredY}px`;
-        anchor.style.pointerEvents = "auto";
+        setStyle(anchor, "position", "absolute");
+        setStyle(anchor, "left", `${desiredX}px`);
+        setStyle(anchor, "top", `${desiredY}px`);
+        setStyle(anchor, "pointerEvents", "auto");
         this.badgeOverlay.appendChild(anchor);
 
         const badge = new O3NodeBadge(anchor, file, node.id, linkType, this.app, this);
@@ -4797,7 +4798,7 @@ export class GraphEngine {
 
   private hideParentOverlay(): void {
     if (!this.parentOverlay) return;
-    this.parentOverlay.style.display = "none";
+    setStyle(this.parentOverlay, "display", "none");
     this.parentOverlay.empty();
   }
 
@@ -4808,34 +4809,34 @@ export class GraphEngine {
 
     const title = document.createElement("div");
     title.textContent = `Parent actions for: ${node.label || node.id}`;
-    title.style.fontWeight = "600";
-    title.style.fontSize = "12px";
-    title.style.marginBottom = "8px";
+    setStyle(title, "fontWeight", "600");
+    setStyle(title, "fontSize", "12px");
+    setStyle(title, "marginBottom", "8px");
     this.parentOverlay.appendChild(title);
 
     const parentTypes = this.getParentSemanticLinkTypes();
     if (parentTypes.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "No parent link types defined";
-      empty.style.fontSize = "12px";
-      empty.style.opacity = "0.8";
+      setStyle(empty, "fontSize", "12px");
+      setStyle(empty, "opacity", "0.8");
       this.parentOverlay.appendChild(empty);
     } else {
       const actions = document.createElement("div");
-      actions.style.display = "grid";
-      actions.style.gap = "6px";
+      setStyle(actions, "display", "grid");
+      setStyle(actions, "gap", "6px");
       this.parentOverlay.appendChild(actions);
 
       for (const parentType of parentTypes) {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = parentType;
-        button.style.textAlign = "left";
-        button.style.padding = "4px 8px";
-        button.style.cursor = "pointer";
+        setStyle(button, "textAlign", "left");
+        setStyle(button, "padding", "4px 8px");
+        setStyle(button, "cursor", "pointer");
         if (this.isParentExpansionActive(node.id, parentType)) {
-          button.style.background = "rgba(110, 150, 220, 0.2)";
-          button.style.borderColor = "rgba(110, 150, 220, 0.6)";
+          setStyle(button, "background", "rgba(110, 150, 220, 0.2)");
+          setStyle(button, "borderColor", "rgba(110, 150, 220, 0.6)");
         }
         button.addEventListener("click", () => {
           this.triggerParentExpansion(node, parentType);
@@ -4858,9 +4859,9 @@ export class GraphEngine {
     const left = Math.min(Math.max(8, leftRaw), maxLeft);
     const top = Math.min(Math.max(8, topRaw), maxTop);
 
-    this.parentOverlay.style.left = `${left}px`;
-    this.parentOverlay.style.top = `${top}px`;
-    this.parentOverlay.style.display = "block";
+    setStyle(this.parentOverlay, "left", `${left}px`);
+    setStyle(this.parentOverlay, "top", `${top}px`);
+    setStyle(this.parentOverlay, "display", "block");
   }
 
   private triggerParentExpansion(node: GraphNode, parentLinkType: string): void {
@@ -5651,9 +5652,9 @@ export class GraphEngine {
     if (this.disableDefaultLinkTypeList) {
       if (this.menuOptions.renderLinkTypeMenuExtras) {
         const extrasHost = document.createElement("div");
-        extrasHost.style.display = "grid";
-        extrasHost.style.gap = "8px";
-        extrasHost.style.padding = "2px";
+        setStyle(extrasHost, "display", "grid");
+        setStyle(extrasHost, "gap", "8px");
+        setStyle(extrasHost, "padding", "2px");
         this.menuList.appendChild(extrasHost);
         this.menuOptions.renderLinkTypeMenuExtras(extrasHost);
       }
@@ -5685,29 +5686,29 @@ export class GraphEngine {
       const divider = document.createElement("div");
       divider.className = "linktype-divider";
       divider.textContent = label;
-      divider.style.fontSize = "10px";
-      divider.style.fontWeight = "600";
-      divider.style.opacity = "0.7";
-      divider.style.textTransform = "uppercase";
-      divider.style.letterSpacing = "0.04em";
-      divider.style.padding = "6px 2px 2px";
-      divider.style.marginTop = "4px";
-      divider.style.borderTop = "1px solid var(--background-modifier-border)";
+      setStyle(divider, "fontSize", "10px");
+      setStyle(divider, "fontWeight", "600");
+      setStyle(divider, "opacity", "0.7");
+      setStyle(divider, "textTransform", "uppercase");
+      setStyle(divider, "letterSpacing", "0.04em");
+      setStyle(divider, "padding", "6px 2px 2px");
+      setStyle(divider, "marginTop", "4px");
+      setStyle(divider, "borderTop", "1px solid var(--background-modifier-border)");
       this.menuList.appendChild(divider);
     };
 
     const appendLinkTypeRow = (type: string) => {
       const row = document.createElement("div");
-      row.style.display = "flex";
-      row.style.flexDirection = "column";
-      row.style.gap = "4px";
-      row.style.padding = "4px 2px";
+      setStyle(row, "display", "flex");
+      setStyle(row, "flexDirection", "column");
+      setStyle(row, "gap", "4px");
+      setStyle(row, "padding", "4px 2px");
 
       const checkboxRow = document.createElement("label");
-      checkboxRow.style.display = "flex";
-      checkboxRow.style.alignItems = "center";
-      checkboxRow.style.gap = "8px";
-      checkboxRow.style.cursor = "pointer";
+      setStyle(checkboxRow, "display", "flex");
+      setStyle(checkboxRow, "alignItems", "center");
+      setStyle(checkboxRow, "gap", "8px");
+      setStyle(checkboxRow, "cursor", "pointer");
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -5734,9 +5735,9 @@ export class GraphEngine {
 
       const physicsConfig = this.getLinkTypePhysicsConfig(type);
       const physicsBlock = document.createElement("div");
-      physicsBlock.style.display = "grid";
-      physicsBlock.style.gap = "4px";
-      physicsBlock.style.marginLeft = "22px";
+      setStyle(physicsBlock, "display", "grid");
+      setStyle(physicsBlock, "gap", "4px");
+      setStyle(physicsBlock, "marginLeft", "22px");
 
       const makePhysicsSlider = (config: {
         label: string;
@@ -5749,18 +5750,18 @@ export class GraphEngine {
         onChange: (value: number) => void;
       }) => {
         const wrap = document.createElement("div");
-        wrap.style.display = "grid";
-        wrap.style.gap = "2px";
+        setStyle(wrap, "display", "grid");
+        setStyle(wrap, "gap", "2px");
 
         const labelRow = document.createElement("div");
-        labelRow.style.display = "flex";
-        labelRow.style.justifyContent = "space-between";
-        labelRow.style.alignItems = "center";
-        labelRow.style.fontSize = "10px";
+        setStyle(labelRow, "display", "flex");
+        setStyle(labelRow, "justifyContent", "space-between");
+        setStyle(labelRow, "alignItems", "center");
+        setStyle(labelRow, "fontSize", "10px");
 
         const labelEl = document.createElement("span");
         const valueEl = document.createElement("span");
-        valueEl.style.fontFamily = "var(--font-monospace)";
+        setStyle(valueEl, "fontFamily", "var(--font-monospace)");
         labelRow.appendChild(labelEl);
         labelRow.appendChild(valueEl);
         wrap.appendChild(labelRow);
@@ -5774,7 +5775,7 @@ export class GraphEngine {
           ? Number(config.currentValue)
           : config.defaultValue;
         slider.value = String(initialValue);
-        slider.style.width = "100%";
+        setStyle(slider, "width", "100%");
         ["mousedown", "mouseup", "click", "wheel"].forEach(evt => {
           slider.addEventListener(evt, (e) => e.stopPropagation());
         });
@@ -5846,9 +5847,9 @@ export class GraphEngine {
     if (this.menuOptions.renderLinkTypeMenuExtras) {
       appendDivider("Graph Link Type Config");
       const extrasHost = document.createElement("div");
-      extrasHost.style.display = "grid";
-      extrasHost.style.gap = "8px";
-      extrasHost.style.padding = "6px 2px 2px";
+      setStyle(extrasHost, "display", "grid");
+      setStyle(extrasHost, "gap", "8px");
+      setStyle(extrasHost, "padding", "6px 2px 2px");
       this.menuList.appendChild(extrasHost);
       this.menuOptions.renderLinkTypeMenuExtras(extrasHost);
     }
@@ -5869,8 +5870,8 @@ export class GraphEngine {
 
     const title = document.createElement("div");
     title.textContent = "Graph Settings";
-    title.style.fontWeight = "600";
-    title.style.marginBottom = "10px";
+    setStyle(title, "fontWeight", "600");
+    setStyle(title, "marginBottom", "10px");
     this.settingsPanel.appendChild(title);
 
     this.appendLayoutSetting();
@@ -5988,18 +5989,18 @@ export class GraphEngine {
 
   private appendLayoutSetting() {
     const wrapper = document.createElement("div");
-    wrapper.style.marginBottom = "10px";
+    setStyle(wrapper, "marginBottom", "10px");
 
     const label = document.createElement("div");
     label.textContent = "Layout";
-    label.style.fontSize = "12px";
-    label.style.marginBottom = "4px";
+    setStyle(label, "fontSize", "12px");
+    setStyle(label, "marginBottom", "4px");
     wrapper.appendChild(label);
 
     const select = document.createElement("select");
-    select.style.width = "100%";
-    select.style.fontSize = "12px";
-    select.style.padding = "2px 4px";
+    setStyle(select, "width", "100%");
+    setStyle(select, "fontSize", "12px");
+    setStyle(select, "padding", "2px 4px");
 
     for (const option of this.layoutOptions) {
       const entry = document.createElement("option");
@@ -6033,19 +6034,19 @@ export class GraphEngine {
     onChange: (value: number) => void;
   }) {
     const wrapper = document.createElement("div");
-    wrapper.style.marginBottom = "10px";
+    setStyle(wrapper, "marginBottom", "10px");
 
     const labelRow = document.createElement("div");
-    labelRow.style.display = "flex";
-    labelRow.style.justifyContent = "space-between";
-    labelRow.style.fontSize = "12px";
-    labelRow.style.marginBottom = "4px";
+    setStyle(labelRow, "display", "flex");
+    setStyle(labelRow, "justifyContent", "space-between");
+    setStyle(labelRow, "fontSize", "12px");
+    setStyle(labelRow, "marginBottom", "4px");
 
     const labelText = document.createElement("span");
     labelText.textContent = config.label;
     const valueText = document.createElement("span");
     valueText.textContent = config.formatter(config.value);
-    valueText.style.fontFamily = "var(--font-monospace)";
+    setStyle(valueText, "fontFamily", "var(--font-monospace)");
 
     labelRow.appendChild(labelText);
     labelRow.appendChild(valueText);
@@ -6057,7 +6058,7 @@ export class GraphEngine {
     slider.max = String(config.max);
     slider.step = String(config.step);
     slider.value = String(config.value);
-    slider.style.width = "100%";
+    setStyle(slider, "width", "100%");
     slider.addEventListener("input", () => {
       const value = Number(slider.value);
       if (!Number.isFinite(value)) return;
@@ -6081,12 +6082,12 @@ export class GraphEngine {
     onChange: (value: boolean) => void;
   }) {
     const wrapper = document.createElement("label");
-    wrapper.style.display = "flex";
-    wrapper.style.alignItems = "center";
-    wrapper.style.justifyContent = "space-between";
-    wrapper.style.gap = "10px";
-    wrapper.style.marginTop = "2px";
-    wrapper.style.fontSize = "12px";
+    setStyle(wrapper, "display", "flex");
+    setStyle(wrapper, "alignItems", "center");
+    setStyle(wrapper, "justifyContent", "space-between");
+    setStyle(wrapper, "gap", "10px");
+    setStyle(wrapper, "marginTop", "2px");
+    setStyle(wrapper, "fontSize", "12px");
 
     const labelText = document.createElement("span");
     labelText.textContent = config.label;
@@ -6106,31 +6107,31 @@ export class GraphEngine {
   private appendGroupingSettings(): void {
     const section = document.createElement("details");
     section.open = false;
-    section.style.marginTop = "12px";
-    section.style.paddingTop = "8px";
-    section.style.borderTop = "1px solid var(--background-modifier-border)";
+    setStyle(section, "marginTop", "12px");
+    setStyle(section, "paddingTop", "8px");
+    setStyle(section, "borderTop", "1px solid var(--background-modifier-border)");
 
     const summary = document.createElement("summary");
     summary.textContent = "Grouping";
-    summary.style.cursor = "pointer";
-    summary.style.fontWeight = "600";
-    summary.style.fontSize = "12px";
+    setStyle(summary, "cursor", "pointer");
+    setStyle(summary, "fontWeight", "600");
+    setStyle(summary, "fontSize", "12px");
     section.appendChild(summary);
 
     const body = document.createElement("div");
-    body.style.display = "grid";
-    body.style.gap = "8px";
-    body.style.marginTop = "8px";
+    setStyle(body, "display", "grid");
+    setStyle(body, "gap", "8px");
+    setStyle(body, "marginTop", "8px");
     section.appendChild(body);
 
     const addRow = document.createElement("div");
-    addRow.style.display = "flex";
-    addRow.style.justifyContent = "flex-start";
+    setStyle(addRow, "display", "flex");
+    setStyle(addRow, "justifyContent", "flex-start");
 
     const addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.textContent = "+ Add Rule";
-    addBtn.style.fontSize = "11px";
+    setStyle(addBtn, "fontSize", "11px");
     addBtn.addEventListener("click", () => {
       const defaultProperty = this.groupingPropertyOptions[0] ?? "";
       this.groupingRules = [
@@ -6152,27 +6153,27 @@ export class GraphEngine {
     if (this.groupingRules.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "No grouping rules";
-      empty.style.fontSize = "11px";
-      empty.style.opacity = "0.7";
+      setStyle(empty, "fontSize", "11px");
+      setStyle(empty, "opacity", "0.7");
       body.appendChild(empty);
     }
 
     this.groupingRules.forEach((rule, index) => {
       const ruleBox = document.createElement("div");
-      ruleBox.style.display = "grid";
-      ruleBox.style.gap = "6px";
-      ruleBox.style.padding = "8px";
-      ruleBox.style.border = "1px solid var(--background-modifier-border)";
-      ruleBox.style.borderRadius = "6px";
+      setStyle(ruleBox, "display", "grid");
+      setStyle(ruleBox, "gap", "6px");
+      setStyle(ruleBox, "padding", "8px");
+      setStyle(ruleBox, "border", "1px solid var(--background-modifier-border)");
+      setStyle(ruleBox, "borderRadius", "6px");
 
       const field = (labelText: string) => {
         const wrap = document.createElement("label");
-        wrap.style.display = "grid";
-        wrap.style.gap = "2px";
-        wrap.style.fontSize = "11px";
+        setStyle(wrap, "display", "grid");
+        setStyle(wrap, "gap", "2px");
+        setStyle(wrap, "fontSize", "11px");
         const label = document.createElement("span");
         label.textContent = labelText;
-        label.style.opacity = "0.8";
+        setStyle(label, "opacity", "0.8");
         wrap.appendChild(label);
         ruleBox.appendChild(wrap);
         return wrap;
@@ -6180,8 +6181,8 @@ export class GraphEngine {
 
       const propertyField = field("Property");
       const propertySelect = document.createElement("select");
-      propertySelect.style.fontSize = "11px";
-      propertySelect.style.padding = "2px 4px";
+      setStyle(propertySelect, "fontSize", "11px");
+      setStyle(propertySelect, "padding", "2px 4px");
       const propertyOptions = this.normalizeGroupingPropertyOptions([
         ...this.groupingPropertyOptions,
         rule.property
@@ -6209,8 +6210,8 @@ export class GraphEngine {
 
       const conditionField = field("Condition");
       const conditionSelect = document.createElement("select");
-      conditionSelect.style.fontSize = "11px";
-      conditionSelect.style.padding = "2px 4px";
+      setStyle(conditionSelect, "fontSize", "11px");
+      setStyle(conditionSelect, "padding", "2px 4px");
       for (const optionValue of ["equals", "contains", "exists"] as const) {
         const opt = document.createElement("option");
         opt.value = optionValue;
@@ -6238,8 +6239,8 @@ export class GraphEngine {
         const valueInput = document.createElement("input");
         valueInput.type = "text";
         valueInput.value = rule.value ?? "";
-        valueInput.style.fontSize = "11px";
-        valueInput.style.padding = "2px 4px";
+        setStyle(valueInput, "fontSize", "11px");
+        setStyle(valueInput, "padding", "2px 4px");
         valueInput.addEventListener("input", () => {
           this.groupingRules[index] = { ...this.groupingRules[index], value: valueInput.value };
           this.emitGroupingRules();
@@ -6262,8 +6263,8 @@ export class GraphEngine {
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.textContent = "Delete Rule";
-      deleteBtn.style.fontSize = "11px";
-      deleteBtn.style.justifySelf = "start";
+      setStyle(deleteBtn, "fontSize", "11px");
+      setStyle(deleteBtn, "justifySelf", "start");
       deleteBtn.addEventListener("click", () => {
         this.groupingRules = this.groupingRules.filter((_, i) => i !== index);
         this.emitGroupingRules();
@@ -6305,7 +6306,7 @@ export class GraphEngine {
     const step = (timestamp: number) => {
       const targetFrameInterval = this.getTargetFrameIntervalMs();
       if (timestamp - this.lastAnimationFrameAt < targetFrameInterval) {
-        this.animationFrame = requestAnimationFrame(step);
+        this.animationFrame = window.requestAnimationFrame(step);
         return;
       }
 
@@ -6313,7 +6314,7 @@ export class GraphEngine {
       const maxVelocity = this.simulate();
       this.safeDraw();
       if (this.simulationFrozenByHotkey) {
-        this.animationFrame = requestAnimationFrame(step);
+        this.animationFrame = window.requestAnimationFrame(step);
         return;
       }
       if (!this.shouldContinueSimulation(maxVelocity)) {
@@ -6321,10 +6322,10 @@ export class GraphEngine {
         this.animationFrame = null;
         return;
       }
-      this.animationFrame = requestAnimationFrame(step);
+      this.animationFrame = window.requestAnimationFrame(step);
     };
 
-    this.animationFrame = requestAnimationFrame(step);
+    this.animationFrame = window.requestAnimationFrame(step);
   }
 
   private getTargetFrameIntervalMs(): number {
@@ -7492,9 +7493,9 @@ export class GraphEngine {
   }
 
   private setGraphCursor(cursor: string): void {
-    if (this.canvas) this.canvas.style.cursor = cursor;
-    if (this.badgeOverlay) this.badgeOverlay.style.cursor = cursor;
-    if (this.container) this.container.style.cursor = cursor;
+    if (this.canvas) setStyle(this.canvas, "cursor", cursor);
+    if (this.badgeOverlay) setStyle(this.badgeOverlay, "cursor", cursor);
+    if (this.container) setStyle(this.container, "cursor", cursor);
   }
 
   private updateGraphLensCursor(clientX: number, clientY: number): void {
@@ -9395,13 +9396,13 @@ export class GraphEngine {
   private getTransparentDragImage(): HTMLElement {
     if (this.transparentDragImage) return this.transparentDragImage;
     const image = document.createElement("div");
-    image.style.position = "fixed";
-    image.style.left = "-10000px";
-    image.style.top = "-10000px";
-    image.style.width = "1px";
-    image.style.height = "1px";
-    image.style.opacity = "0";
-    image.style.pointerEvents = "none";
+    setStyle(image, "position", "fixed");
+    setStyle(image, "left", "-10000px");
+    setStyle(image, "top", "-10000px");
+    setStyle(image, "width", "1px");
+    setStyle(image, "height", "1px");
+    setStyle(image, "opacity", "0");
+    setStyle(image, "pointerEvents", "none");
     document.body.appendChild(image);
     this.transparentDragImage = image;
     return image;
@@ -9478,8 +9479,8 @@ export class GraphEngine {
   private positionHoverPreviewTarget(clientX: number, clientY: number): void {
     if (!this.hoverPreviewTargetEl) return;
     const rect = this.container.getBoundingClientRect();
-    this.hoverPreviewTargetEl.style.left = `${Math.max(0, clientX - rect.left)}px`;
-    this.hoverPreviewTargetEl.style.top = `${Math.max(0, clientY - rect.top)}px`;
+    setStyle(this.hoverPreviewTargetEl, "left", `${Math.max(0, clientX - rect.left)}px`);
+    setStyle(this.hoverPreviewTargetEl, "top", `${Math.max(0, clientY - rect.top)}px`);
   }
 
   private triggerNodeHoverPreview(node: GraphNode, event: MouseEvent): void {
@@ -12401,8 +12402,8 @@ export class GraphEngine {
       return;
     }
     this.suppressMenuSizeChangedEvents = true;
-    this.menuPanel.style.width = `${next.width}px`;
-    this.menuPanel.style.height = `${next.height}px`;
+    setStyle(this.menuPanel, "width", `${next.width}px`);
+    setStyle(this.menuPanel, "height", `${next.height}px`);
     window.setTimeout(() => {
       this.suppressMenuSizeChangedEvents = false;
     }, 0);

@@ -122,7 +122,7 @@ export class GraphDocumentStateManager {
       if (!this.isTransientBusyError(error)) {
         throw error;
       }
-      await new Promise((resolve) => globalThis.setTimeout(resolve, GraphDocumentStateManager.TRANSIENT_SAVE_RETRY_DELAY_MS));
+      await new Promise((resolve) => window.setTimeout(resolve, GraphDocumentStateManager.TRANSIENT_SAVE_RETRY_DELAY_MS));
       await this.options.documentService.saveDocument(document, payload);
     }
   }

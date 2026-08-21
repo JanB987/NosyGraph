@@ -80,7 +80,7 @@ export class GraphPaneRuntimeManager {
       return;
     }
     if (runtime.saveTimeoutId !== undefined) {
-      globalThis.clearTimeout(runtime.saveTimeoutId);
+      window.clearTimeout(runtime.saveTimeoutId);
     }
     runtime.engine.destroy();
     runtime.canvas.remove();
@@ -118,7 +118,7 @@ export class GraphPaneRuntimeManager {
       badgesByNode: Record<string, NodeLinkBadge[]>;
     };
   }): void {
-    const startTime = globalThis.performance.now();
+    const startTime = window.performance.now();
     const runtime = this.ensureRuntime(args.pane, args.viewport, args.documentPath);
     const renderSignature = this.buildRenderSignature(args);
     const cameraSignature = args.view.camera
@@ -160,7 +160,7 @@ export class GraphPaneRuntimeManager {
     if (graphChanged || cameraChanged || centralGravityChanged || repulsionChanged || velocitySnapThresholdChanged) {
       runtime.engine.render();
     }
-    const durationMs = globalThis.performance.now() - startTime;
+    const durationMs = window.performance.now() - startTime;
     if (durationMs > 8) {
       console.debug("[GraphPerf] attachOrUpdatePane", {
         pane: args.pane,
@@ -217,7 +217,7 @@ export class GraphPaneRuntimeManager {
     }
 
     this.destroyPane(pane);
-    const graphCanvas = globalThis.document.createElement("canvas");
+    const graphCanvas = window.document.createElement("canvas");
     graphCanvas.className = "wm-graph-preview-canvas";
     graphCanvas.dataset.graphInteractiveCanvas = pane;
     viewport.append(graphCanvas);
@@ -389,9 +389,9 @@ export class GraphPaneRuntimeManager {
       return;
     }
     if (runtime.saveTimeoutId !== undefined) {
-      globalThis.clearTimeout(runtime.saveTimeoutId);
+      window.clearTimeout(runtime.saveTimeoutId);
     }
-    runtime.saveTimeoutId = globalThis.setTimeout(() => {
+    runtime.saveTimeoutId = window.setTimeout(() => {
       runtime.saveTimeoutId = undefined;
       void this.options.persistGraphView(documentPath);
     }, 120);
