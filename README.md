@@ -7,6 +7,20 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 > [!warning]
 > This plugin is currently beta software. Use it first in a copied vault or with reliable backups enabled. Earlier development builds had a critical bug where an open graph note could sometimes be emptied when Obsidian reloaded while the graph view was active. This has not been seen recently, and safeguards have been added to block unsafe empty graph-state writes, but graph notes should still be treated as important data and backed up.
 
+
+## Screenshots
+
+![NosyGraph graph with connected base and link types](docs/images/Screenshot 2026-08-26 090901.png)
+
+### Expandable Graph Lenses
+
+![NosyGraph graph with nested lenses](docs/images/Screenshot 2026-08-26 090127.png)
+
+### Nested Lenses And Graph Navigation
+
+![NosyGraph nested lenses and connected nodes](docs/images/Screenshot 2026-08-26 090710.png)
+
+
 ## Features
 
 ### Graph Notes
