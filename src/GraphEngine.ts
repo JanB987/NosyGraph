@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { App, Component, EventRef, Menu, TFile } from "obsidian";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE } from "./linkResolver";
 import { type GraphPropertyKeys, normalizeGraphPropertyKeys, readFrontmatterPropertyByKey } from "./GraphPropertyKeys";
@@ -1067,7 +1067,7 @@ export class GraphEngine {
     setStyle(this.fitButton, "lineHeight", "1");
     setStyle(this.fitButton, "borderRadius", "6px");
 
-    this.menuCount = this.menuButton.createEl("span");
+    this.menuCount = this.menuButton.createSpan();
     this.menuCount.textContent = "0";
     setStyle(this.menuCount, "minWidth", "18px");
     setStyle(this.menuCount, "height", "18px");
@@ -1873,8 +1873,11 @@ export class GraphEngine {
     return String(key ?? "").trim().toLowerCase();
   }
 
-  private getFrontmatterLinks(cache: any): FrontmatterLinkEntry[] {
-    const links = cache?.frontmatterLinks;
+  private getFrontmatterLinks(cache: unknown): FrontmatterLinkEntry[] {
+    const record = cache && typeof cache === "object"
+      ? cache as { frontmatterLinks?: unknown }
+      : {};
+    const links = record.frontmatterLinks;
     return Array.isArray(links) ? links : [];
   }
 
@@ -2913,12 +2916,9 @@ export class GraphEngine {
     };
   }
 
-  reheatSimulation(amount = 0.15, reason?: string): void {
+  reheatSimulation(amount = 0.15, _reason?: string): void {
     const magnitude = Math.max(0, Number.isFinite(amount) ? amount : 0.15);
     if (magnitude <= 0) return;
-    if (this.debugEnabled) {
-      console.debug("[GraphView] reheating simulation:", reason ?? "unspecified", "amount:", magnitude);
-    }
     this.startSimulation();
   }
 
@@ -12645,3 +12645,4 @@ export class GraphEngine {
   }
 }
 
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

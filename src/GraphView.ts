@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { App, FileView, Menu, Modal, Notice, WorkspaceLeaf, type ViewStateResult, parsePropertyId, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
 import { setStyle } from "./domStyle";
 import {
@@ -629,12 +629,15 @@ export class BasesGraphView extends FileView {
     return this.file;
   }
 
-  async setState(state: any, result: ViewStateResult) {
-    const nextFilePath = String(state?.file ?? state?.filePath ?? "").trim();
+  async setState(state: unknown, result: ViewStateResult) {
+    const inputState = state && typeof state === "object"
+      ? state as Record<string, unknown>
+      : {};
+    const nextFilePath = String(inputState.file ?? inputState.filePath ?? "").trim();
     const previousFilePath = this.file?.path ?? this.filePath ?? "";
     const resolvedFilePath = nextFilePath || previousFilePath;
     const normalizedState = {
-      ...(state && typeof state === "object" ? state : {}),
+      ...inputState,
       ...(resolvedFilePath ? { file: resolvedFilePath } : {})
     };
 
@@ -865,9 +868,6 @@ export class BasesGraphView extends FileView {
   }
 
   private initializeGraph(): void {
-    if (this.debugEnabled) {
-      console.debug("[GraphView] initializeGraph called");
-    }
     if (this.isInitializing || this.initialized) return;
     this.isInitializing = true;
 
@@ -917,7 +917,7 @@ export class BasesGraphView extends FileView {
     }, Math.max(0, delayMs));
   }
 
-  private async runDeferredGraphHydration(token: number, reason: string): Promise<void> {
+  private async runDeferredGraphHydration(token: number, _reason: string): Promise<void> {
     try {
       if (!this.file) return;
       if (!this.initialized) {
@@ -938,12 +938,6 @@ export class BasesGraphView extends FileView {
       if (!this.isCurrentGraphHydration(token)) return;
 
       this.pendingReloadAfterInitialize = false;
-      if (this.debugEnabled) {
-        console.debug("[GraphView] deferred graph hydration", {
-          reason,
-          file: this.file?.path ?? null
-        });
-      }
       await this.reloadFromFile();
     } catch (error) {
       this.renderError(this.viewContainer, error);
@@ -2554,8 +2548,12 @@ export class BasesGraphView extends FileView {
       if (!existing) {
         try {
           await this.app.vault.createFolder(currentPath);
-        } catch (error: any) {
-          const message = String(error?.message ?? "").toLowerCase();
+        } catch (error) {
+          const message = String(
+            error && typeof error === "object" && "message" in error
+              ? (error as { message?: unknown }).message
+              : ""
+          ).toLowerCase();
           if (message.includes("already exists")) {
             continue;
           }
@@ -3607,24 +3605,15 @@ export class BasesGraphView extends FileView {
 
   private registerLifecycleEventHandlers(): void {
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
-      if (this.debugEnabled) {
-        console.debug("[GraphView] file-open:", file?.path ?? null);
-      }
       this.handleFileOpen(file ?? null);
     }));
 
     this.registerEvent(this.app.workspace.on("active-leaf-change", (_leaf) => {
       const file = this.app.workspace.getActiveFile();
-      if (this.debugEnabled) {
-        console.debug("[GraphView] active-leaf-change:", file?.path ?? null);
-      }
       this.highlightActiveNode(file?.path ?? null);
     }));
 
     this.registerEvent(this.app.workspace.on("layout-change", () => {
-      if (this.debugEnabled) {
-        console.debug("[GraphView] layout-change");
-      }
       // Intentionally no graph rebuild/replay/reheat on layout changes.
     }));
 
@@ -3648,9 +3637,6 @@ export class BasesGraphView extends FileView {
       }
       if (!this.isGraphRelevantFile(file)) {
         return;
-      }
-      if (this.debugEnabled) {
-        console.debug("[GraphView] metadata changed:", file.path);
       }
       this.scheduleMetadataProcessing(file);
     }));
@@ -3686,9 +3672,6 @@ export class BasesGraphView extends FileView {
         return;
       }
       if (this.connectedBaseFilterResult?.baseFile?.path === file.path) {
-        if (this.debugEnabled) {
-          console.debug("[GraphView] base filter modify:", file.path);
-        }
         void this.handleConnectedBaseFilterModify(file);
         return;
       }
@@ -3704,9 +3687,6 @@ export class BasesGraphView extends FileView {
         this.refreshVisibleNodeMetadataForFile(file, { preserveDiffSnapshot: true });
       }
       if (file.path !== this.file.path) return;
-      if (this.debugEnabled) {
-        console.debug("[GraphView] vault modify:", file.path);
-      }
       this.handleVaultModify(file);
     }));
   }
@@ -3798,10 +3778,6 @@ export class BasesGraphView extends FileView {
 
     if (!wasRelevant) return;
     if (this.file?.path === path) return;
-
-    if (this.debugEnabled) {
-      console.debug("[GraphView] vault delete:", path);
-    }
 
     if (wasVisible) {
       this.scheduleNoteTruthReconciliation(0);
@@ -5004,7 +4980,7 @@ export class BasesGraphView extends FileView {
     return out;
   }
 
-  getViewState(): any {
+  getViewState(): unknown {
     this.syncViewStateModelFromRuntime();
     const boundFilePath = this.file?.path ?? this.filePath ?? null;
     const graphState = {
@@ -5037,7 +5013,7 @@ export class BasesGraphView extends FileView {
     };
   }
 
-  async setViewState(state: any, ...rest: any[]): Promise<void> {
+  async setViewState(state: unknown, ...rest: unknown[]): Promise<void> {
     const payload = this.unwrapLeafViewStatePayload(state);
     await super.setViewState(state, ...rest);
     this.applyFileBindingFromState(payload);
@@ -5228,7 +5204,7 @@ export class BasesGraphView extends FileView {
     }
   }
 
-  private buildNodeLabels(entries: any[]): Map<string, string> {
+  private buildNodeLabels(entries: Array<Record<string, unknown>>): Map<string, string> {
     const labels = new Map<string, string>();
     const labelPropId = this.getPropertyId("labelProp");
 
@@ -5287,7 +5263,7 @@ export class BasesGraphView extends FileView {
     return linkpath ? `[[${linkpath}]]` : "";
   }
 
-  private selectBestLinkTypeSource(entries: any[]): {
+  private selectBestLinkTypeSource(entries: Array<Record<string, unknown>>): {
     source: string;
     files: TFile[];
     candidateCounts: Record<string, number>;
@@ -5431,7 +5407,7 @@ export class BasesGraphView extends FileView {
     }
   }
 
-  private getPropertyId(optionKey: string): any | null {
+  private getPropertyId(optionKey: string): unknown | null {
     const raw = this.config?.get(optionKey);
     const key = String(raw ?? "").trim();
     if (!key) return null;
@@ -7002,3 +6978,4 @@ class RenameGraphNoteModal extends Modal {
     this.close();
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

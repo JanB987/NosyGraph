@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { App, parseYaml, TFile } from "obsidian";
 
 export interface BaseViewFilterResult {
@@ -216,11 +216,15 @@ export class ObsidianBaseViewFilterResolver {
     return null;
   }
 
-  private getBasesApiCandidate(): any {
-    const appAny = this.app as any;
-    return appAny?.internalPlugins?.plugins?.bases?.instance
-      ?? appAny?.plugins?.plugins?.bases
-      ?? appAny?.bases
+  private getBasesApiCandidate(): unknown {
+    const appAny = this.app as unknown as {
+      internalPlugins?: { plugins?: { bases?: { instance?: unknown } } };
+      plugins?: { plugins?: { bases?: unknown } };
+      bases?: unknown;
+    };
+    return appAny.internalPlugins?.plugins?.bases?.instance
+      ?? appAny.plugins?.plugins?.bases
+      ?? appAny.bases
       ?? null;
   }
 
@@ -783,3 +787,4 @@ export class ObsidianBaseViewFilterResolver {
     return `${basePath}${viewName ? `#${viewName}` : ""}`;
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

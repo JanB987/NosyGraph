@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Obsidian DOM helper return types are validated by runtime element creation in this small badge wrapper. */
 import { App, TFile } from "obsidian";
 import { O3LinkType } from "./O3LinkType";
 import type { GraphEngine } from "./GraphEngine";
 import { setStyle } from "./domStyle";
 
 export class O3NodeBadge {
-  private badgeElement: HTMLDivElement | null = null;
+  private badgeElement: HTMLElement | null = null;
 
   constructor(
     private nodeElement: HTMLElement,
@@ -16,10 +17,10 @@ export class O3NodeBadge {
   ) {}
 
   render(): void {
-    this.badgeElement = this.nodeElement.createDiv({
-      cls: "o3-node-badge",
-      text: this.linkType.key
-    });
+    const badgeElement = this.nodeElement.createEl("div");
+    badgeElement.addClass("o3-node-badge");
+    badgeElement.textContent = this.linkType.key;
+    this.badgeElement = badgeElement;
     setStyle(this.badgeElement, "left", "0");
     setStyle(this.badgeElement, "top", "0");
     this.badgeElement.addEventListener("mousedown", (event) => {
@@ -55,3 +56,4 @@ export class O3NodeBadge {
     );
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Re-enable Obsidian DOM helper lint rules after this badge wrapper. */

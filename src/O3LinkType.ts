@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { TFile } from "obsidian";
 import {
   DEFAULT_LINK_TYPE_PROPERTY_KEYS,
@@ -30,7 +30,7 @@ export class O3LinkType {
   linkDiscovery: boolean;
   linkDuplicateNodes: boolean;
 
-  constructor(file: TFile, fm: any, propertyKeys: Partial<LinkTypePropertyKeys> = DEFAULT_LINK_TYPE_PROPERTY_KEYS) {
+  constructor(file: TFile, fm: unknown, propertyKeys: Partial<LinkTypePropertyKeys> = DEFAULT_LINK_TYPE_PROPERTY_KEYS) {
     const keys = normalizeLinkTypePropertyKeys(propertyKeys);
     const read = (key: keyof LinkTypePropertyKeys): unknown =>
       readConfiguredProperty(fm, keys, DEFAULT_LINK_TYPE_PROPERTY_KEYS, key);
@@ -126,3 +126,4 @@ export class O3LinkType {
       .replace(/\s+/g, "_");
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

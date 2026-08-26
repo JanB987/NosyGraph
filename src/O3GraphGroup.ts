@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { TFile } from "obsidian";
 import {
   DEFAULT_GROUP_PROPERTY_KEYS,
@@ -18,7 +18,7 @@ export class O3GraphGroup {
   colorExplicit: boolean;
   icon: string;
 
-  constructor(file: TFile, fm: any, propertyKeys: Partial<GroupPropertyKeys> = DEFAULT_GROUP_PROPERTY_KEYS) {
+  constructor(file: TFile, fm: unknown, propertyKeys: Partial<GroupPropertyKeys> = DEFAULT_GROUP_PROPERTY_KEYS) {
     const keys = normalizeGroupPropertyKeys(propertyKeys);
     const read = (key: keyof GroupPropertyKeys): unknown =>
       readConfiguredProperty(fm, keys, DEFAULT_GROUP_PROPERTY_KEYS, key);
@@ -32,10 +32,10 @@ export class O3GraphGroup {
     this.icon = String(read("icon") ?? "").trim();
   }
 
-  matches(frontmatter: any): boolean {
-    if (!frontmatter) return false;
+  matches(frontmatter: unknown): boolean {
+    if (!frontmatter || typeof frontmatter !== "object") return false;
 
-    const propValue = this.readPropertyValue(frontmatter);
+    const propValue = this.readPropertyValue(frontmatter as Record<string, unknown>);
 
     switch (this.operator) {
       case "exists":
@@ -65,3 +65,4 @@ export class O3GraphGroup {
     return undefined;
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

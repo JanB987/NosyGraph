@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- This extracted runtime manager is not bundled by the Obsidian plugin and keeps host-neutral callback boundaries for future reuse. */
 import { LinkQuickSwitcher } from "../components/LinkQuickSwitcher";
 import type { GraphEdge, GraphNode } from "../core/types";
 import type { LinkTypeDefinition } from "../link-types/types";
@@ -118,7 +119,6 @@ export class GraphPaneRuntimeManager {
       badgesByNode: Record<string, NodeLinkBadge[]>;
     };
   }): void {
-    const startTime = window.performance.now();
     const runtime = this.ensureRuntime(args.pane, args.viewport, args.documentPath);
     const renderSignature = this.buildRenderSignature(args);
     const cameraSignature = args.view.camera
@@ -159,17 +159,6 @@ export class GraphPaneRuntimeManager {
     }
     if (graphChanged || cameraChanged || centralGravityChanged || repulsionChanged || velocitySnapThresholdChanged) {
       runtime.engine.render();
-    }
-    const durationMs = window.performance.now() - startTime;
-    if (durationMs > 8) {
-      console.debug("[GraphPerf] attachOrUpdatePane", {
-        pane: args.pane,
-        durationMs: Math.round(durationMs * 100) / 100,
-        graphChanged,
-        cameraChanged,
-        nodeCount: args.renderState.nodes.length,
-        edgeCount: args.renderState.edges.length,
-      });
     }
   }
 
@@ -468,3 +457,4 @@ export class GraphPaneRuntimeManager {
     return path.replace(/\\/g, "/").split("/").pop()?.replace(/\.[^.]+$/u, "") ?? path;
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- Re-enable dynamic host-boundary lint rules after the extracted runtime manager. */

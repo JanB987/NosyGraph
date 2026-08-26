@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
-import { App, MarkdownRenderChild, Notice, parseYaml, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf } from "obsidian";
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
+import { App, MarkdownRenderChild, Notice, parseYaml, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, type MenuItem } from "obsidian";
 import { BASES_GRAPH_VIEW, BasesGraphView } from "./GraphView";
 import { GraphEngine, type EmbeddedGraphDefinition, type GraphLineStyle } from "./GraphEngine";
 import { O3GraphState, type O3GraphRuntimeNodeSnapshot, type O3GraphRuntimeState } from "./O3GraphState";
@@ -296,7 +296,7 @@ export default class BasesGraphPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file, _source, sourceLeaf) => {
       if (!(file instanceof TFile)) return;
       if (file.extension !== "md") return;
-      menu.addItem((item: any) => {
+      menu.addItem((item: MenuItem) => {
         item
           .setTitle("Open as NosyGraph")
           .setIcon("share-2")
@@ -2342,3 +2342,4 @@ class BasesGraphSettingTab extends PluginSettingTab {
       });
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

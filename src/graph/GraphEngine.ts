@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- This extracted renderer is not bundled by the Obsidian plugin and keeps host-neutral callback boundaries for future reuse. */
 // Canvas renderer and interaction layer for graph visualization.
 
 import type { GraphEdge, GraphNode } from "../core/types";
@@ -1450,3 +1451,4 @@ export class GraphEngine {
     this.nodeStateChangeHandler?.([...this.nodes]);
   }
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Re-enable dynamic host-boundary lint rules after the extracted renderer. */
