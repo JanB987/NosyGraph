@@ -10,15 +10,15 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 
 ## Screenshots
 
-![NosyGraph graph with connected base and link types](docs/images/Screenshot 2026-08-26 090901.png)
+![NosyGraph graph with connected base and link types](docs/images/nosygraph-linktype-badges.png)
 
 ### Expandable Graph Lenses
 
-![NosyGraph graph with nested lenses](docs/images/Screenshot 2026-08-26 090127.png)
+![NosyGraph graph with nested lenses](docs/images/nosygraph-lenses-overview.png)
 
 ### Nested Lenses And Graph Navigation
 
-![NosyGraph nested lenses and connected nodes](docs/images/Screenshot 2026-08-26 090710.png)
+![NosyGraph nested lenses and connected nodes](docs/images/nosygraph-nested-lenses.png)
 
 
 ## Features
