@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
 import { App, Component, EventRef, Menu, TFile } from "obsidian";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE } from "./linkResolver";
 import { type GraphPropertyKeys, normalizeGraphPropertyKeys, readFrontmatterPropertyByKey } from "./GraphPropertyKeys";
@@ -12640,7 +12641,7 @@ export class GraphEngine {
   }
 
   private createElement<K extends keyof HTMLElementTagNameMap>(tagName: K): HTMLElementTagNameMap[K] {
-    return this.container.ownerDocument.createElement(tagName);
+    return createEl(tagName);
   }
 }
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
 import { App, MarkdownRenderChild, Notice, parseYaml, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import { BASES_GRAPH_VIEW, BasesGraphView } from "./GraphView";
 import { GraphEngine, type EmbeddedGraphDefinition, type GraphLineStyle } from "./GraphEngine";
@@ -1867,6 +1868,10 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
 class BasesGraphSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: BasesGraphPlugin) {
     super(app, plugin);
+  }
+
+  getSettingDefinitions(): unknown[] {
+    return [];
   }
 
   display(): void {

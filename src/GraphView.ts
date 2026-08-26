@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion */
 import { App, FileView, Menu, Modal, Notice, WorkspaceLeaf, type ViewStateResult, parsePropertyId, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
 import { setStyle } from "./domStyle";
 import {
@@ -4207,15 +4208,6 @@ export class BasesGraphView extends FileView {
 
     if (!message) {
       this.lastConnectedBaseFilterMessage = null;
-      if (this.debugEnabled) {
-        console.info("[GraphView] Connected Base filter resolved", {
-          filterId: result.filterId,
-          baseFile: result.baseFile?.path ?? null,
-          viewName: result.viewName,
-          source: result.source,
-          files: result.files.length
-        });
-      }
       return;
     }
 
