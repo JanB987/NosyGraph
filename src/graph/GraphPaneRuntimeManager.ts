@@ -217,10 +217,9 @@ export class GraphPaneRuntimeManager {
     }
 
     this.destroyPane(pane);
-    const graphCanvas = window.document.createElement("canvas");
-    graphCanvas.className = "wm-graph-preview-canvas";
+    const graphCanvas = viewport.createEl("canvas");
+    graphCanvas.addClass("wm-graph-preview-canvas");
     graphCanvas.dataset.graphInteractiveCanvas = pane;
-    viewport.append(graphCanvas);
 
     const graphEngine = new GraphEngine();
     graphEngine.initialize(graphCanvas);

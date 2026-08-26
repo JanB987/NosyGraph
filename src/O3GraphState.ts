@@ -1,5 +1,4 @@
 import { TFile } from "obsidian";
-const DEBUG_LOGS = false;
 
 export interface O3GraphRuntimeExpansion {
   id: string;
@@ -108,9 +107,6 @@ export class O3GraphState {
 
     if (!match) {
       this.loadedFromGraphStateBlock = false;
-      if (DEBUG_LOGS) {
-        console.log("No o3graph block found.");
-      }
       return;
     }
 
@@ -120,9 +116,6 @@ export class O3GraphState {
       const parsedVersion = Number(parsed?.version);
       if (!(parsedVersion === 1 || parsedVersion === 2)) {
         this.loadedFromGraphStateBlock = false;
-        if (DEBUG_LOGS) {
-          console.warn("Unsupported graph state version:", parsed?.version);
-        }
         return;
       }
       this.loadedFromGraphStateBlock = true;
@@ -197,9 +190,6 @@ export class O3GraphState {
       };
       this.migrateLegacyExpandedToGraphModel(legacyExpanded);
       this.normalizeGraphModel();
-      if (DEBUG_LOGS) {
-        console.log("Loaded O3GraphState:", this.state);
-      }
     } catch (e) {
       console.error("Failed to parse o3graph block:", e);
     }

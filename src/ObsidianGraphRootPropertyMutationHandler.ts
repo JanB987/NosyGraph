@@ -1,5 +1,5 @@
-import { Modal, Notice, TFile, type App } from "obsidian";
-import { extractInternalLinkCandidates, resolveWikiLinkArray } from "./linkResolver";
+import { Modal, TFile, type App } from "obsidian";
+import { resolveWikiLinkArray } from "./linkResolver";
 import { setStyle } from "./domStyle";
 
 export interface GraphRootPropertyMutationRequest {

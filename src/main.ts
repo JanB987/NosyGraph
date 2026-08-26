@@ -319,7 +319,7 @@ export default class BasesGraphPlugin extends Plugin {
       if (!isGraphTarget) return;
 
       const embedContent = el.closest(".markdown-embed-content");
-      if (!(embedContent instanceof HTMLElement)) return;
+      if (!this.isHTMLElement(embedContent)) return;
       if (!this.isGraphViewEmbedRequest(embedContent)) return;
       if (embedContent.dataset.o3GraphEmbedMounted === "1") return;
       embedContent.dataset.o3GraphEmbedMounted = "1";
@@ -336,7 +336,7 @@ export default class BasesGraphPlugin extends Plugin {
 
   private isGraphViewEmbedRequest(embedContent: HTMLElement): boolean {
     const embed = embedContent.closest(".markdown-embed");
-    if (!(embed instanceof HTMLElement)) return false;
+    if (!this.isHTMLElement(embed)) return false;
 
     const candidates: string[] = [];
     const add = (value: unknown): void => {
@@ -351,7 +351,7 @@ export default class BasesGraphPlugin extends Plugin {
     add(embed.dataset?.href);
 
     for (const link of Array.from(embed.querySelectorAll("a.internal-link, .markdown-embed-link"))) {
-      if (!(link instanceof HTMLElement)) continue;
+      if (!this.isHTMLElement(link)) continue;
       add(link.getAttribute("href"));
       add(link.getAttribute("data-href"));
       add(link.getAttribute("aria-label"));
@@ -373,6 +373,20 @@ export default class BasesGraphPlugin extends Plugin {
       .toLowerCase()
       .replace(/[\s_-]+/g, "");
     return subpath === "graphview" || subpath === "o3graph" || subpath === "o3graphview";
+  }
+
+  private isHTMLElement(value: unknown): value is HTMLElement {
+    if (!value || typeof value !== "object") return false;
+    const ownerDocument = "ownerDocument" in value
+      ? (value as { ownerDocument?: Document | null }).ownerDocument
+      : null;
+    const ownerWindow = ownerDocument?.defaultView ?? window;
+    return value instanceof ownerWindow.HTMLElement;
+  }
+
+  private isMouseEvent(value: unknown, contextEl: HTMLElement): value is MouseEvent {
+    const ownerWindow = contextEl.ownerDocument.defaultView ?? window;
+    return value instanceof ownerWindow.MouseEvent;
   }
 
   private triggerStyleSettingsReparse(): void {
@@ -931,26 +945,34 @@ export default class BasesGraphPlugin extends Plugin {
       }
       await this.openFileInGraphView(file, targetLeaf);
     };
+    let suppressPrimaryGraphActionUntil = 0;
+    const suppressPrimaryGraphAction = (): void => {
+      suppressPrimaryGraphActionUntil = Date.now() + 750;
+    };
     const actionEl = view.addAction("share-2", "Open as NosyGraph", () => {
+      if (Date.now() < suppressPrimaryGraphActionUntil) return;
       void openGraphAction(leaf);
     });
     actionEl.addEventListener("click", (event) => {
-      if (!(event instanceof MouseEvent)) return;
+      if (!this.isMouseEvent(event, actionEl)) return;
       if (!this.shouldOpenGraphActionInNewTab(event)) return;
+      suppressPrimaryGraphAction();
       event.preventDefault();
       event.stopImmediatePropagation();
       void openGraphAction(this.app.workspace.getLeaf("tab"));
     }, true);
     actionEl.addEventListener("auxclick", (event) => {
       if (event.button !== 1) return;
+      suppressPrimaryGraphAction();
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
       void openGraphAction(this.app.workspace.getLeaf("tab"));
     });
     actionEl.addEventListener("mousedown", (event) => {
       if (event.button !== 1) return;
+      suppressPrimaryGraphAction();
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
     });
     this.markdownGraphSwitchActions.set(leaf, actionEl);
 

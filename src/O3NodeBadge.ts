@@ -2,7 +2,6 @@ import { App, TFile } from "obsidian";
 import { O3LinkType } from "./O3LinkType";
 import type { GraphEngine } from "./GraphEngine";
 import { setStyle } from "./domStyle";
-const DEBUG_LOGS = false;
 
 export class O3NodeBadge {
   private badgeElement: HTMLDivElement | null = null;
@@ -17,9 +16,10 @@ export class O3NodeBadge {
   ) {}
 
   render(): void {
-    this.badgeElement = document.createElement("div");
-    this.badgeElement.className = "o3-node-badge";
-    this.badgeElement.textContent = this.linkType.key;
+    this.badgeElement = this.nodeElement.createDiv({
+      cls: "o3-node-badge",
+      text: this.linkType.key
+    });
     setStyle(this.badgeElement, "left", "0");
     setStyle(this.badgeElement, "top", "0");
     this.badgeElement.addEventListener("mousedown", (event) => {
@@ -33,15 +33,9 @@ export class O3NodeBadge {
         this.onClick();
       }
     });
-
-    this.nodeElement.appendChild(this.badgeElement);
   }
 
   private onClick(): void {
-    if (DEBUG_LOGS) {
-      console.log(`[Badge] Clicked ${this.linkType.key} on ${this.nodeFile.name}`);
-    }
-
     this.graphEngine.expandFromNode(
       this.nodeFile,
       this.linkType,

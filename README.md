@@ -120,11 +120,7 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 
 ## Basic Setup
 
-Install the plugin into your vault's plugin folder:
-
-```text
-<vault>/.obsidian/plugins/nosygraph/
-```
+Install the plugin into the `.obsidian/plugins/nosygraph/` folder inside an Obsidian vault.
 
 The folder should contain:
 
@@ -140,6 +136,14 @@ For local development from source:
 npm install
 npm run build
 ```
+
+## Privacy And Permissions
+
+NosyGraph works locally inside Obsidian and does not make network requests.
+
+The plugin may enumerate Markdown files in the vault to resolve graph roots, graph capable notes, incoming links, discovered link types, connected Base view results, and missing-file relationships. This is needed because graph membership can depend on links and frontmatter relationships across multiple notes.
+
+Clipboard access is used for explicit copy actions in the graph view, such as copying selected graph node links. NosyGraph does not read clipboard content for background processing.
 
 ## Note Types
 
@@ -349,16 +353,7 @@ Groups can overlap. If multiple active groups match a node, the first matching g
 
 NosyGraph was created by Jan Bergholz with the help of AI-assisted software development tools. Jan Bergholz managed and directed the development, defined the desired behavior, tested the plugin in real vault workflows, and made the product and design decisions. The implementation was developed iteratively with AI assistance.
 
-Recommended manifest values:
-
-```json
-{
-  "id": "nosygraph",
-  "name": "NosyGraph",
-  "description": "Build and explore structured, expandable graphs from your notes.",
-  "author": "Jan Bergholz"
-}
-```
+The plugin manifest uses the id `nosygraph`, the name `NosyGraph`, and Jan Bergholz as author.
 
 ## Release Status
 

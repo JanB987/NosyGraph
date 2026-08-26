@@ -616,7 +616,7 @@ export class GraphEngine {
   private styleSettingsCssChangeRef: EventRef | null = null;
   private onOutsideClick = (e: MouseEvent) => {
     const target = e.target as EventTarget | null;
-    if (!(target instanceof HTMLElement)) return;
+    if (!this.isHTMLElement(target)) return;
     const parentOverlayVisible = !!this.parentOverlay && this.parentOverlay.style.display !== "none";
     if (!this.menuOpen && !this.settingsOpen && !parentOverlayVisible) return;
     if (!this.menuPanel || !this.settingsPanel || !this.menuButton || !this.settingsButton) return;
@@ -904,20 +904,18 @@ export class GraphEngine {
     setStyle(this.container, "overflow", "hidden");
     this.container.tabIndex = 0;
 
-    this.canvas = document.createElement("canvas");
+    this.canvas = this.container.createEl("canvas");
     setStyle(this.canvas, "position", "absolute");
     setStyle(this.canvas, "inset", "0");
     setStyle(this.canvas, "zIndex", "0");
-    this.container.appendChild(this.canvas);
 
-    this.hoverPreviewTargetEl = document.createElement("div");
+    this.hoverPreviewTargetEl = this.container.createDiv();
     setStyle(this.hoverPreviewTargetEl, "position", "absolute");
     setStyle(this.hoverPreviewTargetEl, "width", "1px");
     setStyle(this.hoverPreviewTargetEl, "height", "1px");
     setStyle(this.hoverPreviewTargetEl, "pointerEvents", "none");
     setStyle(this.hoverPreviewTargetEl, "opacity", "0");
     setStyle(this.hoverPreviewTargetEl, "zIndex", "1");
-    this.container.appendChild(this.hoverPreviewTargetEl);
 
     this.ctx = this.canvas.getContext("2d")!;
     this.initializeSize();
@@ -1028,21 +1026,19 @@ export class GraphEngine {
   }
 
   private initMenus() {
-    const overlay = document.createElement("div");
+    const overlay = this.container.createDiv();
     setStyle(overlay, "position", "absolute");
     setStyle(overlay, "top", "8px");
     setStyle(overlay, "left", "8px");
     setStyle(overlay, "zIndex", "2");
     setStyle(overlay, "display", "block");
-    this.container.appendChild(overlay);
 
-    const buttonRow = document.createElement("div");
+    const buttonRow = overlay.createDiv();
     setStyle(buttonRow, "display", "flex");
     setStyle(buttonRow, "gap", "8px");
     setStyle(buttonRow, "alignItems", "center");
-    overlay.appendChild(buttonRow);
 
-    this.menuButton = document.createElement("button");
+    this.menuButton = buttonRow.createEl("button");
     this.menuButton.type = "button";
     this.menuButton.textContent = "Link Types ";
     setStyle(this.menuButton, "display", "flex");
@@ -1050,9 +1046,8 @@ export class GraphEngine {
     setStyle(this.menuButton, "gap", "6px");
     setStyle(this.menuButton, "padding", "6px 10px");
     setStyle(this.menuButton, "cursor", "pointer");
-    buttonRow.appendChild(this.menuButton);
 
-    this.fitButton = document.createElement("button");
+    this.fitButton = this.container.createEl("button");
     this.fitButton.type = "button";
     this.fitButton.textContent = "⤢";
     this.fitButton.title = "Fit graph to content";
@@ -1070,9 +1065,8 @@ export class GraphEngine {
     setStyle(this.fitButton, "fontSize", "16px");
     setStyle(this.fitButton, "lineHeight", "1");
     setStyle(this.fitButton, "borderRadius", "6px");
-    this.container.appendChild(this.fitButton);
 
-    this.menuCount = document.createElement("span");
+    this.menuCount = this.menuButton.createEl("span");
     this.menuCount.textContent = "0";
     setStyle(this.menuCount, "minWidth", "18px");
     setStyle(this.menuCount, "height", "18px");
@@ -1083,9 +1077,8 @@ export class GraphEngine {
     setStyle(this.menuCount, "fontSize", "11px");
     setStyle(this.menuCount, "lineHeight", "18px");
     setStyle(this.menuCount, "textAlign", "center");
-    this.menuButton.appendChild(this.menuCount);
 
-    this.menuPanel = document.createElement("div");
+    this.menuPanel = overlay.createDiv();
     setStyle(this.menuPanel, "display", "none");
     setStyle(this.menuPanel, "position", "absolute");
     setStyle(this.menuPanel, "top", "36px");
@@ -1105,9 +1098,8 @@ export class GraphEngine {
     setStyle(this.menuPanel, "border", "1px solid var(--background-modifier-border)");
     setStyle(this.menuPanel, "background", "var(--background-primary)");
     setStyle(this.menuPanel, "boxShadow", "0 8px 24px rgba(0,0,0,0.2)");
-    overlay.appendChild(this.menuPanel);
 
-    this.settingsButton = document.createElement("button");
+    this.settingsButton = buttonRow.createEl("button");
     this.settingsButton.type = "button";
     this.settingsButton.textContent = "⚙";
     this.settingsButton.title = "Graph settings";
@@ -1121,9 +1113,8 @@ export class GraphEngine {
     setStyle(this.settingsButton, "lineHeight", "1");
     setStyle(this.settingsButton, "borderRadius", "6px");
     setStyle(this.settingsButton, "cursor", "pointer");
-    buttonRow.appendChild(this.settingsButton);
 
-    this.settingsPanel = document.createElement("div");
+    this.settingsPanel = overlay.createDiv();
     setStyle(this.settingsPanel, "display", "none");
     setStyle(this.settingsPanel, "position", "absolute");
     setStyle(this.settingsPanel, "top", "36px");
@@ -1134,15 +1125,13 @@ export class GraphEngine {
     setStyle(this.settingsPanel, "border", "1px solid var(--background-modifier-border)");
     setStyle(this.settingsPanel, "background", "var(--background-primary)");
     setStyle(this.settingsPanel, "boxShadow", "0 8px 24px rgba(0,0,0,0.2)");
-    overlay.appendChild(this.settingsPanel);
 
-    this.badgeOverlay = document.createElement("div");
+    this.badgeOverlay = this.container.createDiv();
     setStyle(this.badgeOverlay, "position", "absolute");
     setStyle(this.badgeOverlay, "inset", "0");
     setStyle(this.badgeOverlay, "zIndex", "1");
     setStyle(this.badgeOverlay, "pointerEvents", "auto");
     this.badgeOverlay.draggable = false;
-    this.container.appendChild(this.badgeOverlay);
     this.badgeOverlay.addEventListener("wheel", this.onWheelBound, { passive: false });
     this.badgeOverlay.addEventListener("mousedown", this.onMouseDownBound);
     this.badgeOverlay.addEventListener("dblclick", this.onDoubleClickBound);
@@ -1152,7 +1141,7 @@ export class GraphEngine {
     this.badgeOverlay.addEventListener("drop", this.onNativeDropBound);
     this.badgeOverlay.addEventListener("dragend", this.onNativeDragEndBound);
 
-    this.parentOverlay = document.createElement("div");
+    this.parentOverlay = this.container.createDiv();
     setStyle(this.parentOverlay, "position", "absolute");
     setStyle(this.parentOverlay, "display", "none");
     setStyle(this.parentOverlay, "zIndex", "4");
@@ -1163,21 +1152,18 @@ export class GraphEngine {
     setStyle(this.parentOverlay, "border", "1px solid var(--background-modifier-border)");
     setStyle(this.parentOverlay, "background", "var(--background-primary)");
     setStyle(this.parentOverlay, "boxShadow", "0 8px 24px rgba(0,0,0,0.2)");
-    this.container.appendChild(this.parentOverlay);
 
-    this.menuSearch = document.createElement("input");
+    this.menuSearch = this.menuPanel.createEl("input");
     this.menuSearch.type = "text";
     this.menuSearch.placeholder = "Search link types...";
     setStyle(this.menuSearch, "width", "100%");
     setStyle(this.menuSearch, "marginBottom", "8px");
     setStyle(this.menuSearch, "display", this.disableDefaultLinkTypeList ? "none" : "block");
-    this.menuPanel.appendChild(this.menuSearch);
 
-    this.menuList = document.createElement("div");
+    this.menuList = this.menuPanel.createDiv();
     setStyle(this.menuList, "flex", "1");
     setStyle(this.menuList, "minHeight", "0");
     setStyle(this.menuList, "overflowY", "auto");
-    this.menuPanel.appendChild(this.menuList);
 
     this.menuButton.addEventListener("mousedown", (e) => {
       e.stopPropagation();
@@ -3097,7 +3083,7 @@ export class GraphEngine {
       return existing;
     }
 
-    const button = document.createElement("button");
+    const button = this.createElement("button");
     button.type = "button";
     setStyle(button, "position", "absolute");
     setStyle(button, "transform", "translate(-50%, -50%)");
@@ -3146,7 +3132,7 @@ export class GraphEngine {
       return existing;
     }
 
-    const pin = document.createElement("button");
+    const pin = this.createElement("button");
     pin.type = "button";
     pin.textContent = "📌";
     pin.title = "Unpin node";
@@ -3211,7 +3197,7 @@ export class GraphEngine {
       return existing;
     }
 
-    const button = document.createElement("button");
+    const button = this.createElement("button");
     button.type = "button";
     button.className = "o3-node-lens-button";
     button.textContent = "⌕";
@@ -3763,7 +3749,7 @@ export class GraphEngine {
         const badgeLabel = String(linkType.key ?? linkType.property ?? "").trim() || normalizedProperty;
         const desiredX = sx + radius + 4;
         const desiredY = sy - radius - 4 - (i * 14);
-        const anchor = document.createElement("div");
+        const anchor = this.createElement("div");
         anchor.className = "o3-node-badge-anchor";
         anchor.dataset.o3ExpansionKey = expansionKey;
         setStyle(anchor, "position", "absolute");
@@ -4125,7 +4111,6 @@ export class GraphEngine {
     towardX: number,
     towardY: number
   ): { x: number; y: number } {
-    const container = this.getExpandedEmbeddedContainerForOrigin(node.id);
     const center = this.getRenderedNodeCenter(node);
     const centerX = center.x;
     const centerY = center.y;
@@ -4807,7 +4792,7 @@ export class GraphEngine {
 
     this.parentOverlay.empty();
 
-    const title = document.createElement("div");
+    const title = this.createElement("div");
     title.textContent = `Parent actions for: ${node.label || node.id}`;
     setStyle(title, "fontWeight", "600");
     setStyle(title, "fontSize", "12px");
@@ -4816,19 +4801,19 @@ export class GraphEngine {
 
     const parentTypes = this.getParentSemanticLinkTypes();
     if (parentTypes.length === 0) {
-      const empty = document.createElement("div");
+      const empty = this.createElement("div");
       empty.textContent = "No parent link types defined";
       setStyle(empty, "fontSize", "12px");
       setStyle(empty, "opacity", "0.8");
       this.parentOverlay.appendChild(empty);
     } else {
-      const actions = document.createElement("div");
+      const actions = this.createElement("div");
       setStyle(actions, "display", "grid");
       setStyle(actions, "gap", "6px");
       this.parentOverlay.appendChild(actions);
 
       for (const parentType of parentTypes) {
-        const button = document.createElement("button");
+        const button = this.createElement("button");
         button.type = "button";
         button.textContent = parentType;
         setStyle(button, "textAlign", "left");
@@ -5651,7 +5636,7 @@ export class GraphEngine {
     this.menuList.empty();
     if (this.disableDefaultLinkTypeList) {
       if (this.menuOptions.renderLinkTypeMenuExtras) {
-        const extrasHost = document.createElement("div");
+        const extrasHost = this.createElement("div");
         setStyle(extrasHost, "display", "grid");
         setStyle(extrasHost, "gap", "8px");
         setStyle(extrasHost, "padding", "2px");
@@ -5683,7 +5668,7 @@ export class GraphEngine {
     }
 
     const appendDivider = (label: string) => {
-      const divider = document.createElement("div");
+      const divider = this.createElement("div");
       divider.className = "linktype-divider";
       divider.textContent = label;
       setStyle(divider, "fontSize", "10px");
@@ -5698,19 +5683,19 @@ export class GraphEngine {
     };
 
     const appendLinkTypeRow = (type: string) => {
-      const row = document.createElement("div");
+      const row = this.createElement("div");
       setStyle(row, "display", "flex");
       setStyle(row, "flexDirection", "column");
       setStyle(row, "gap", "4px");
       setStyle(row, "padding", "4px 2px");
 
-      const checkboxRow = document.createElement("label");
+      const checkboxRow = this.createElement("label");
       setStyle(checkboxRow, "display", "flex");
       setStyle(checkboxRow, "alignItems", "center");
       setStyle(checkboxRow, "gap", "8px");
       setStyle(checkboxRow, "cursor", "pointer");
 
-      const checkbox = document.createElement("input");
+      const checkbox = this.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = this.selectedLinkTypes.has(type);
       checkbox.addEventListener("change", () => {
@@ -5726,7 +5711,7 @@ export class GraphEngine {
         this.menuList.scrollTop = 0;
       });
 
-      const text = document.createElement("span");
+      const text = this.createElement("span");
       text.textContent = type;
 
       checkboxRow.appendChild(checkbox);
@@ -5734,7 +5719,7 @@ export class GraphEngine {
       row.appendChild(checkboxRow);
 
       const physicsConfig = this.getLinkTypePhysicsConfig(type);
-      const physicsBlock = document.createElement("div");
+      const physicsBlock = this.createElement("div");
       setStyle(physicsBlock, "display", "grid");
       setStyle(physicsBlock, "gap", "4px");
       setStyle(physicsBlock, "marginLeft", "22px");
@@ -5749,24 +5734,24 @@ export class GraphEngine {
         formatter: (value: number) => string;
         onChange: (value: number) => void;
       }) => {
-        const wrap = document.createElement("div");
+        const wrap = this.createElement("div");
         setStyle(wrap, "display", "grid");
         setStyle(wrap, "gap", "2px");
 
-        const labelRow = document.createElement("div");
+        const labelRow = this.createElement("div");
         setStyle(labelRow, "display", "flex");
         setStyle(labelRow, "justifyContent", "space-between");
         setStyle(labelRow, "alignItems", "center");
         setStyle(labelRow, "fontSize", "10px");
 
-        const labelEl = document.createElement("span");
-        const valueEl = document.createElement("span");
+        const labelEl = this.createElement("span");
+        const valueEl = this.createElement("span");
         setStyle(valueEl, "fontFamily", "var(--font-monospace)");
         labelRow.appendChild(labelEl);
         labelRow.appendChild(valueEl);
         wrap.appendChild(labelRow);
 
-        const slider = document.createElement("input");
+        const slider = this.createElement("input");
         slider.type = "range";
         slider.min = String(config.min);
         slider.max = String(config.max);
@@ -5846,7 +5831,7 @@ export class GraphEngine {
 
     if (this.menuOptions.renderLinkTypeMenuExtras) {
       appendDivider("Graph Link Type Config");
-      const extrasHost = document.createElement("div");
+      const extrasHost = this.createElement("div");
       setStyle(extrasHost, "display", "grid");
       setStyle(extrasHost, "gap", "8px");
       setStyle(extrasHost, "padding", "6px 2px 2px");
@@ -5868,7 +5853,7 @@ export class GraphEngine {
     this.settingsPanel.empty();
     this.settingControls = {};
 
-    const title = document.createElement("div");
+    const title = this.createElement("div");
     title.textContent = "Graph Settings";
     setStyle(title, "fontWeight", "600");
     setStyle(title, "marginBottom", "10px");
@@ -5988,22 +5973,22 @@ export class GraphEngine {
   }
 
   private appendLayoutSetting() {
-    const wrapper = document.createElement("div");
+    const wrapper = this.createElement("div");
     setStyle(wrapper, "marginBottom", "10px");
 
-    const label = document.createElement("div");
+    const label = this.createElement("div");
     label.textContent = "Layout";
     setStyle(label, "fontSize", "12px");
     setStyle(label, "marginBottom", "4px");
     wrapper.appendChild(label);
 
-    const select = document.createElement("select");
+    const select = this.createElement("select");
     setStyle(select, "width", "100%");
     setStyle(select, "fontSize", "12px");
     setStyle(select, "padding", "2px 4px");
 
     for (const option of this.layoutOptions) {
-      const entry = document.createElement("option");
+      const entry = this.createElement("option");
       entry.value = option.id;
       entry.textContent = option.enabled === false ? `${option.label} (coming soon)` : option.label;
       entry.disabled = option.enabled === false;
@@ -6033,18 +6018,18 @@ export class GraphEngine {
     formatter: (value: number) => string;
     onChange: (value: number) => void;
   }) {
-    const wrapper = document.createElement("div");
+    const wrapper = this.createElement("div");
     setStyle(wrapper, "marginBottom", "10px");
 
-    const labelRow = document.createElement("div");
+    const labelRow = this.createElement("div");
     setStyle(labelRow, "display", "flex");
     setStyle(labelRow, "justifyContent", "space-between");
     setStyle(labelRow, "fontSize", "12px");
     setStyle(labelRow, "marginBottom", "4px");
 
-    const labelText = document.createElement("span");
+    const labelText = this.createElement("span");
     labelText.textContent = config.label;
-    const valueText = document.createElement("span");
+    const valueText = this.createElement("span");
     valueText.textContent = config.formatter(config.value);
     setStyle(valueText, "fontFamily", "var(--font-monospace)");
 
@@ -6052,7 +6037,7 @@ export class GraphEngine {
     labelRow.appendChild(valueText);
     wrapper.appendChild(labelRow);
 
-    const slider = document.createElement("input");
+    const slider = this.createElement("input");
     slider.type = "range";
     slider.min = String(config.min);
     slider.max = String(config.max);
@@ -6081,7 +6066,7 @@ export class GraphEngine {
     value: boolean;
     onChange: (value: boolean) => void;
   }) {
-    const wrapper = document.createElement("label");
+    const wrapper = this.createElement("label");
     setStyle(wrapper, "display", "flex");
     setStyle(wrapper, "alignItems", "center");
     setStyle(wrapper, "justifyContent", "space-between");
@@ -6089,10 +6074,10 @@ export class GraphEngine {
     setStyle(wrapper, "marginTop", "2px");
     setStyle(wrapper, "fontSize", "12px");
 
-    const labelText = document.createElement("span");
+    const labelText = this.createElement("span");
     labelText.textContent = config.label;
 
-    const checkbox = document.createElement("input");
+    const checkbox = this.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = config.value;
     checkbox.addEventListener("change", () => {
@@ -6105,30 +6090,30 @@ export class GraphEngine {
   }
 
   private appendGroupingSettings(): void {
-    const section = document.createElement("details");
+    const section = this.createElement("details");
     section.open = false;
     setStyle(section, "marginTop", "12px");
     setStyle(section, "paddingTop", "8px");
     setStyle(section, "borderTop", "1px solid var(--background-modifier-border)");
 
-    const summary = document.createElement("summary");
+    const summary = this.createElement("summary");
     summary.textContent = "Grouping";
     setStyle(summary, "cursor", "pointer");
     setStyle(summary, "fontWeight", "600");
     setStyle(summary, "fontSize", "12px");
     section.appendChild(summary);
 
-    const body = document.createElement("div");
+    const body = this.createElement("div");
     setStyle(body, "display", "grid");
     setStyle(body, "gap", "8px");
     setStyle(body, "marginTop", "8px");
     section.appendChild(body);
 
-    const addRow = document.createElement("div");
+    const addRow = this.createElement("div");
     setStyle(addRow, "display", "flex");
     setStyle(addRow, "justifyContent", "flex-start");
 
-    const addBtn = document.createElement("button");
+    const addBtn = this.createElement("button");
     addBtn.type = "button";
     addBtn.textContent = "+ Add Rule";
     setStyle(addBtn, "fontSize", "11px");
@@ -6151,7 +6136,7 @@ export class GraphEngine {
     body.appendChild(addRow);
 
     if (this.groupingRules.length === 0) {
-      const empty = document.createElement("div");
+      const empty = this.createElement("div");
       empty.textContent = "No grouping rules";
       setStyle(empty, "fontSize", "11px");
       setStyle(empty, "opacity", "0.7");
@@ -6159,7 +6144,7 @@ export class GraphEngine {
     }
 
     this.groupingRules.forEach((rule, index) => {
-      const ruleBox = document.createElement("div");
+      const ruleBox = this.createElement("div");
       setStyle(ruleBox, "display", "grid");
       setStyle(ruleBox, "gap", "6px");
       setStyle(ruleBox, "padding", "8px");
@@ -6167,11 +6152,11 @@ export class GraphEngine {
       setStyle(ruleBox, "borderRadius", "6px");
 
       const field = (labelText: string) => {
-        const wrap = document.createElement("label");
+        const wrap = this.createElement("label");
         setStyle(wrap, "display", "grid");
         setStyle(wrap, "gap", "2px");
         setStyle(wrap, "fontSize", "11px");
-        const label = document.createElement("span");
+        const label = this.createElement("span");
         label.textContent = labelText;
         setStyle(label, "opacity", "0.8");
         wrap.appendChild(label);
@@ -6180,7 +6165,7 @@ export class GraphEngine {
       };
 
       const propertyField = field("Property");
-      const propertySelect = document.createElement("select");
+      const propertySelect = this.createElement("select");
       setStyle(propertySelect, "fontSize", "11px");
       setStyle(propertySelect, "padding", "2px 4px");
       const propertyOptions = this.normalizeGroupingPropertyOptions([
@@ -6188,13 +6173,13 @@ export class GraphEngine {
         rule.property
       ]);
       if (propertyOptions.length === 0) {
-        const opt = document.createElement("option");
+        const opt = this.createElement("option");
         opt.value = "";
         opt.textContent = "(No properties)";
         propertySelect.appendChild(opt);
       } else {
         for (const property of propertyOptions) {
-          const opt = document.createElement("option");
+          const opt = this.createElement("option");
           opt.value = property;
           opt.textContent = property;
           propertySelect.appendChild(opt);
@@ -6209,11 +6194,11 @@ export class GraphEngine {
       propertyField.appendChild(propertySelect);
 
       const conditionField = field("Condition");
-      const conditionSelect = document.createElement("select");
+      const conditionSelect = this.createElement("select");
       setStyle(conditionSelect, "fontSize", "11px");
       setStyle(conditionSelect, "padding", "2px 4px");
       for (const optionValue of ["equals", "contains", "exists"] as const) {
-        const opt = document.createElement("option");
+        const opt = this.createElement("option");
         opt.value = optionValue;
         opt.textContent = optionValue;
         conditionSelect.appendChild(opt);
@@ -6236,7 +6221,7 @@ export class GraphEngine {
 
       if (rule.operator !== "exists") {
         const valueField = field("Value");
-        const valueInput = document.createElement("input");
+        const valueInput = this.createElement("input");
         valueInput.type = "text";
         valueInput.value = rule.value ?? "";
         setStyle(valueInput, "fontSize", "11px");
@@ -6250,7 +6235,7 @@ export class GraphEngine {
       }
 
       const colorField = field("Color");
-      const colorInput = document.createElement("input");
+      const colorInput = this.createElement("input");
       colorInput.type = "color";
       colorInput.value = /^#[0-9a-fA-F]{6}$/.test(rule.color) ? rule.color : "#4caf50";
       colorInput.addEventListener("input", () => {
@@ -6260,7 +6245,7 @@ export class GraphEngine {
       });
       colorField.appendChild(colorInput);
 
-      const deleteBtn = document.createElement("button");
+      const deleteBtn = this.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.textContent = "Delete Rule";
       setStyle(deleteBtn, "fontSize", "11px");
@@ -9018,7 +9003,7 @@ export class GraphEngine {
       this.requestRender();
       return;
     }
-    const targetEl = e.target instanceof HTMLElement
+    const targetEl = this.isHTMLElement(e.target)
       ? e.target.closest("[data-o3-expansion-key]") as HTMLElement | null
       : null;
     const nextHoveredExpansionKey = targetEl?.dataset?.o3ExpansionKey ?? null;
@@ -9395,7 +9380,7 @@ export class GraphEngine {
 
   private getTransparentDragImage(): HTMLElement {
     if (this.transparentDragImage) return this.transparentDragImage;
-    const image = document.createElement("div");
+    const image = this.createElement("div");
     setStyle(image, "position", "fixed");
     setStyle(image, "left", "-10000px");
     setStyle(image, "top", "-10000px");
@@ -9524,7 +9509,7 @@ export class GraphEngine {
     draggedNodeId: string,
   ): BadgeDropTarget | null {
     const element = document.elementFromPoint(clientX, clientY);
-    let badgeElement = element instanceof HTMLElement
+    let badgeElement = this.isHTMLElement(element)
       ? element.closest("[data-o3-expansion-key]") as HTMLElement | null
       : null;
     if (!badgeElement) {
@@ -12240,7 +12225,7 @@ export class GraphEngine {
           zoom: previousCamera.zoom
         };
 
-    const exportCanvas = document.createElement("canvas");
+    const exportCanvas = this.createElement("canvas");
     exportCanvas.width = size.width;
     exportCanvas.height = size.height;
     const exportCtx = exportCanvas.getContext("2d");
@@ -12494,7 +12479,7 @@ export class GraphEngine {
   }
 
   private isEditableKeyboardTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) return false;
+    if (!this.isHTMLElement(target)) return false;
     const tagName = target.tagName.toLowerCase();
     return tagName === "input"
       || tagName === "textarea"
@@ -12641,11 +12626,21 @@ export class GraphEngine {
 
   private debug(event: string, payload?: Record<string, unknown>) {
     if (!this.debugEnabled) return;
-    const prefix = "[BasesGraphEngine:debug]";
-    if (payload) {
-      console.log(prefix, event, payload);
-      return;
-    }
-    console.log(prefix, event);
+    void event;
+    void payload;
+  }
+
+  private isHTMLElement(value: unknown): value is HTMLElement {
+    if (!value || typeof value !== "object") return false;
+    const ownerDocument = "ownerDocument" in value
+      ? (value as { ownerDocument?: Document | null }).ownerDocument
+      : null;
+    const ownerWindow = ownerDocument?.defaultView ?? window;
+    return value instanceof ownerWindow.HTMLElement;
+  }
+
+  private createElement<K extends keyof HTMLElementTagNameMap>(tagName: K): HTMLElementTagNameMap[K] {
+    return this.container.ownerDocument.createElement(tagName);
   }
 }
+

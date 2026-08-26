@@ -1,4 +1,4 @@
-import { FileView, Menu, Notice, WorkspaceLeaf, type ViewStateResult, parsePropertyId, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
+import { App, FileView, Menu, Modal, Notice, WorkspaceLeaf, type ViewStateResult, parsePropertyId, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
 import { setStyle } from "./domStyle";
 import {
   DIRECTION_GRAPH_LAYOUT_ID,
@@ -246,11 +246,7 @@ export class BasesGraphView extends FileView {
     this.groupPropertyKeys = normalizeGroupPropertyKeys(this.groupPropertyKeys);
     // Mark this as a navigable file-backed view so workspace file context follows this leaf.
     this.navigation = true;
-    if (this.debugEnabled) {
-      console.log("[GraphView] constructor called");
-      console.log("[GraphView] viewType:", BASES_GRAPH_VIEW);
-    }
-    this.viewContainer = document.createElement("div");
+    this.viewContainer = this.containerEl.createDiv();
     this.loadConfigStore();
     this.persistenceKey = this.resolvePersistenceKey();
     this.viewStateModel = StateManager.cloneState(this.readAllPersistedGraphState());
@@ -652,10 +648,6 @@ export class BasesGraphView extends FileView {
       this.file = null;
     }
 
-    if (this.debugEnabled) {
-      console.log("setState file:", this.filePath);
-      console.log("Bound file:", this.file?.path ?? null);
-    }
     this.refreshLeafHeader();
 
     if (this.file && !loadedByBaseFileView) {
@@ -698,9 +690,6 @@ export class BasesGraphView extends FileView {
 
   async onOpen(): Promise<void> {
     this.isClosingOrUnloadingGraphView = false;
-    if (this.debugEnabled) {
-      console.log("[GraphView] onOpen called");
-    }
     if (!this.hasRegisteredMarkdownSwitchAction) {
       this.addAction("document", "Open as Markdown", this.onSwitchToMarkdownActionBound);
       this.hasRegisteredMarkdownSwitchAction = true;
@@ -1071,9 +1060,6 @@ export class BasesGraphView extends FileView {
       this.linkTypeRegistry.set(linkType.file.path, linkType);
     }
 
-    if (this.debugEnabled) {
-      console.log("LinkType registry loaded:", this.linkTypeRegistry);
-    }
   }
 
   private async migrateLegacyLinkTypesToForceBased(): Promise<void> {
@@ -1136,9 +1122,6 @@ export class BasesGraphView extends FileView {
       }
     }
 
-    if (this.debugEnabled) {
-      console.log("Group registry loaded:", this.groupRegistry);
-    }
   }
 
   private async loadGraphFile(): Promise<Record<string, unknown>> {
@@ -1156,9 +1139,6 @@ export class BasesGraphView extends FileView {
         this.graphSettings = documentStore.readSimulationSettings(this.graphSettings);
         this.engine.setSimulationSettings(this.graphSettings);
         this.linkTypeMenuSize = this.readLinkTypeMenuSizeFromGraphState(this.graphState.state);
-        if (this.debugEnabled) {
-          console.log("Graph runtime state active:", this.graphState?.state);
-        }
       } finally {
         documentStore.endHydration();
       }
@@ -1836,19 +1816,6 @@ export class BasesGraphView extends FileView {
       return;
     }
 
-    if (this.debugEnabled) {
-      console.log("=== reloadFromFile() called ===");
-      console.log("this.file:", this.file);
-    }
-
-    if (this.leaf) {
-      const viewState = this.leaf.getViewState();
-      if (this.debugEnabled) {
-        console.log("leaf viewState:", viewState);
-        console.log("leaf state.file:", (viewState as any)?.state?.file);
-      }
-    }
-
     if (!this.file) {
       if (this.debugEnabled) {
         console.warn("GraphView has no file bound to it.");
@@ -1859,12 +1826,6 @@ export class BasesGraphView extends FileView {
     const fm = await this.loadGraphFile();
     const fileModeGraphSettings = this.isFileMode ? { ...this.graphSettings } : null;
     const resolvedRootNodes = this.resolveRootNodeFilesFromGraphFrontmatter(fm);
-    if (this.debugEnabled) {
-      console.log("[O3Graph] raw root node values:", {
-        rootNodeProperties: resolvedRootNodes.propertyNames,
-        values: resolvedRootNodes.rawValues
-      });
-    }
     this.fileModeRootFiles = resolvedRootNodes.files;
     this.activeRootNodeProperties = resolvedRootNodes.usesConfiguredProperties
       ? resolvedRootNodes.propertyNames.map((property) => String(property ?? "").trim()).filter(Boolean)
@@ -1886,9 +1847,6 @@ export class BasesGraphView extends FileView {
     this.fileModeActiveLinkTypeFiles = resolveWikiLinkArray(this.app, readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "activeLinkTypes"));
     this.fileModeActiveOverlayLinkTypeFiles = resolveWikiLinkArray(this.app, readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "activeOverlayLinkTypes"));
     this.fileModeActiveGroupFiles = resolveWikiLinkArray(this.app, this.readActiveGroupsValueWithDefaults(fm));
-    if (this.debugEnabled) {
-      console.log("[O3Graph] resolved root files:", this.fileModeRootFiles);
-    }
     this.currentGraphFiles = this.isFileMode
       ? this.mergeGraphFiles(this.fileModeRootFiles, this.fileModeFilterFiles)
       : this.resolveRootNodeFiles();
@@ -1929,12 +1887,6 @@ export class BasesGraphView extends FileView {
       .filter((lt) => !activePathSet.has(String(lt.file?.path ?? "").trim()))
       .sort((a, b) => String(a.key ?? "").localeCompare(String(b.key ?? "")));
     this.discoveredProperties = Array.from(this.discoverLinkableProperties()).sort((a, b) => a.localeCompare(b));
-    if (this.debugEnabled) {
-      console.log("Active LinkTypes:", this.activeLinkTypes);
-      console.log("Active Overlay LinkTypes:", this.activeOverlayLinkTypes);
-      console.log("Visible LinkTypes:", this.visibleLinkTypes);
-    }
-
     this.activeGroups = [];
 
     const resolvedGroupFiles = resolveWikiLinkArray(this.app, rawActiveGroups);
@@ -1943,10 +1895,6 @@ export class BasesGraphView extends FileView {
       if (group) {
         this.activeGroups.push(group);
       }
-    }
-
-    if (this.debugEnabled) {
-      console.log("Active Groups:", this.activeGroups);
     }
 
     const rootNodes = this.fileModeRootFiles.map((file) => this.toRootNodeLinkpath(file));
@@ -2982,9 +2930,6 @@ export class BasesGraphView extends FileView {
 
     try {
       await this.app.vault.modify(file, updatedContent);
-      if (this.debugEnabled) {
-        console.log("[GraphView] Graph YAML updated with:", wikilink);
-      }
       await this.reloadFromFile();
     } catch (error) {
       console.error("[GraphView] Failed to activate LinkType:", error);
@@ -4607,9 +4552,6 @@ export class BasesGraphView extends FileView {
       if (wrote) {
         this.suppressGraphFileReloadUntil = Date.now() + 1500;
       }
-      if (wrote && this.debugEnabled) {
-        console.log("Graph state written to file.");
-      }
     } catch (e) {
       console.error("Failed to write graph state:", e);
     }
@@ -5268,7 +5210,7 @@ export class BasesGraphView extends FileView {
 
   private async renameGraphNoteFromHeader(file: TFile): Promise<void> {
     const currentName = file.basename;
-    const nextNameRaw = window.prompt("Rename graph note", currentName);
+    const nextNameRaw = await RenameGraphNoteModal.prompt(this.app, currentName);
     if (nextNameRaw === null) return;
     const nextName = String(nextNameRaw ?? "").trim();
     if (!nextName || nextName === currentName) return;
@@ -6997,21 +6939,74 @@ export class BasesGraphView extends FileView {
 
   private debug(event: string, payload?: Record<string, unknown>) {
     if (!this.debugEnabled) return;
-    const prefix = "[BasesGraphView:debug]";
-    if (payload) {
-      console.log(prefix, event, payload);
-      return;
-    }
-    console.log(prefix, event);
+    void event;
+    void payload;
   }
 
   private debugSource(event: string, payload?: Record<string, unknown>) {
     if (!this.sourceDebugEnabled) return;
-    const prefix = "[BasesGraphView:source-debug]";
-    if (payload) {
-      console.log(prefix, event, payload);
-      return;
+    void event;
+    void payload;
+  }
+}
+
+class RenameGraphNoteModal extends Modal {
+  private inputEl: HTMLInputElement | null = null;
+  private submitted = false;
+
+  static prompt(app: App, currentName: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      new RenameGraphNoteModal(app, currentName, resolve).open();
+    });
+  }
+
+  constructor(
+    app: App,
+    private readonly currentName: string,
+    private readonly resolveValue: (value: string | null) => void
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("Rename graph note");
+    this.contentEl.empty();
+    this.inputEl = this.contentEl.createEl("input", {
+      type: "text",
+      value: this.currentName
+    });
+    this.inputEl.addClass("o3-graph-modal-input");
+    this.inputEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.submit();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.close();
+      }
+    });
+
+    const buttonRow = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancelButton = buttonRow.createEl("button", { text: "Cancel" });
+    cancelButton.addEventListener("click", () => this.close());
+    const submitButton = buttonRow.createEl("button", { text: "Rename" });
+    submitButton.addClass("mod-cta");
+    submitButton.addEventListener("click", () => this.submit());
+    this.inputEl.focus();
+    this.inputEl.select();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.submitted) {
+      this.resolveValue(null);
     }
-    console.log(prefix, event);
+  }
+
+  private submit(): void {
+    this.submitted = true;
+    this.resolveValue(this.inputEl?.value ?? "");
+    this.close();
   }
 }
