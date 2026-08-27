@@ -89,6 +89,7 @@ interface GroupRule {
 }
 
 export class BasesGraphView extends FileView {
+  private graphTabMode = false;
 
   private engine: GraphEngine;
   private initialized = false;
@@ -239,7 +240,8 @@ export class BasesGraphView extends FileView {
     private noteTypeIdentifiers: NoteTypeIdentifierSettings = DEFAULT_NOTE_TYPE_IDENTIFIERS,
     private linkTypePropertyKeys: LinkTypePropertyKeys = DEFAULT_LINK_TYPE_PROPERTY_KEYS,
     private groupPropertyKeys: GroupPropertyKeys = DEFAULT_GROUP_PROPERTY_KEYS,
-    private onGraphNodeLinksCopied?: (paths: string[], clipboardText: string) => void
+    private onGraphNodeLinksCopied?: (paths: string[], clipboardText: string) => void,
+    private onGraphTabZoomIntoNode?: (graphLeaf: WorkspaceLeaf, path: string) => Promise<void> | void
   ) {
     super(leaf);
     this.graphPropertyKeys = normalizeGraphPropertyKeys(this.graphPropertyKeys);
@@ -403,6 +405,9 @@ export class BasesGraphView extends FileView {
       },
       onNodeOpen: (request) => {
         return new ObsidianGraphNodeOpenHandler(this.app).openNode(request);
+      },
+      onZoomIntoNode: (request) => {
+        return this.zoomIntoNode(request.path);
       },
       onCopySelectedNodeLinks: () => {
         return this.copySelectedNodeLinksToClipboard();
@@ -618,6 +623,24 @@ export class BasesGraphView extends FileView {
     return links.length;
   }
 
+  private async zoomIntoNode(pathRaw: string): Promise<void> {
+    const path = String(pathRaw ?? "").trim();
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile) || !this.isGraphNotePath(file.path)) {
+      new Notice("This note is not recognized as a NosyGraph-capable note.");
+      return;
+    }
+    if (this.graphTabMode && this.onGraphTabZoomIntoNode) {
+      await this.onGraphTabZoomIntoNode(this.leaf, file.path);
+      return;
+    }
+    await this.leaf.setViewState({
+      type: BASES_GRAPH_VIEW,
+      state: { file: file.path },
+      active: true
+    }, true);
+  }
+
   refreshAfterExternalFrontmatterMutation(filePath: string): void {
     const normalizedPath = String(filePath ?? "").trim();
     if (!normalizedPath || (!this.file || this.file.path !== normalizedPath) && !this.embeddedGraphStates.has(normalizedPath)) {
@@ -635,6 +658,9 @@ export class BasesGraphView extends FileView {
   }
 
   getDisplayText(): string {
+    if (this.graphTabMode) {
+      return this.file ? `Graph: ${this.file.basename}` : "Graph";
+    }
     return this.file?.basename ?? super.getDisplayText();
   }
 
@@ -651,8 +677,13 @@ export class BasesGraphView extends FileView {
     const boundFilePath = this.file?.path ?? this.filePath ?? null;
     return {
       ...baseState,
-      file: boundFilePath
+      file: boundFilePath,
+      ...(this.graphTabMode ? { graphTab: true } : {})
     };
+  }
+
+  isGraphTab(): boolean {
+    return this.graphTabMode;
   }
 
   getFile(): TFile | null {
@@ -663,6 +694,8 @@ export class BasesGraphView extends FileView {
     const inputState = state && typeof state === "object"
       ? state as Record<string, unknown>
       : {};
+    this.graphTabMode = inputState.graphTab === true;
+    this.navigation = !this.graphTabMode;
     const nextFilePath = String(inputState.file ?? inputState.filePath ?? "").trim();
     const previousFilePath = this.file?.path ?? this.filePath ?? "";
     const resolvedFilePath = nextFilePath || previousFilePath;
@@ -5039,7 +5072,10 @@ export class BasesGraphView extends FileView {
     };
     return {
       ...baseViewState,
-      state: mergedInnerState
+      state: {
+        ...mergedInnerState,
+        ...(this.graphTabMode ? { graphTab: true } : {})
+      }
     };
   }
 

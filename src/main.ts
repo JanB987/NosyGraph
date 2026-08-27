@@ -95,6 +95,10 @@ export default class BasesGraphPlugin extends Plugin {
   private markdownGraphSwitchActions = new Map<WorkspaceLeaf, HTMLElement>();
   private copiedGraphNodePaths: string[] = [];
   private copiedGraphNodeClipboardText = "";
+  private lastGraphCapableFilePath = "";
+  private graphTabFollowSequence = 0;
+  private graphTabSyncInProgress = false;
+  private lastGraphTabSourceLeaf: WorkspaceLeaf | null = null;
 
   async onload() {
     await this.loadPluginSettings();
@@ -129,7 +133,8 @@ export default class BasesGraphPlugin extends Plugin {
           this.settings.noteTypeIdentifiers,
           this.settings.linkTypePropertyKeys,
           this.settings.groupPropertyKeys,
-          (paths, clipboardText) => this.rememberCopiedGraphNodeLinks(paths, clipboardText)
+          (paths, clipboardText) => this.rememberCopiedGraphNodeLinks(paths, clipboardText),
+          (graphLeaf, path) => this.zoomGraphTabIntoNode(graphLeaf, path)
         )
     );
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, info) => {
@@ -149,6 +154,14 @@ export default class BasesGraphPlugin extends Plugin {
           return;
         }
         await this.openFileInGraphView(file, leaf);
+      }
+    });
+
+    this.addCommand({
+      id: "open-graph-tab",
+      name: "Open Graph Tab",
+      callback: async () => {
+        await this.openGraphTab();
       }
     });
 
@@ -287,11 +300,16 @@ export default class BasesGraphPlugin extends Plugin {
     });
 
     this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+      this.rememberGraphTabSourceLeaf(leaf ?? null);
       this.syncMarkdownGraphSwitchAction(leaf ?? null);
+      void this.followActiveLeafInGraphTabs(leaf ?? null);
     }));
 
     this.registerEvent(this.app.workspace.on("file-open", () => {
-      this.syncMarkdownGraphSwitchAction(this.app.workspace.getMostRecentLeaf());
+      const leaf = this.app.workspace.getMostRecentLeaf();
+      this.rememberGraphTabSourceLeaf(leaf);
+      this.syncMarkdownGraphSwitchAction(leaf);
+      void this.followActiveLeafInGraphTabs(leaf);
     }));
 
     this.registerEvent(this.app.metadataCache.on("changed", (file) => {
@@ -911,6 +929,124 @@ export default class BasesGraphPlugin extends Plugin {
       });
       new Notice("Failed to open NosyGraph view. See console for details.");
     }
+  }
+
+  private async openGraphTab(): Promise<void> {
+    const sourceLeaf = this.app.workspace.getMostRecentLeaf();
+    const activeFile = this.resolveActiveFileForLeaf(sourceLeaf);
+    const sourceFile = activeFile instanceof TFile && activeFile.extension === "md"
+      ? activeFile
+      : this.resolveLastGraphCapableFile();
+    if (!(sourceFile instanceof TFile)) {
+      new Notice("Open a Markdown note before creating a Graph Tab.");
+      return;
+    }
+
+    this.lastGraphCapableFilePath = sourceFile.path;
+    const leaf = this.app.workspace.getLeaf("tab");
+    await leaf.setViewState({
+      type: BASES_GRAPH_VIEW,
+      state: {
+        file: sourceFile.path,
+        graphTab: true
+      },
+      active: true
+    }, false);
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
+  }
+
+  private resolveLastGraphCapableFile(): TFile | null {
+    const file = this.app.vault.getAbstractFileByPath(this.lastGraphCapableFilePath);
+    return file instanceof TFile && file.extension === "md" ? file : null;
+  }
+
+  private rememberGraphTabSourceLeaf(leaf: WorkspaceLeaf | null): void {
+    if (!leaf || this.isGraphTabLeaf(leaf)) return;
+    const file = this.resolveLeafFile(leaf);
+    if (file instanceof TFile && file.extension === "md") {
+      this.lastGraphTabSourceLeaf = leaf;
+    }
+  }
+
+  private async zoomGraphTabIntoNode(graphLeaf: WorkspaceLeaf, pathRaw: string): Promise<void> {
+    const path = String(pathRaw ?? "").trim();
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile) || file.extension !== "md") return;
+
+    const graphGroup = this.readLeafGroup(graphLeaf);
+    const candidates: WorkspaceLeaf[] = [];
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (leaf === graphLeaf || this.isGraphTabLeaf(leaf)) return;
+      if (leaf.view.getViewType() !== "markdown") return;
+      if (graphGroup && this.readLeafGroup(leaf) !== graphGroup) return;
+      candidates.push(leaf);
+    });
+
+    const remembered = this.lastGraphTabSourceLeaf;
+    const targetLeaf = remembered && candidates.includes(remembered)
+      ? remembered
+      : candidates[0] ?? this.app.workspace.getLeaf("tab");
+    await targetLeaf.setViewState({
+      type: "markdown",
+      state: { file: file.path },
+      active: true
+    }, true);
+    this.lastGraphTabSourceLeaf = targetLeaf;
+    this.app.workspace.setActiveLeaf(targetLeaf, { focus: true });
+  }
+
+  private async followActiveLeafInGraphTabs(sourceLeaf: WorkspaceLeaf | null): Promise<void> {
+    if (!sourceLeaf || this.graphTabSyncInProgress || this.isGraphTabLeaf(sourceLeaf)) return;
+    const sourceFile = this.resolveLeafFile(sourceLeaf);
+    if (!(sourceFile instanceof TFile) || sourceFile.extension !== "md") return;
+
+    const sequence = ++this.graphTabFollowSequence;
+    this.lastGraphCapableFilePath = sourceFile.path;
+    const sourceGroup = this.readLeafGroup(sourceLeaf);
+    const targets = this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW)
+      .filter((leaf) => leaf !== sourceLeaf && this.isGraphTabLeaf(leaf))
+      .filter((leaf) => {
+        const graphTabGroup = this.readLeafGroup(leaf);
+        return !graphTabGroup || graphTabGroup === sourceGroup;
+      });
+    if (targets.length === 0) return;
+
+    this.graphTabSyncInProgress = true;
+    try {
+      for (const leaf of targets) {
+        if (sequence !== this.graphTabFollowSequence) return;
+        const viewState = leaf.getViewState() as Record<string, unknown>;
+        const innerState = viewState.state && typeof viewState.state === "object"
+          ? viewState.state as Record<string, unknown>
+          : {};
+        if (String(innerState.file ?? "").trim() === sourceFile.path) continue;
+        await leaf.setViewState({
+          ...viewState,
+          state: {
+            ...innerState,
+            file: sourceFile.path,
+            graphTab: true
+          },
+          active: false
+        }, false);
+      }
+    } finally {
+      this.graphTabSyncInProgress = false;
+    }
+  }
+
+  private isGraphTabLeaf(leaf: WorkspaceLeaf): boolean {
+    const viewState = leaf.getViewState() as Record<string, unknown>;
+    const innerState = viewState.state && typeof viewState.state === "object"
+      ? viewState.state as Record<string, unknown>
+      : {};
+    if (innerState.graphTab === true) return true;
+    return leaf.view instanceof BasesGraphView && leaf.view.isGraphTab();
+  }
+
+  private readLeafGroup(leaf: WorkspaceLeaf): string {
+    const viewState = leaf.getViewState() as Record<string, unknown>;
+    return String(viewState.group ?? "").trim();
   }
 
   private async openFileInMarkdownView(file: TFile, leaf: WorkspaceLeaf): Promise<void> {

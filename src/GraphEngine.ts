@@ -202,6 +202,11 @@ export interface GraphNodeOpenRequest {
   newTab?: boolean;
 }
 
+export interface GraphNodeZoomRequest {
+  nodeId: string;
+  path: string;
+}
+
 interface MarqueeSelection {
   startX: number;
   startY: number;
@@ -283,6 +288,7 @@ export interface GraphEngineMenuOptions {
     request: GraphBadgeLinkInputRequest
   ) => Promise<GraphLinkBadgeDropMutationResult | void> | GraphLinkBadgeDropMutationResult | void;
   onNodeOpen?: (request: GraphNodeOpenRequest) => Promise<void> | void;
+  onZoomIntoNode?: (request: GraphNodeZoomRequest) => Promise<void> | void;
   initialGroupingRules?: GroupingRule[];
   initialGroupingProperties?: string[];
   onGroupingRulesChange?: (rules: GroupingRule[]) => void;
@@ -8233,6 +8239,24 @@ export class GraphEngine {
             .setTitle("Open node in new tab")
             .onClick(() => {
               void this.openNodeFile(nodeToOpen, true);
+            });
+        });
+      }
+
+      const nodeToZoom = selectedNodes.length === 1 ? selectedNodes[0] : null;
+      if (
+        nodeToZoom
+        && this.menuOptions.onZoomIntoNode
+        && this.menuOptions.isGraphNote?.(nodeToZoom.sourcePath)
+      ) {
+        menu.addItem((item) => {
+          item
+            .setTitle("Zoom into node")
+            .onClick(() => {
+              void this.menuOptions.onZoomIntoNode?.({
+                nodeId: nodeToZoom.id,
+                path: nodeToZoom.sourcePath
+              });
             });
         });
       }
