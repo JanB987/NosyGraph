@@ -1,7 +1,7 @@
 {
   "id": "nosygraph",
   "name": "NosyGraph",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "minAppVersion": "1.5.0",
   "description": "Build and explore structured, expandable graphs from your notes.",
   "author": "Jan Bergholz",

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
-import { App, MarkdownRenderChild, Notice, parseYaml, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, type MenuItem } from "obsidian";
+import { App, MarkdownRenderChild, Notice, parseYaml, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, type Editor, type MarkdownFileInfo, type MenuItem } from "obsidian";
 import { BASES_GRAPH_VIEW, BasesGraphView } from "./GraphView";
 import { GraphEngine, type EmbeddedGraphDefinition, type GraphLineStyle } from "./GraphEngine";
 import { O3GraphState, type O3GraphRuntimeNodeSnapshot, type O3GraphRuntimeState } from "./O3GraphState";
@@ -93,6 +93,8 @@ const DEFAULT_SETTINGS: BasesGraphPluginSettings = {
 export default class BasesGraphPlugin extends Plugin {
   settings: BasesGraphPluginSettings = { ...DEFAULT_SETTINGS };
   private markdownGraphSwitchActions = new Map<WorkspaceLeaf, HTMLElement>();
+  private copiedGraphNodePaths: string[] = [];
+  private copiedGraphNodeClipboardText = "";
 
   async onload() {
     await this.loadPluginSettings();
@@ -126,9 +128,16 @@ export default class BasesGraphPlugin extends Plugin {
           this.settings.graphPropertyKeys,
           this.settings.noteTypeIdentifiers,
           this.settings.linkTypePropertyKeys,
-          this.settings.groupPropertyKeys
+          this.settings.groupPropertyKeys,
+          (paths, clipboardText) => this.rememberCopiedGraphNodeLinks(paths, clipboardText)
         )
     );
+    this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, info) => {
+      this.handleGraphNodeLinksFrontmatterPaste(event, editor, info);
+    }));
+    this.registerDomEvent(document, "paste", (event) => {
+      this.handleGraphNodeLinksPropertiesPaste(event);
+    }, { capture: true });
     this.addCommand({
       id: "open-graph",
       name: "Open Graph",
@@ -333,6 +342,109 @@ export default class BasesGraphPlugin extends Plugin {
       );
       ctx.addChild(child);
     });
+  }
+
+  private rememberCopiedGraphNodeLinks(paths: string[], clipboardText: string): void {
+    this.copiedGraphNodePaths = Array.from(new Set(
+      (paths ?? []).map((path) => String(path ?? "").trim()).filter(Boolean)
+    ));
+    this.copiedGraphNodeClipboardText = String(clipboardText ?? "");
+  }
+
+  private handleGraphNodeLinksFrontmatterPaste(
+    event: ClipboardEvent,
+    editor: Editor,
+    info: MarkdownFileInfo
+  ): void {
+    if (event.defaultPrevented || this.copiedGraphNodePaths.length === 0) return;
+    const pastedText = event.clipboardData?.getData("text/plain") ?? "";
+    if (!pastedText || pastedText !== this.copiedGraphNodeClipboardText) return;
+    if (!this.isEditorSelectionInsideFrontmatter(editor)) return;
+
+    const destinationPath = info.file?.path ?? "";
+    const yamlLinks = this.copiedGraphNodePaths.map((path) => {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      const link = file instanceof TFile
+        ? this.app.fileManager.generateMarkdownLink(file, destinationPath)
+        : `[[${path.replace(/\.md$/i, "")}]]`;
+      return `- "${link.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+    });
+    if (yamlLinks.length === 0) return;
+
+    event.preventDefault();
+    editor.replaceSelection(this.formatFrontmatterLinkPaste(editor, yamlLinks), "paste");
+  }
+
+  private handleGraphNodeLinksPropertiesPaste(event: ClipboardEvent): void {
+    if (event.defaultPrevented || this.copiedGraphNodePaths.length === 0) return;
+    const pastedText = event.clipboardData?.getData("text/plain") ?? "";
+    if (!pastedText || pastedText !== this.copiedGraphNodeClipboardText) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const propertyElement = target.closest<HTMLElement>(".metadata-property[data-property-key]");
+    const property = String(propertyElement?.dataset.propertyKey ?? "").trim();
+    if (!property || !target.closest(".metadata-property-value")) return;
+    const destinationFile = this.app.workspace.getActiveFile();
+    if (!(destinationFile instanceof TFile)) return;
+
+    const sources = this.copiedGraphNodePaths.map((path) => ({ nodeId: path, path }));
+    if (target instanceof HTMLElement) target.blur();
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void new ObsidianGraphLinkMutationHandler(this.app).applyBadgeLinkAdd({
+      target: { nodeId: destinationFile.path, path: destinationFile.path },
+      sources,
+      property,
+      discoveryDirection: "outgoing"
+    }).then((result) => {
+      const added = result.added.length;
+      if (added > 0) {
+        this.refreshGraphViewsAfterFrontmatterMutation(destinationFile.path);
+        new Notice(added === 1 ? "Added graph node link to property." : `Added ${added} graph node links to property.`);
+      } else if (result.skipped.length > 0) {
+        new Notice("Selected graph node links are already present in this property.");
+      }
+    }).catch((error) => {
+      console.error("Failed to paste graph node links into property:", error);
+      new Notice("Failed to add graph node links to property.");
+    });
+  }
+
+  private refreshGraphViewsAfterFrontmatterMutation(filePath: string): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW)) {
+      const view = leaf.view as BasesGraphView;
+      if (typeof view.refreshAfterExternalFrontmatterMutation === "function") {
+        view.refreshAfterExternalFrontmatterMutation(filePath);
+      }
+    }
+  }
+
+  private formatFrontmatterLinkPaste(editor: Editor, yamlLinks: string[]): string {
+    const cursor = editor.getCursor("from");
+    const lineBeforeCursor = editor.getLine(cursor.line).slice(0, cursor.ch);
+    if (/^\s*[^#][^:]*:\s*$/.test(lineBeforeCursor)) {
+      return `\n${yamlLinks.join("\n")}`;
+    }
+    const indentation = lineBeforeCursor.trim().length === 0
+      ? lineBeforeCursor.match(/^\s*/)?.[0] ?? ""
+      : "";
+    return yamlLinks.join(`\n${indentation}`);
+  }
+
+  private isEditorSelectionInsideFrontmatter(editor: Editor): boolean {
+    if (editor.lineCount() < 2 || editor.getLine(0).replace(/^\uFEFF/, "").trim() !== "---") return false;
+    let closingFenceLine = -1;
+    for (let line = 1; line < editor.lineCount(); line++) {
+      const value = editor.getLine(line).trim();
+      if (value === "---" || value === "...") {
+        closingFenceLine = line;
+        break;
+      }
+    }
+    if (closingFenceLine < 1) return false;
+    const from = editor.getCursor("from").line;
+    const to = editor.getCursor("to").line;
+    return from > 0 && from <= closingFenceLine && to > 0 && to <= closingFenceLine;
   }
 
   private isGraphViewEmbedRequest(embedContent: HTMLElement): boolean {
@@ -1122,8 +1234,25 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
         return new ObsidianGraphLinkMutationHandler(this.appRef).applyBadgeDrop(request);
       },
       shouldAutoExpandDroppedLinkTypes: () => this.shouldAutoExpandDroppedLinkTypes(),
-      onGraphLinkInputRequested: (request) => {
-        return new ObsidianGraphLinkInputHandler(this.appRef).requestLinkInput(request);
+      onGraphLinkInputRequested: async (request) => {
+        const result = await new ObsidianGraphLinkInputHandler(this.appRef).requestLinkInput(request);
+        const ownerPath = String(request.graphCapableOwnerPath ?? this.graphFile.path).trim();
+        const selectedFiles = (result.selected ?? [])
+          .map((path) => this.appRef.vault.getAbstractFileByPath(path))
+          .filter((file): file is TFile => file instanceof TFile);
+        const ownerFile = this.appRef.vault.getAbstractFileByPath(ownerPath);
+        if (ownerFile instanceof TFile && selectedFiles.length > 0) {
+          const rootResult = await new ObsidianGraphRootPropertyMutationHandler(this.appRef).addFilesToReferenceProperty({
+            ownerPath: ownerFile.path,
+            referencePath: request.target.path,
+            files: selectedFiles,
+            propertyNames: this.getRootNodePropertyNamesForFile(ownerFile)
+          });
+          if (rootResult.added > 0) {
+            window.setTimeout(() => { void this.reloadFromFile(); }, 0);
+          }
+        }
+        return result;
       },
       onNodeOpen: (request) => {
         return new ObsidianGraphNodeOpenHandler(this.appRef).openNode(request);

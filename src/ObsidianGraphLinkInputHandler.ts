@@ -28,7 +28,7 @@ export class ObsidianGraphLinkInputHandler {
           property: request.property,
           discoveryDirection: request.discoveryDirection
         });
-        resolve(result);
+        resolve({ ...result, selected: [sourceFile.path] });
       }, () => {
         resolve({ added: [], removed: [], skipped: [] });
       });

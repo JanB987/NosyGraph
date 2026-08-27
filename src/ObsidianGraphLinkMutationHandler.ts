@@ -18,6 +18,7 @@ export interface GraphLinkBadgeDropMutationResult {
   added: string[];
   removed: string[];
   skipped: string[];
+  selected?: string[];
 }
 
 export class ObsidianGraphLinkMutationHandler {

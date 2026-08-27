@@ -14,6 +14,13 @@ export interface GraphRootPropertyMutationResult {
   property: string | null;
 }
 
+export interface GraphReferencePropertyMutationRequest {
+  ownerPath: string;
+  referencePath: string;
+  files: TFile[];
+  propertyNames: string[];
+}
+
 export class ObsidianGraphRootPropertyMutationHandler {
   constructor(private readonly app: App) {}
 
@@ -28,6 +35,33 @@ export class ObsidianGraphRootPropertyMutationHandler {
     const property = propertyNames.length === 1
       ? propertyNames[0]
       : await this.requestPropertySelection(propertyNames, ownerFile);
+    if (!property) return { added: 0, property: null };
+
+    const added = await this.addFilesToProperty(ownerFile, files, property);
+    return { added, property };
+  }
+
+  async addFilesToReferenceProperty(
+    request: GraphReferencePropertyMutationRequest
+  ): Promise<GraphRootPropertyMutationResult> {
+    const ownerFile = this.resolveFile(request.ownerPath);
+    const referenceFile = this.resolveFile(request.referencePath);
+    const files = this.normalizeFiles(request.files, ownerFile?.path ?? "");
+    const propertyNames = this.normalizeProperties(request.propertyNames);
+    if (!(ownerFile instanceof TFile) || !(referenceFile instanceof TFile) || files.length === 0) {
+      return { added: 0, property: null };
+    }
+
+    const frontmatter = this.app.metadataCache.getFileCache(ownerFile)?.frontmatter ?? {};
+    const matchingProperties = propertyNames.filter((property) =>
+      resolveWikiLinkArray(this.app, frontmatter[this.findFrontmatterPropertyKey(frontmatter, property) ?? property])
+        .some((file) => file.path === referenceFile.path)
+    );
+    if (matchingProperties.length === 0) return { added: 0, property: null };
+
+    const property = matchingProperties.length === 1
+      ? matchingProperties[0]
+      : await this.requestPropertySelection(matchingProperties, ownerFile);
     if (!property) return { added: 0, property: null };
 
     const added = await this.addFilesToProperty(ownerFile, files, property);

@@ -238,7 +238,8 @@ export class BasesGraphView extends FileView {
     private graphPropertyKeys: GraphPropertyKeys = DEFAULT_GRAPH_PROPERTY_KEYS,
     private noteTypeIdentifiers: NoteTypeIdentifierSettings = DEFAULT_NOTE_TYPE_IDENTIFIERS,
     private linkTypePropertyKeys: LinkTypePropertyKeys = DEFAULT_LINK_TYPE_PROPERTY_KEYS,
-    private groupPropertyKeys: GroupPropertyKeys = DEFAULT_GROUP_PROPERTY_KEYS
+    private groupPropertyKeys: GroupPropertyKeys = DEFAULT_GROUP_PROPERTY_KEYS,
+    private onGraphNodeLinksCopied?: (paths: string[], clipboardText: string) => void
   ) {
     super(leaf);
     this.graphPropertyKeys = normalizeGraphPropertyKeys(this.graphPropertyKeys);
@@ -378,8 +379,27 @@ export class BasesGraphView extends FileView {
         return new ObsidianGraphLinkMutationHandler(this.app).applyBadgeDrop(request);
       },
       shouldAutoExpandDroppedLinkTypes: () => this.shouldAutoExpandDroppedLinkTypes(),
-      onGraphLinkInputRequested: (request) => {
-        return new ObsidianGraphLinkInputHandler(this.app).requestLinkInput(request);
+      onGraphLinkInputRequested: async (request) => {
+        const result = await new ObsidianGraphLinkInputHandler(this.app).requestLinkInput(request);
+        const ownerPath = String(request.graphCapableOwnerPath ?? this.file?.path ?? "").trim();
+        const selectedFiles = (result.selected ?? [])
+          .map((path) => this.app.vault.getAbstractFileByPath(path))
+          .filter((file): file is TFile => file instanceof TFile);
+        const ownerFile = this.app.vault.getAbstractFileByPath(ownerPath);
+        if (ownerFile instanceof TFile && selectedFiles.length > 0) {
+          const rootResult = await new ObsidianGraphRootPropertyMutationHandler(this.app).addFilesToReferenceProperty({
+            ownerPath: ownerFile.path,
+            referencePath: request.target.path,
+            files: selectedFiles,
+            propertyNames: this.getRootNodePropertyNamesForFile(ownerFile)
+          });
+          if (rootResult.added > 0) {
+            this.embeddedGraphStates.delete(ownerFile.path);
+            this.embeddedGraphDocumentStores.delete(ownerFile.path);
+            window.setTimeout(() => { void this.reloadFromFile(); }, 0);
+          }
+        }
+        return result;
       },
       onNodeOpen: (request) => {
         return new ObsidianGraphNodeOpenHandler(this.app).openNode(request);
@@ -591,9 +611,19 @@ export class BasesGraphView extends FileView {
       new Notice("No graph nodes selected.");
       return 0;
     }
-    await navigator.clipboard.writeText(links.join("\n"));
+    const clipboardText = links.join("\n");
+    await navigator.clipboard.writeText(clipboardText);
+    this.onGraphNodeLinksCopied?.(paths, clipboardText);
     new Notice(links.length === 1 ? "Copied graph node link." : `Copied ${links.length} graph node links.`);
     return links.length;
+  }
+
+  refreshAfterExternalFrontmatterMutation(filePath: string): void {
+    const normalizedPath = String(filePath ?? "").trim();
+    if (!normalizedPath || (!this.file || this.file.path !== normalizedPath) && !this.embeddedGraphStates.has(normalizedPath)) {
+      return;
+    }
+    window.setTimeout(() => { void this.reloadFromFile(); }, 0);
   }
 
   selectAllGraphNodes(): number {

@@ -186,12 +186,14 @@ export interface GraphLinkBadgeDropMutationResult {
   added: string[];
   removed: string[];
   skipped: string[];
+  selected?: string[];
 }
 
 export interface GraphBadgeLinkInputRequest {
   target: GraphLinkMutationNodeRef;
   property: string;
   discoveryDirection: "incoming" | "outgoing" | "both";
+  graphCapableOwnerPath?: string;
 }
 
 export interface GraphNodeOpenRequest {
@@ -1378,12 +1380,19 @@ export class GraphEngine {
       ? new Set<string>()
       : this.collectDiscoveredTypes(linkTypeSourceFiles);
     const includeNoneType = this.selectedLinkTypes.has(NONE_LINK_TYPE);
-    const selectedTypeSourceNodeIds = this.collectSelectedTypeSourceNodeIds(linkTypeSourceFiles);
+    const selectedTypeSourceNodeIds = this.lastDisableLinkTypeDiscovery
+      ? new Set<string>()
+      : this.collectSelectedTypeSourceNodeIds(linkTypeSourceFiles);
 
     for (const file of files) {
       const frontmatterByType = this.collectFrontmatterLinksByType(file);
 
       for (const [type, targets] of frontmatterByType.entries()) {
+        // Persistent graph-note views expand active LinkTypes per node through
+        // expandedByBadge. Do not rediscover the same property globally during
+        // an edge rebuild, otherwise one badge click appears to expand every
+        // node that has links under that property.
+        if (this.lastDisableLinkTypeDiscovery) continue;
         if (!this.selectedLinkTypes.has(type)) continue;
         if (this.getLinkTypeSemantic(type) === "parent") continue;
         const duplicateMode = this.isLinkDuplicateNodesEnabled(type);
@@ -1510,6 +1519,33 @@ export class GraphEngine {
 
   private reconcileCurrentFilesFromVisibleState(): void {
     const next = new Set<string>();
+    const expansionNodeIds = new Set<string>();
+    const duplicateExpansionTargetPaths = new Set<string>();
+    for (const [badgeKey, nodeIds] of this.expansionNodes.entries()) {
+      for (const nodeId of nodeIds) expansionNodeIds.add(nodeId);
+      const separator = badgeKey.lastIndexOf("::");
+      const linkType = separator > 0 ? this.normalizeLinkType(badgeKey.slice(separator + 2)) : "";
+      if (this.activeLinkTypeDuplicateNodesByProperty.get(linkType) !== true) continue;
+      for (const targetPath of this.expandedByBadge.get(badgeKey) ?? []) {
+        if (targetPath) duplicateExpansionTargetPaths.add(targetPath);
+      }
+    }
+    // Remove stale canonical copies left by the old reconciliation behavior. The
+    // badge-owned duplicate instances remain and are the only nodes that should
+    // represent these targets while the badge is expanded.
+    const staleCanonicalNodeIds = this.nodes
+      .filter((node) =>
+        !node.stateOwnerPath
+        && duplicateExpansionTargetPaths.has(node.sourcePath)
+        && !expansionNodeIds.has(node.id)
+        && !this.rootFilePaths.has(node.sourcePath)
+        && !this.filterFilePaths.has(node.sourcePath)
+        && !(this.nodeOwners.get(node.id)?.size)
+      )
+      .map((node) => node.id);
+    for (const nodeId of staleCanonicalNodeIds) {
+      this.removeNodeById(nodeId);
+    }
     for (const path of this.rootFilePaths) {
       if (path) next.add(path);
     }
@@ -1526,7 +1562,12 @@ export class GraphEngine {
     for (const [badgeKey, nodeIds] of this.expansionNodes.entries()) {
       const separator = badgeKey.lastIndexOf("::");
       const sourceNodeId = separator > 0 ? badgeKey.slice(0, separator) : "";
+      const linkType = separator > 0 ? this.normalizeLinkType(badgeKey.slice(separator + 2)) : "";
       if (sourceNodeId && this.nodeMap.get(sourceNodeId)?.stateOwnerPath) continue;
+      // Duplicate-node link types already own concrete runtime nodes per badge. Adding
+      // their source paths to currentFiles also creates canonical/filter instances,
+      // which makes the same relationship appear expanded from every root node.
+      if (this.activeLinkTypeDuplicateNodesByProperty.get(linkType) === true) continue;
       for (const nodeId of nodeIds) {
         const sourcePath = this.getSourcePathForNodeId(nodeId);
         if (sourcePath) next.add(sourcePath);
@@ -2046,11 +2087,45 @@ export class GraphEngine {
         for (const targetPath of targets) {
           const targetNodeIds = context.targetNodeIdsByPath.get(targetPath) ?? [];
           for (const targetNodeId of targetNodeIds) {
+            if (!this.isVisibleDuplicateEdgeOwnedBySource(sourceNodeId, targetNodeId, targetPath, linkType)) {
+              continue;
+            }
             this.pushVisibleEdge(seen, sourceNodeId, targetNodeId, linkType);
           }
         }
       }
     }
+  }
+
+  private isVisibleDuplicateEdgeOwnedBySource(
+    sourceNodeId: string,
+    targetNodeId: string,
+    targetPath: string,
+    linkType: string
+  ): boolean {
+    if (!this.isLinkDuplicateNodesEnabled(linkType)) return true;
+
+    const sourceNode = this.nodeMap.get(sourceNodeId);
+    const sourceIsDuplicate = Boolean(
+      this.tryGetDuplicateSourcePathFromId(sourceNodeId)
+      || sourceNode?.embeddedOrigin?.kind === "expansion" && sourceNode.embeddedOrigin.duplicate === true
+    );
+    if (sourceIsDuplicate && !this.expandedByBadge.has(this.badgeKey(sourceNodeId, this.normalizeLinkType(linkType)))) {
+      return false;
+    }
+
+    const outerDuplicatePath = this.tryGetDuplicateSourcePathFromId(targetNodeId);
+    if (outerDuplicatePath) {
+      return targetNodeId === this.formatDuplicateNodeId(sourceNodeId, targetPath, linkType);
+    }
+
+    const targetNode = this.nodeMap.get(targetNodeId);
+    if (targetNode?.embeddedOrigin?.kind !== "expansion" || targetNode.embeddedOrigin.duplicate !== true) {
+      return true;
+    }
+    const expectedEmbeddedSourceId = sourceNode?.embeddedSourceNodeId ?? sourceNode?.sourcePath ?? sourceNodeId;
+    return targetNode.embeddedOrigin.sourceNodeId === expectedEmbeddedSourceId
+      && this.normalizeLinkType(targetNode.embeddedOrigin.linkType) === this.normalizeLinkType(linkType);
   }
 
   private syncVisibleLinkTypeEdgesAfterBadgeMutation(
@@ -9724,7 +9799,8 @@ export class GraphEngine {
     const result = await this.menuOptions.onGraphLinkInputRequested?.({
       target: targetRef,
       property: propertyKey,
-      discoveryDirection: linkType.linkDiscoveryDirection
+      discoveryDirection: linkType.linkDiscoveryDirection,
+      ...(targetNode.stateOwnerPath ? { graphCapableOwnerPath: targetNode.stateOwnerPath } : {})
     });
 
     this.clearIncomingLinkIndex();
@@ -10867,13 +10943,15 @@ export class GraphEngine {
       }
       for (const target of targets) {
         const targetPath = target.path;
-        this.currentFiles.add(targetPath);
         targetPaths.add(targetPath);
         const anchorNode = this.nodeMap.get(expansionSourceNodeId) ?? null;
         const childNodeId = this.ensureExpansionTargetNode(target, expansionSourceNodeId, property, {
           anchorNode,
           preferExistingVisibleTarget: this.visibleLinkTypes.has(property)
         });
+        if (this.activeLinkTypeDuplicateNodesByProperty.get(property) !== true) {
+          this.currentFiles.add(targetPath);
+        }
         this.expansionNodes.get(badgeKey)!.add(childNodeId);
         if (!this.nodeOwners.has(childNodeId)) {
           this.nodeOwners.set(childNodeId, new Set<string>());
