@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "node esbuild.config.js",
     "build": "node esbuild.config.js production",
-    "typecheck": "tsc -p tsconfig.architecture.json"
+    "typecheck": "tsc -p tsconfig.architecture.json",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "esbuild": "^0.19.0",
     "obsidian": "^1.13.1",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.11"
   }
 }
