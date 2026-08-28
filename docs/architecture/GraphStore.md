@@ -4,6 +4,10 @@
 
 `GraphStore` is the single owner of runtime graph state. It makes state changes explicit and observable.
 
+Current implementation: [`src/graph-application/GraphStore.ts`](../../src/graph-application/GraphStore.ts)
+
+The migration begins with selection state. Other state categories remain in the legacy engine until their individual behavior is characterized.
+
 ## Owned state
 
 - [GraphNodeInstance](GraphNodeInstance.md) objects
@@ -17,6 +21,15 @@
 
 ```ts
 class GraphStore {
+  getSelectedNodeIds(): readonly NodeInstanceId[];
+  getSelectedNodeCount(): number;
+  isNodeSelected(nodeId: NodeInstanceId): boolean;
+  selectOnly(nodeId: NodeInstanceId): boolean;
+  toggleSelection(nodeId: NodeInstanceId): boolean;
+  replaceSelection(nodeIds: Iterable<NodeInstanceId>): boolean;
+  clearSelection(): boolean;
+
+  // Target API after later state categories are migrated:
   getSnapshot(): GraphSnapshot;
   apply(changeSet: GraphChangeSet): void;
   replace(snapshot: GraphSnapshot): void;
@@ -36,4 +49,3 @@ class GraphStore {
 ## Migration rule
 
 Move one state category at a time. Once state moves into this store, delete its old duplicate owner rather than synchronizing two mutable copies.
-
