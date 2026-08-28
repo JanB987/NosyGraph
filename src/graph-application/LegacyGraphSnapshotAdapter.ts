@@ -57,7 +57,7 @@ export class LegacyGraphSnapshotAdapter implements GraphSnapshotSource {
       viewport: { ...lens.viewport }
     }));
 
-    return { nodes, notes, edges, expansions, lenses };
+    return { nodes, notes, badges: [], edges, expansions, lenses };
   }
 
   private readUniqueNotes(nodes: readonly LegacyGraphReadNode[]): GraphNote[] {

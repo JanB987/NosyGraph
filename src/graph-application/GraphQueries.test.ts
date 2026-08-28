@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { GraphBadge } from "../graph-domain/GraphBadge";
 import type { GraphEdge } from "../graph-domain/GraphEdge";
 import type { GraphNodeInstance } from "../graph-domain/GraphNodeInstance";
 import type { GraphSnapshot } from "../graph-domain/GraphSnapshot";
@@ -72,6 +73,45 @@ function createSnapshot(): GraphSnapshot {
         contextId: LENS_CONTEXT,
         pinned: true
       })
+    ],
+    badges: [
+      {
+        id: "A.md::parts",
+        nodeId: "A.md",
+        linkTypeId: "parts",
+        contextId: ROOT_CONTEXT,
+        label: "Parts",
+        color: "#4488cc",
+        state: "expanded",
+        semantic: "link",
+        hasRelationships: true,
+        duplicateNodes: false,
+        expansionId: "A.md::parts"
+      },
+      {
+        id: "A.md::parents",
+        nodeId: "A.md",
+        linkTypeId: "parents",
+        contextId: ROOT_CONTEXT,
+        label: "Parents",
+        color: "#cc8844",
+        state: "collapsed",
+        semantic: "parent",
+        hasRelationships: true,
+        duplicateNodes: false
+      },
+      {
+        id: "lens-1::B.md::related",
+        nodeId: "lens-1::B.md",
+        linkTypeId: "related",
+        contextId: LENS_CONTEXT,
+        label: "Related",
+        color: "#6e96dc",
+        state: "collapsed",
+        semantic: "link",
+        hasRelationships: false,
+        duplicateNodes: true
+      }
     ],
     expansions: [
       {
@@ -172,5 +212,31 @@ describe("GraphQueries", () => {
     const edges = graph.getEdges() as GraphEdge[];
     edges.pop();
     expect(snapshot.edges).toHaveLength(2);
+  });
+
+  it("queries normal, parent, duplicate, collapsed, and expanded badges", () => {
+    const snapshot = createSnapshot();
+    const graph = queries(snapshot);
+
+    expect(graph.getBadges()).toHaveLength(3);
+    expect(graph.getBadge("A.md::parts")).toMatchObject({
+      state: "expanded",
+      semantic: "link",
+      hasRelationships: true,
+      duplicateNodes: false,
+      expansionId: "A.md::parts"
+    });
+    expect(graph.getBadge("A.md::parents")).toMatchObject({
+      state: "collapsed",
+      semantic: "parent"
+    });
+    expect(graph.getBadgesForNode("lens-1::B.md")).toEqual([
+      expect.objectContaining({ duplicateNodes: true, hasRelationships: false })
+    ]);
+    expect(graph.getBadgesForNode("missing")).toEqual([]);
+
+    const badges = graph.getBadges() as GraphBadge[];
+    badges.pop();
+    expect(snapshot.badges).toHaveLength(3);
   });
 });

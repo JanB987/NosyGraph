@@ -13,3 +13,4 @@ export type ExpansionId = string;
 export type GraphContextId = string;
 export type LensId = string;
 export type GraphDocumentId = string;
+export type BadgeId = string;

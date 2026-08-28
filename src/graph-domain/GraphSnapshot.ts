@@ -1,3 +1,4 @@
+import type { GraphBadge } from "./GraphBadge";
 import type { GraphEdge } from "./GraphEdge";
 import type { GraphExpansion } from "./GraphExpansion";
 import type { GraphLens } from "./GraphLens";
@@ -8,6 +9,7 @@ import type { GraphNote } from "./GraphNote";
 export interface GraphSnapshot {
   nodes: readonly GraphNodeInstance[];
   notes: readonly GraphNote[];
+  badges: readonly GraphBadge[];
   edges: readonly GraphEdge[];
   expansions: readonly GraphExpansion[];
   lenses: readonly GraphLens[];

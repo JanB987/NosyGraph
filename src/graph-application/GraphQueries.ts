@@ -1,3 +1,4 @@
+import type { GraphBadge } from "../graph-domain/GraphBadge";
 import type { GraphEdge } from "../graph-domain/GraphEdge";
 import type { GraphExpansion } from "../graph-domain/GraphExpansion";
 import type { GraphLens } from "../graph-domain/GraphLens";
@@ -5,6 +6,7 @@ import type { GraphNodeInstance } from "../graph-domain/GraphNodeInstance";
 import type { GraphNote } from "../graph-domain/GraphNote";
 import type { GraphSnapshot, GraphSnapshotSource } from "../graph-domain/GraphSnapshot";
 import type {
+  BadgeId,
   ExpansionId,
   GraphContextId,
   LinkTypeId,
@@ -61,6 +63,18 @@ export class GraphQueries {
 
   getRootNodes(): readonly GraphNodeInstance[] {
     return this.snapshot().nodes.filter((node) => node.origin.kind === "root");
+  }
+
+  getBadges(): readonly GraphBadge[] {
+    return [...this.snapshot().badges];
+  }
+
+  getBadge(badgeId: BadgeId): GraphBadge | undefined {
+    return this.snapshot().badges.find((badge) => badge.id === badgeId);
+  }
+
+  getBadgesForNode(nodeId: NodeInstanceId): readonly GraphBadge[] {
+    return this.snapshot().badges.filter((badge) => badge.nodeId === nodeId);
   }
 
   getEdges(): readonly GraphEdge[] {
