@@ -8,6 +8,7 @@ import type { O3LinkType } from "./O3LinkType";
 import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
 import { GraphQueries } from "./graph-application/GraphQueries";
+import { GraphStore } from "./graph-application/GraphStore";
 import {
   LegacyGraphSnapshotAdapter,
   ROOT_GRAPH_CONTEXT_ID,
@@ -523,7 +524,7 @@ export class GraphEngine {
   private nodeUnlockTimers = new Map<string, number>();
   private lastFocalNodeId: string | null = null;
   private isAltPressed = false;
-  private selectedNodeIds = new Set<string>();
+  private readonly graphStore = new GraphStore();
   private pinnedNodePaths = new Set<string>();
   private altDragFrozenNodeIds = new Set<string>();
 
@@ -3762,9 +3763,9 @@ export class GraphEngine {
     if (this.marqueeSelection) return false;
     if (this.isDraggingNode && this.draggedNode) {
       if (this.draggedNodeOriginPositions.has(node.id) || node.id === this.draggedNode.id) return false;
-      return this.showAllLinkTypeBadgesHeld || this.selectedNodeIds.has(node.id) || this.dragBadgeRevealNodeId === node.id;
+      return this.showAllLinkTypeBadgesHeld || this.graphStore.isNodeSelected(node.id) || this.dragBadgeRevealNodeId === node.id;
     }
-    return this.showAllLinkTypeBadgesHeld || this.selectedNodeIds.has(node.id);
+    return this.showAllLinkTypeBadgesHeld || this.graphStore.isNodeSelected(node.id);
   }
 
   private syncNodeBadges(): void {
@@ -7986,7 +7987,7 @@ export class GraphEngine {
         this.ctx.restore();
       }
 
-      if (this.selectedNodeIds.has(n.id)) {
+      if (this.graphStore.isNodeSelected(n.id)) {
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.arc(sx, sy, (radius + 8) * this.camera.zoom, 0, Math.PI * 2);
@@ -8161,27 +8162,19 @@ export class GraphEngine {
   // =========================
 
   private selectOnlyNode(nodeId: string): void {
-    if (this.selectedNodeIds.size === 1 && this.selectedNodeIds.has(nodeId)) return;
-    this.selectedNodeIds = new Set([nodeId]);
+    if (!this.graphStore.selectOnly(nodeId)) return;
     this.badgesDirty = true;
     this.requestRender();
   }
 
   private toggleNodeSelection(nodeId: string): void {
-    const next = new Set(this.selectedNodeIds);
-    if (next.has(nodeId)) {
-      next.delete(nodeId);
-    } else {
-      next.add(nodeId);
-    }
-    this.selectedNodeIds = next;
+    if (!this.graphStore.toggleSelection(nodeId)) return;
     this.badgesDirty = true;
     this.requestRender();
   }
 
   private clearNodeSelection(): void {
-    if (this.selectedNodeIds.size === 0) return;
-    this.selectedNodeIds.clear();
+    if (!this.graphStore.clearSelection()) return;
     this.badgesDirty = true;
     this.requestRender();
   }
@@ -8192,8 +8185,7 @@ export class GraphEngine {
         .map((node) => String(node.id ?? "").trim())
         .filter(Boolean)
     );
-    if (!this.haveSelectedNodesChanged(next)) return next.size;
-    this.selectedNodeIds = next;
+    if (!this.graphStore.replaceSelection(next)) return next.size;
     this.badgesDirty = true;
     this.requestRender();
     return next.size;
@@ -8205,7 +8197,7 @@ export class GraphEngine {
     this.container.focus();
 
     const clickedNode = this.findNodeAtScreenPosition(e.clientX, e.clientY);
-    if (clickedNode && !this.selectedNodeIds.has(clickedNode.id)) {
+    if (clickedNode && !this.graphStore.isNodeSelected(clickedNode.id)) {
       this.selectOnlyNode(clickedNode.id);
     }
 
@@ -8336,7 +8328,7 @@ export class GraphEngine {
 
   private getSelectedNodes(): GraphNode[] {
     const nodes: GraphNode[] = [];
-    for (const nodeId of this.selectedNodeIds) {
+    for (const nodeId of this.graphStore.getSelectedNodeIds()) {
       const node = this.nodeMap.get(nodeId);
       if (node) nodes.push(node);
     }
@@ -8476,7 +8468,7 @@ export class GraphEngine {
         this.ctx.shadowBlur = 10;
         this.ctx.stroke();
       }
-      if (this.selectedNodeIds.has(container.origin)) {
+      if (this.graphStore.isNodeSelected(container.origin)) {
         this.ctx.beginPath();
         this.roundRectPath(x - 3, y - 3, width + 6, height + 6, radius + 3);
         this.ctx.strokeStyle = "rgba(255, 214, 102, 0.95)";
@@ -8485,7 +8477,7 @@ export class GraphEngine {
         this.ctx.stroke();
         this.ctx.setLineDash([]);
       }
-      const shouldDrawTitle = this.shouldDrawNodeLabels() || this.selectedNodeIds.has(container.origin);
+      const shouldDrawTitle = this.shouldDrawNodeLabels() || this.graphStore.isNodeSelected(container.origin);
       if (shouldDrawTitle) {
         const label = container.graphPath.split("/").pop()?.replace(/\.md$/i, "") ?? container.graphPath;
         const origin = this.nodeMap.get(container.origin);
@@ -8736,7 +8728,7 @@ export class GraphEngine {
       currentX: point.x,
       currentY: point.y
     };
-    this.selectedNodeIds.clear();
+    this.graphStore.clearSelection();
     this.altDragFrozenNodeIds = new Set(this.nodes.map((node) => node.id));
     this.badgesDirty = true;
     this.requestRender();
@@ -8766,20 +8758,10 @@ export class GraphEngine {
       }
     }
 
-    const changed = this.haveSelectedNodesChanged(next);
-    if (changed) {
-      this.selectedNodeIds = next;
+    if (this.graphStore.replaceSelection(next)) {
       this.badgesDirty = true;
     }
     this.requestRender();
-  }
-
-  private haveSelectedNodesChanged(next: Set<string>): boolean {
-    if (next.size !== this.selectedNodeIds.size) return true;
-    for (const nodeId of next) {
-      if (!this.selectedNodeIds.has(nodeId)) return true;
-    }
-    return false;
   }
 
   private endMarqueeSelection(): void {
@@ -8791,8 +8773,8 @@ export class GraphEngine {
   }
 
   private captureDraggedNodeOrigins(anchorNode: GraphNode): void {
-    const nodeIds = this.selectedNodeIds.has(anchorNode.id)
-      ? Array.from(this.selectedNodeIds)
+    const nodeIds = this.graphStore.isNodeSelected(anchorNode.id)
+      ? [...this.graphStore.getSelectedNodeIds()]
       : [anchorNode.id];
     const excludedLensMemberIds = this.getOpenLensDescendantNodeIds(anchorNode.id);
     this.draggedNodeOriginPositions.clear();
@@ -9020,7 +9002,7 @@ export class GraphEngine {
           this.isPanning = false;
           return;
         }
-        if (!this.selectedNodeIds.has(this.pressedNode.id)) {
+        if (!this.graphStore.isNodeSelected(this.pressedNode.id)) {
           this.selectOnlyNode(this.pressedNode.id);
         }
         this.captureDraggedNodeOrigins(this.pressedNode);
@@ -9053,7 +9035,7 @@ export class GraphEngine {
         return;
       }
 
-      if (!this.selectedNodeIds.has(this.pressedNode.id)) {
+      if (!this.graphStore.isNodeSelected(this.pressedNode.id)) {
         this.selectOnlyNode(this.pressedNode.id);
       }
       this.captureDraggedNodeOrigins(this.pressedNode);
@@ -9340,7 +9322,7 @@ export class GraphEngine {
       return;
     }
 
-    if (!this.selectedNodeIds.has(node.id)) {
+    if (!this.graphStore.isNodeSelected(node.id)) {
       this.selectOnlyNode(node.id);
     }
     this.captureDraggedNodeOrigins(node);
@@ -9701,8 +9683,8 @@ export class GraphEngine {
     for (const nodeId of this.draggedNodeOriginPositions.keys()) {
       out.add(nodeId);
     }
-    if (this.selectedNodeIds.has(draggedNodeId)) {
-      for (const nodeId of this.selectedNodeIds) {
+    if (this.graphStore.isNodeSelected(draggedNodeId)) {
+      for (const nodeId of this.graphStore.getSelectedNodeIds()) {
         out.add(nodeId);
       }
     }
@@ -10205,8 +10187,8 @@ export class GraphEngine {
   }
 
   private getDraggedGraphNodeMutationRefs(draggedNode: GraphNode): GraphLinkMutationNodeRef[] {
-    const nodeIds = this.selectedNodeIds.has(draggedNode.id)
-      ? Array.from(new Set([...this.selectedNodeIds, draggedNode.id]))
+    const nodeIds = this.graphStore.isNodeSelected(draggedNode.id)
+      ? Array.from(new Set([...this.graphStore.getSelectedNodeIds(), draggedNode.id]))
       : [draggedNode.id];
     const refs: GraphLinkMutationNodeRef[] = [];
     const seen = new Set<string>();
@@ -10318,7 +10300,7 @@ export class GraphEngine {
 
   private drawLabels() {
     const shouldDrawUnselectedLabels = this.shouldDrawNodeLabels();
-    if (!shouldDrawUnselectedLabels && this.selectedNodeIds.size === 0) return;
+    if (!shouldDrawUnselectedLabels && this.graphStore.getSelectedNodeCount() === 0) return;
 
     this.ctx.fillStyle = "#cfcfcf";
     this.ctx.textAlign = "center";
@@ -10326,7 +10308,7 @@ export class GraphEngine {
 
     for (const node of this.nodes) {
       if (!node.label) continue;
-      if (!shouldDrawUnselectedLabels && !this.selectedNodeIds.has(node.id)) continue;
+      if (!shouldDrawUnselectedLabels && !this.graphStore.isNodeSelected(node.id)) continue;
 
       const clipContainer = this.getEmbeddedClipContainerForNode(node);
       if (clipContainer) {
@@ -11306,7 +11288,7 @@ export class GraphEngine {
     const activeLinkTypes = this.getLinkTypesForNode(node);
     const shouldIncludeVisibleLinkTypes =
       node.embeddedInstanceId
-      && (this.selectedNodeIds.has(node.id) || this.dragBadgeRevealNodeId === node.id);
+      && (this.graphStore.isNodeSelected(node.id) || this.dragBadgeRevealNodeId === node.id);
     if (!shouldIncludeVisibleLinkTypes) {
       return activeLinkTypes;
     }
@@ -12081,7 +12063,7 @@ export class GraphEngine {
   getSelectedNodePaths(): string[] {
     const paths: string[] = [];
     const seen = new Set<string>();
-    for (const nodeId of this.selectedNodeIds) {
+    for (const nodeId of this.graphStore.getSelectedNodeIds()) {
       const node = this.nodeMap.get(nodeId);
       if (!node) continue;
       const ref = this.getGraphNodeMutationRef(node);
@@ -12706,7 +12688,7 @@ export class GraphEngine {
         velocity: { x: node.vx, y: node.vy },
         radius: this.getEffectiveNodeRadius(node),
         pinned: Boolean(node.isPinned || this.pinnedNodePaths.has(node.id)),
-        selected: this.selectedNodeIds.has(node.id),
+        selected: this.graphStore.isNodeSelected(node.id),
         origin
       };
     });

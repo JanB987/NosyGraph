@@ -8,6 +8,23 @@ Current implementation: [`src/graph-application/GraphStore.ts`](../../src/graph-
 
 The migration begins with selection state. Other state categories remain in the legacy engine until their individual behavior is characterized.
 
+## Current selection call flow
+
+```text
+mouse, keyboard, marquee, context menu, or drag interaction
+                          |
+                          v
+                 legacy GraphEngine
+                          |
+                          v
+                     GraphStore
+                          |
+                          v
+             render and read-only snapshot
+```
+
+`GraphEngine` no longer owns a `selectedNodeIds` set. It uses the store for selection checks and changes involved in badge visibility, selection rings, labels, copying, pinning, dragging, badge drops, marquee selection, and `GraphQueries` snapshots.
+
 ## Owned state
 
 - [GraphNodeInstance](GraphNodeInstance.md) objects

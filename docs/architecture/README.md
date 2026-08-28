@@ -80,7 +80,8 @@ GraphController <--------> Obsidian adapters
 - [x] Adapt the active engine to expose a read-only `GraphSnapshot`.
 - [x] Add initial query and adapter characterization tests.
 - [x] Add snapshot coverage for edge and lens details.
-- [ ] Introduce `GraphStore` and move the first low-risk state category into it.
+- [x] Introduce `GraphStore` and make it the single owner of selection state.
+- [ ] Introduce `GraphController` for selection commands.
 
 ## Validation during the migration
 
