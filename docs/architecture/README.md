@@ -71,3 +71,15 @@ GraphController <--------> Obsidian adapters
 6. Separate renderer and physics.
 7. Move lenses, containers, and persistence last.
 
+## Current progress
+
+- [x] Target architecture documented.
+- [x] Note and node-instance identities separated in host-neutral types.
+- [x] Expansion ownership represented explicitly.
+- [x] First read-only `GraphQueries` API added.
+- [ ] Adapt the active engine to expose a `GraphSnapshot`.
+- [ ] Add characterization tests before moving mutable state.
+
+## Validation during the migration
+
+Run `npm run typecheck` for the new host-neutral architecture and `npm run build` for the complete legacy plugin bundle. The architecture typecheck is deliberately scoped: dormant Working Memory extraction files currently reference modules that are not part of this package, and the active legacy files contain pre-existing strict-type errors. Expanding the strict boundary will be a gradual part of the refactor.

@@ -4,6 +4,8 @@
 
 `GraphNote` is a host-neutral representation of a Markdown note. It is separate from [GraphNodeInstance](GraphNodeInstance.md).
 
+Current implementation: [`src/graph-domain/GraphNote.ts`](../../src/graph-domain/GraphNote.ts)
+
 ## Core data
 
 ```ts
@@ -35,4 +37,3 @@ The Obsidian implementation belongs in [Obsidian adapters](ObsidianAdapters.md).
 ## Why note and node stay separate
 
 A single note may appear as a root, a duplicate expansion node, and nodes in multiple lenses. Note metadata is shared; position, selection, ownership, and viewport context belong to each node instance.
-

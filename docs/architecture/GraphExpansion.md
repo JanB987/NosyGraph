@@ -4,6 +4,8 @@
 
 `GraphExpansion` records which runtime objects were introduced through one badge. Explicit ownership makes collapse and nested duplicate behavior understandable and testable.
 
+Current implementation: [`src/graph-domain/GraphExpansion.ts`](../../src/graph-domain/GraphExpansion.ts)
+
 ## Core data
 
 ```ts
@@ -33,4 +35,3 @@ createCollapseChangeSet(expansionId, snapshot): GraphChangeSet;
 - Orchestrated by [GraphController](GraphController.md).
 - Stored in [GraphStore](GraphStore.md).
 - Queried through [GraphQueries](GraphQueries.md).
-

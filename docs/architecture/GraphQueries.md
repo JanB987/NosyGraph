@@ -4,6 +4,8 @@
 
 `GraphQueries` provides the approachable, read-only API for understanding and extending the graph.
 
+Current implementation: [`src/graph-application/GraphQueries.ts`](../../src/graph-application/GraphQueries.ts)
+
 ## Proposed API
 
 ```ts
@@ -30,4 +32,3 @@ class GraphQueries {
 ## Design rule
 
 Queries answer questions and never change state. A badge click is therefore a controller command; asking which nodes belong to its expansion is a query.
-
