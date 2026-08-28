@@ -4,6 +4,10 @@
 
 `GraphController` is the application coordinator. It translates interaction or host intents into domain operations and applies their results to [GraphStore](GraphStore.md).
 
+Current implementation: [`src/graph-application/GraphController.ts`](../../src/graph-application/GraphController.ts)
+
+Selection is the first implemented command family. Other responsibilities below describe the target architecture and will be introduced incrementally.
+
 ## Responsibilities
 
 - Add and remove roots.
@@ -17,13 +21,18 @@
 
 ```ts
 class GraphController {
-  initialize(document: GraphDocument): Promise<void>;
-  execute(command: GraphCommand): Promise<GraphChangeSet>;
-  handleIntent(intent: GraphIntent): Promise<void>;
+  executeSelection(command: GraphSelectionCommand): GraphSelectionResult;
+  selectOnly(nodeId: NodeInstanceId): GraphSelectionResult;
+  toggleSelection(nodeId: NodeInstanceId): GraphSelectionResult;
+  replaceSelection(nodeIds: readonly NodeInstanceId[]): GraphSelectionResult;
+  selectAll(nodeIds: readonly NodeInstanceId[]): GraphSelectionResult;
+  clearSelection(): GraphSelectionResult;
 }
 ```
 
-Smaller typed command methods can wrap `execute` while the architecture is introduced.
+Each result reports whether state changed and returns a detached selection list. The active view can therefore decide whether badges and rendering need refresh without the controller importing DOM or renderer code.
+
+Future command families will add initialization, roots, expansions, relationships, and lenses. A broader `execute(command)` entry point should be added only when more than one family needs common dispatch.
 
 ## Connections
 
@@ -38,4 +47,3 @@ Smaller typed command methods can wrap `execute` while the architecture is intro
 - Obsidian `TFile` objects
 - Physics state
 - Independent node or edge collections
-
