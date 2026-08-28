@@ -82,7 +82,8 @@ GraphController <--------> Obsidian adapters
 - [x] Add snapshot coverage for edge and lens details.
 - [x] Introduce `GraphStore` and make it the single owner of selection state.
 - [x] Introduce `GraphController` and route selection mutations through it.
-- [ ] Connect `GraphBadge` to the read-only snapshot and query API.
+- [x] Connect `GraphBadge` to the live read-only snapshot and query API.
+- [ ] Route badge-click intent through `GraphController` while delegating expansion behavior to the legacy engine.
 
 ## Validation during the migration
 

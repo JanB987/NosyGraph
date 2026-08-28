@@ -1,3 +1,4 @@
+import type { GraphBadge } from "../graph-domain/GraphBadge";
 import type { GraphEdge } from "../graph-domain/GraphEdge";
 import type { GraphExpansion } from "../graph-domain/GraphExpansion";
 import type { GraphLens } from "../graph-domain/GraphLens";
@@ -16,12 +17,15 @@ export interface LegacyGraphReadNode extends GraphNodeInstance {
 /** A copied expansion record exposed by the legacy engine during migration. */
 export interface LegacyGraphReadExpansion extends GraphExpansion {}
 
+export interface LegacyGraphReadBadge extends GraphBadge {}
+
 export interface LegacyGraphReadEdge extends GraphEdge {}
 
 export interface LegacyGraphReadLens extends GraphLens {}
 
 export interface LegacyGraphReadState {
   nodes: readonly LegacyGraphReadNode[];
+  badges: readonly LegacyGraphReadBadge[];
   edges: readonly LegacyGraphReadEdge[];
   expansions: readonly LegacyGraphReadExpansion[];
   lenses: readonly LegacyGraphReadLens[];
@@ -49,6 +53,7 @@ export class LegacyGraphSnapshotAdapter implements GraphSnapshotSource {
     const legacy = this.source.getLegacyGraphReadState();
     const notes = this.readUniqueNotes(legacy.nodes);
     const nodes = legacy.nodes.map((node) => this.copyNode(node));
+    const badges = legacy.badges.map((badge) => ({ ...badge }));
     const edges = legacy.edges.map((edge) => ({ ...edge }));
     const expansions = legacy.expansions.map((expansion) => this.copyExpansion(expansion));
     const lenses = legacy.lenses.map((lens) => ({
@@ -57,7 +62,7 @@ export class LegacyGraphSnapshotAdapter implements GraphSnapshotSource {
       viewport: { ...lens.viewport }
     }));
 
-    return { nodes, notes, badges: [], edges, expansions, lenses };
+    return { nodes, notes, badges, edges, expansions, lenses };
   }
 
   private readUniqueNotes(nodes: readonly LegacyGraphReadNode[]): GraphNote[] {

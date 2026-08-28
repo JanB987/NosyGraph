@@ -38,6 +38,21 @@ describe("LegacyGraphSnapshotAdapter", () => {
           }
         }
       ],
+      badges: [
+        {
+          id: "A.md::parts",
+          nodeId: "A.md",
+          linkTypeId: "parts",
+          contextId: ROOT_GRAPH_CONTEXT_ID,
+          label: "Parts",
+          color: "#4488cc",
+          state: "expanded",
+          semantic: "link",
+          hasRelationships: true,
+          duplicateNodes: false,
+          expansionId: "A.md::parts"
+        }
+      ],
       edges: [
         {
           id: "A.md::duplicate:A.md::related",
@@ -86,5 +101,7 @@ describe("LegacyGraphSnapshotAdapter", () => {
     expect(snapshot.edges).not.toBe(legacy.edges);
     expect(snapshot.lenses).toEqual(legacy.lenses);
     expect(snapshot.lenses[0].bounds).not.toBe(legacy.lenses[0].bounds);
+    expect(snapshot.badges).toEqual(legacy.badges);
+    expect(snapshot.badges).not.toBe(legacy.badges);
   });
 });

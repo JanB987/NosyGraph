@@ -18,6 +18,9 @@ class GraphQueries {
   getNodeInstancesForNote(noteId: NoteId): readonly GraphNodeInstance[];
   getSelectedNodes(): readonly GraphNodeInstance[];
   getRootNodes(): readonly GraphNodeInstance[];
+  getBadges(): readonly GraphBadge[];
+  getBadge(badgeId: BadgeId): GraphBadge | undefined;
+  getBadgesForNode(nodeId: NodeInstanceId): readonly GraphBadge[];
   getNodesForBadge(nodeId: NodeInstanceId, linkTypeId: LinkTypeId): readonly GraphNodeInstance[];
   getNodesForExpansion(expansionId: ExpansionId): readonly GraphNodeInstance[];
   getEdges(): readonly GraphEdge[];
@@ -27,8 +30,6 @@ class GraphQueries {
   getLensNodes(lensId: LensId): readonly GraphNodeInstance[];
 }
 ```
-
-`getBadgesForNode` remains planned until the badge model is connected to runtime data.
 
 ## Connections
 

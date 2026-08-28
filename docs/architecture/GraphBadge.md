@@ -4,6 +4,8 @@
 
 `GraphBadge` describes one link-type expansion control attached to a [GraphNodeInstance](GraphNodeInstance.md).
 
+Current read model: [`src/graph-domain/GraphBadge.ts`](../../src/graph-domain/GraphBadge.ts)
+
 ## Core data
 
 ```ts
@@ -11,10 +13,13 @@ interface GraphBadge {
   id: BadgeId;
   nodeId: NodeInstanceId;
   linkTypeId: LinkTypeId;
+  contextId: GraphContextId;
   label: string;
   color: string;
-  state: "collapsed" | "expanded" | "loading";
+  state: "collapsed" | "expanded";
+  semantic: "link" | "parent";
   hasRelationships: boolean;
+  duplicateNodes: boolean;
   expansionId?: ExpansionId;
 }
 ```
@@ -35,3 +40,8 @@ getBadgeId(nodeId, linkTypeId): BadgeId;
 
 The badge itself does not mutate graph or note state.
 
+## Current migration state
+
+`LegacyGraphSnapshotAdapter` exposes configured badges for outer and embedded nodes. Normal, parent, and duplicate-node semantics are preserved. `GraphQueries` can return all badges, one badge by stable ID, or the badges belonging to a node.
+
+Badge clicks still enter the legacy `GraphEngine` directly. Moving that interaction behind [GraphController](GraphController.md) is a separate step because it changes command flow rather than read-only data.

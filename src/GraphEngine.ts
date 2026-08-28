@@ -15,6 +15,7 @@ import {
   ROOT_GRAPH_CONTEXT_ID,
   contextIdForLegacyNode,
   uniqueExistingNodeIds,
+  type LegacyGraphReadBadge,
   type LegacyGraphReadEdge,
   type LegacyGraphReadExpansion,
   type LegacyGraphReadLens,
@@ -12730,6 +12731,33 @@ export class GraphEngine {
       });
     }
 
+    const badgesById = new Map<string, LegacyGraphReadBadge>();
+    for (const node of this.nodes) {
+      for (const linkType of this.getPersistableBadgeLinkTypesForNode(node)) {
+        const linkTypeId = this.normalizeLinkType(String(linkType.property ?? ""));
+        if (!linkTypeId) continue;
+        const id = this.badgeKey(node.id, linkTypeId);
+        const semantic = linkType.semantic === "parent" ? "parent" as const : "link" as const;
+        const expanded = semantic === "parent"
+          ? this.isParentExpansionActive(node.id, linkTypeId)
+          : this.expandedByBadge.has(id);
+        badgesById.set(id, {
+          id,
+          nodeId: node.id,
+          linkTypeId,
+          contextId: contextIdForLegacyNode(node.embeddedInstanceId),
+          label: String(linkType.key ?? linkType.property ?? "").trim() || linkTypeId,
+          color: this.getBadgeBaseColor(linkTypeId, linkType.color),
+          state: expanded ? "expanded" : "collapsed",
+          semantic,
+          hasRelationships: this.hasBadgeYamlLinks(node.sourcePath, linkTypeId),
+          duplicateNodes: linkType.linkDuplicateNodes === true,
+          ...(expanded && this.expansionNodes.has(id) ? { expansionId: id } : {})
+        });
+      }
+    }
+    const badges = Array.from(badgesById.values());
+
     const edges: LegacyGraphReadEdge[] = this.edges.flatMap((edge) => {
       const fromNode = this.nodeMap.get(edge.from);
       const toNode = this.nodeMap.get(edge.to);
@@ -12778,7 +12806,7 @@ export class GraphEngine {
       };
     });
 
-    return { nodes, edges, expansions, lenses };
+    return { nodes, badges, edges, expansions, lenses };
   }
 
   private getPrimaryNodeOwner(nodeId: string): { sourceNodeId: string; linkType: string } | null {
