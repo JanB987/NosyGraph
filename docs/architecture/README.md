@@ -83,7 +83,8 @@ GraphController <--------> Obsidian adapters
 - [x] Introduce `GraphStore` and make it the single owner of selection state.
 - [x] Introduce `GraphController` and route selection mutations through it.
 - [x] Connect `GraphBadge` to the live read-only snapshot and query API.
-- [ ] Route badge-click intent through `GraphController` while delegating expansion behavior to the legacy engine.
+- [x] Route standard node-badge intents through `GraphController` while delegating expansion behavior to the legacy engine.
+- [ ] Route the older parent-overlay badge controls through the same command boundary.
 
 ## Validation during the migration
 

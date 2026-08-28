@@ -1,19 +1,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Obsidian DOM helper return types are validated by runtime element creation in this small badge wrapper. */
-import { App, TFile } from "obsidian";
 import { O3LinkType } from "./O3LinkType";
-import type { GraphEngine } from "./GraphEngine";
 import { setStyle } from "./domStyle";
+
+export type O3NodeBadgeIntent =
+  | "toggle-badge"
+  | "open-badge-input"
+  | "expand-badge-chain";
 
 export class O3NodeBadge {
   private badgeElement: HTMLElement | null = null;
 
   constructor(
     private nodeElement: HTMLElement,
-    private nodeFile: TFile,
-    private sourceNodeId: string,
     private linkType: O3LinkType,
-    private app: App,
-    private graphEngine: GraphEngine
+    private onIntent: (intent: O3NodeBadgeIntent) => void
   ) {}
 
   render(): void {
@@ -37,23 +37,15 @@ export class O3NodeBadge {
   }
 
   private onClick(): void {
-    this.graphEngine.expandFromNode(
-      this.nodeFile,
-      this.linkType,
-      this.sourceNodeId
-    );
+    this.onIntent("toggle-badge");
   }
 
   private onAltClick(): void {
-    this.graphEngine.requestBadgeLinkInput(this.sourceNodeId, this.linkType);
+    this.onIntent("open-badge-input");
   }
 
   private onCtrlClick(): void {
-    void this.graphEngine.expandLinkTypeChainFromNode(
-      this.nodeFile,
-      this.linkType,
-      this.sourceNodeId
-    );
+    this.onIntent("expand-badge-chain");
   }
 }
 /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Re-enable Obsidian DOM helper lint rules after this badge wrapper. */

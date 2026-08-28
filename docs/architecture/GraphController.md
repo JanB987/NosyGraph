@@ -39,6 +39,7 @@ The active engine performs no direct selection mutation. It still owns input int
 ```ts
 class GraphController {
   executeSelection(command: GraphSelectionCommand): GraphSelectionResult;
+  executeBadge(command: GraphBadgeCommand): Promise<GraphBadgeCommandResult>;
   selectOnly(nodeId: NodeInstanceId): GraphSelectionResult;
   toggleSelection(nodeId: NodeInstanceId): GraphSelectionResult;
   replaceSelection(nodeIds: readonly NodeInstanceId[]): GraphSelectionResult;
@@ -63,6 +64,26 @@ type GraphBadgeCommand =
 ```
 
 The controller resolves the stable ID through [GraphQueries](GraphQueries.md). It then calls `GraphBadgeCommandPort`, a temporary interface implemented by the legacy engine. Unknown badges and unavailable ports return explicit unhandled results rather than silently mutating state.
+
+The standard runtime flow is now:
+
+```text
+O3NodeBadge modifier-aware DOM event
+                 |
+                 v
+       stable GraphBadgeCommand
+                 |
+                 v
+          GraphController
+           |           |
+           v           v
+     GraphQueries   GraphBadgeCommandPort
+                         |
+                         v
+            legacy GraphEngine operation
+```
+
+This removes the engine dependency from the badge view while preserving normal click, Alt-click, and Ctrl/Cmd-click behavior. The port is a migration seam, not the final home of expansion logic.
 
 ## Connections
 
