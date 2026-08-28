@@ -1,4 +1,6 @@
+import type { GraphEdge } from "./GraphEdge";
 import type { GraphExpansion } from "./GraphExpansion";
+import type { GraphLens } from "./GraphLens";
 import type { GraphNodeInstance } from "./GraphNodeInstance";
 import type { GraphNote } from "./GraphNote";
 
@@ -6,11 +8,12 @@ import type { GraphNote } from "./GraphNote";
 export interface GraphSnapshot {
   nodes: readonly GraphNodeInstance[];
   notes: readonly GraphNote[];
+  edges: readonly GraphEdge[];
   expansions: readonly GraphExpansion[];
+  lenses: readonly GraphLens[];
 }
 
 /** Implemented by GraphStore later; easy to adapt to the current engine now. */
 export interface GraphSnapshotSource {
   getSnapshot(): GraphSnapshot;
 }
-

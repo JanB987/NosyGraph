@@ -1,4 +1,6 @@
+import type { GraphEdge } from "../graph-domain/GraphEdge";
 import type { GraphExpansion } from "../graph-domain/GraphExpansion";
+import type { GraphLens } from "../graph-domain/GraphLens";
 import type { GraphNodeInstance } from "../graph-domain/GraphNodeInstance";
 import type { GraphNote } from "../graph-domain/GraphNote";
 import type { GraphSnapshot, GraphSnapshotSource } from "../graph-domain/GraphSnapshot";
@@ -6,6 +8,7 @@ import type {
   ExpansionId,
   GraphContextId,
   LinkTypeId,
+  LensId,
   NodeInstanceId,
   NoteId
 } from "../graph-domain/graph-identifiers";
@@ -60,6 +63,31 @@ export class GraphQueries {
     return this.snapshot().nodes.filter((node) => node.origin.kind === "root");
   }
 
+  getEdges(): readonly GraphEdge[] {
+    return [...this.snapshot().edges];
+  }
+
+  getEdgesForNode(nodeId: NodeInstanceId): readonly GraphEdge[] {
+    return this.snapshot().edges.filter((edge) =>
+      edge.fromNodeId === nodeId || edge.toNodeId === nodeId
+    );
+  }
+
+  getLenses(): readonly GraphLens[] {
+    return [...this.snapshot().lenses];
+  }
+
+  getLens(lensId: LensId): GraphLens | undefined {
+    return this.snapshot().lenses.find((lens) => lens.id === lensId);
+  }
+
+  getLensNodes(lensId: LensId): readonly GraphNodeInstance[] {
+    const snapshot = this.snapshot();
+    const lens = snapshot.lenses.find((candidate) => candidate.id === lensId);
+    if (!lens) return [];
+    return snapshot.nodes.filter((node) => node.contextId === lens.contextId);
+  }
+
   getExpansion(expansionId: ExpansionId): GraphExpansion | undefined {
     return this.snapshot().expansions.find((expansion) => expansion.id === expansionId);
   }
@@ -98,4 +126,3 @@ export class GraphQueries {
     return snapshot.nodes.filter((node) => wanted.has(node.id));
   }
 }
-

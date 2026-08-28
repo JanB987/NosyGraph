@@ -12,4 +12,4 @@ export type LinkTypeId = string;
 export type ExpansionId = string;
 export type GraphContextId = string;
 export type LensId = string;
-
+export type GraphDocumentId = string;

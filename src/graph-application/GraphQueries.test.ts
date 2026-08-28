@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { GraphEdge } from "../graph-domain/GraphEdge";
 import type { GraphNodeInstance } from "../graph-domain/GraphNodeInstance";
 import type { GraphSnapshot } from "../graph-domain/GraphSnapshot";
 import { GraphQueries } from "./GraphQueries";
@@ -32,6 +33,24 @@ function createSnapshot(): GraphSnapshot {
       { id: "B.md", path: "B.md", name: "B", properties: {} },
       { id: "C.md", path: "C.md", name: "C", properties: {} }
     ],
+    edges: [
+      {
+        id: "A.md::B.md::parts",
+        fromNodeId: "A.md",
+        toNodeId: "A.md::parts::B.md",
+        linkTypeId: "parts",
+        contextId: ROOT_CONTEXT,
+        origin: "discovered"
+      },
+      {
+        id: "lens-1::B.md::C.md::related",
+        fromNodeId: "lens-1::B.md",
+        toNodeId: "C.md",
+        linkTypeId: "related",
+        contextId: LENS_CONTEXT,
+        origin: "visible"
+      }
+    ],
     nodes: [
       node("A.md", "A.md", { selected: true }),
       node("A.md::parts::B.md", "B.md", {
@@ -64,6 +83,18 @@ function createSnapshot(): GraphSnapshot {
         createdNodeIds: ["A.md::parts::B.md"],
         createdEdgeIds: [],
         childExpansionIds: []
+      }
+    ],
+    lenses: [
+      {
+        id: "lens-1",
+        sourceNodeId: "A.md",
+        documentId: "Project Graph.md",
+        contextId: LENS_CONTEXT,
+        bounds: { left: 0, top: 0, right: 400, bottom: 300 },
+        viewport: { x: 10, y: 20, zoom: 0.8 },
+        locked: false,
+        maximized: false
       }
     ]
   };
@@ -123,5 +154,23 @@ describe("GraphQueries", () => {
     expect(graph.getNodesForBadge("A.md", "unknown")).toEqual([]);
     expect(graph.getNodesForExpansion("missing")).toEqual([]);
   });
-});
 
+  it("queries edges by endpoint and resolves nodes in a lens context", () => {
+    const snapshot = createSnapshot();
+    const graph = queries(snapshot);
+
+    expect(graph.getEdges()).toHaveLength(2);
+    expect(graph.getEdgesForNode("A.md").map((edge) => edge.linkTypeId)).toEqual(["parts"]);
+    expect(graph.getEdgesForNode("C.md").map((edge) => edge.linkTypeId)).toEqual(["related"]);
+    expect(graph.getLens("lens-1")?.documentId).toBe("Project Graph.md");
+    expect(graph.getLensNodes("lens-1").map((item) => item.id)).toEqual([
+      "lens-1::B.md",
+      "C.md"
+    ]);
+    expect(graph.getLensNodes("missing")).toEqual([]);
+
+    const edges = graph.getEdges() as GraphEdge[];
+    edges.pop();
+    expect(snapshot.edges).toHaveLength(2);
+  });
+});

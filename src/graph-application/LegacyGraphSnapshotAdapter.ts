@@ -43,7 +43,7 @@ export class LegacyGraphSnapshotAdapter implements GraphSnapshotSource {
     const nodes = legacy.nodes.map((node) => this.copyNode(node));
     const expansions = legacy.expansions.map((expansion) => this.copyExpansion(expansion));
 
-    return { nodes, notes, expansions };
+    return { nodes, notes, edges: [], expansions, lenses: [] };
   }
 
   private readUniqueNotes(nodes: readonly LegacyGraphReadNode[]): GraphNote[] {
