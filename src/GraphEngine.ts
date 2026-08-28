@@ -7,6 +7,7 @@ import type { O3GraphEmbeddedGraphState, O3GraphEmbeddedLensState, O3GraphNodeOr
 import type { O3LinkType } from "./O3LinkType";
 import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
+import { GraphController } from "./graph-application/GraphController";
 import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
 import {
@@ -525,6 +526,7 @@ export class GraphEngine {
   private lastFocalNodeId: string | null = null;
   private isAltPressed = false;
   private readonly graphStore = new GraphStore();
+  private readonly graphController = new GraphController(this.graphStore);
   private pinnedNodePaths = new Set<string>();
   private altDragFrozenNodeIds = new Set<string>();
 
@@ -8162,19 +8164,19 @@ export class GraphEngine {
   // =========================
 
   private selectOnlyNode(nodeId: string): void {
-    if (!this.graphStore.selectOnly(nodeId)) return;
+    if (!this.graphController.selectOnly(nodeId).changed) return;
     this.badgesDirty = true;
     this.requestRender();
   }
 
   private toggleNodeSelection(nodeId: string): void {
-    if (!this.graphStore.toggleSelection(nodeId)) return;
+    if (!this.graphController.toggleSelection(nodeId).changed) return;
     this.badgesDirty = true;
     this.requestRender();
   }
 
   private clearNodeSelection(): void {
-    if (!this.graphStore.clearSelection()) return;
+    if (!this.graphController.clearSelection().changed) return;
     this.badgesDirty = true;
     this.requestRender();
   }
@@ -8185,7 +8187,7 @@ export class GraphEngine {
         .map((node) => String(node.id ?? "").trim())
         .filter(Boolean)
     );
-    if (!this.graphStore.replaceSelection(next)) return next.size;
+    if (!this.graphController.selectAll(Array.from(next)).changed) return next.size;
     this.badgesDirty = true;
     this.requestRender();
     return next.size;
@@ -8728,7 +8730,7 @@ export class GraphEngine {
       currentX: point.x,
       currentY: point.y
     };
-    this.graphStore.clearSelection();
+    this.graphController.clearSelection();
     this.altDragFrozenNodeIds = new Set(this.nodes.map((node) => node.id));
     this.badgesDirty = true;
     this.requestRender();
@@ -8758,7 +8760,7 @@ export class GraphEngine {
       }
     }
 
-    if (this.graphStore.replaceSelection(next)) {
+    if (this.graphController.replaceSelection(Array.from(next)).changed) {
       this.badgesDirty = true;
     }
     this.requestRender();

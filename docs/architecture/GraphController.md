@@ -8,6 +8,23 @@ Current implementation: [`src/graph-application/GraphController.ts`](../../src/g
 
 Selection is the first implemented command family. Other responsibilities below describe the target architecture and will be introduced incrementally.
 
+## Current selection flow
+
+```text
+GraphEngine interprets pointer or keyboard input
+                       |
+                       v
+               GraphController
+                       |
+                       v
+                  GraphStore
+                       |
+                       v
+GraphSelectionResult tells GraphEngine whether to redraw
+```
+
+The active engine performs no direct selection mutation. It still owns input interpretation and selection-related drawing during this migration stage.
+
 ## Responsibilities
 
 - Add and remove roots.

@@ -17,13 +17,16 @@ mouse, keyboard, marquee, context menu, or drag interaction
                  legacy GraphEngine
                           |
                           v
+                   GraphController
+                          |
+                          v
                      GraphStore
                           |
                           v
              render and read-only snapshot
 ```
 
-`GraphEngine` no longer owns a `selectedNodeIds` set. It uses the store for selection checks and changes involved in badge visibility, selection rings, labels, copying, pinning, dragging, badge drops, marquee selection, and `GraphQueries` snapshots.
+`GraphEngine` no longer owns a `selectedNodeIds` set. It reads selection from the store and sends mutations through [GraphController](GraphController.md). Selection affects badge visibility, selection rings, labels, copying, pinning, dragging, badge drops, marquee selection, and `GraphQueries` snapshots.
 
 ## Owned state
 
