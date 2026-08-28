@@ -51,6 +51,19 @@ Each result reports whether state changed and returns a detached selection list.
 
 Future command families will add initialization, roots, expansions, relationships, and lenses. A broader `execute(command)` entry point should be added only when more than one family needs common dispatch.
 
+## Badge commands
+
+Badge interactions are the second command family:
+
+```ts
+type GraphBadgeCommand =
+  | { type: "toggle-badge"; badgeId: BadgeId }
+  | { type: "open-badge-input"; badgeId: BadgeId }
+  | { type: "expand-badge-chain"; badgeId: BadgeId };
+```
+
+The controller resolves the stable ID through [GraphQueries](GraphQueries.md). It then calls `GraphBadgeCommandPort`, a temporary interface implemented by the legacy engine. Unknown badges and unavailable ports return explicit unhandled results rather than silently mutating state.
+
 ## Connections
 
 - Reads host information through [Obsidian adapters](ObsidianAdapters.md).

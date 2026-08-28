@@ -1,4 +1,6 @@
-import type { NodeInstanceId } from "../graph-domain/graph-identifiers";
+import type { GraphBadge } from "../graph-domain/GraphBadge";
+import type { BadgeId, NodeInstanceId } from "../graph-domain/graph-identifiers";
+import type { GraphQueries } from "./GraphQueries";
 import { GraphStore } from "./GraphStore";
 
 export type GraphSelectionCommand =
@@ -15,6 +17,29 @@ export interface GraphSelectionResult {
   selectedNodeCount: number;
 }
 
+export type GraphBadgeCommand =
+  | { type: "toggle-badge"; badgeId: BadgeId }
+  | { type: "open-badge-input"; badgeId: BadgeId }
+  | { type: "expand-badge-chain"; badgeId: BadgeId };
+
+/** Temporary output boundary implemented by the active legacy engine. */
+export interface GraphBadgeCommandPort {
+  toggleBadge(badge: GraphBadge): void | Promise<void>;
+  openBadgeInput(badge: GraphBadge): void | Promise<void>;
+  expandBadgeChain(badge: GraphBadge): void | Promise<void>;
+}
+
+export interface GraphBadgeCommandResult {
+  handled: boolean;
+  badgeId: BadgeId;
+  reason?: "badge-not-found" | "badge-port-unavailable";
+}
+
+export interface GraphControllerOptions {
+  queries?: GraphQueries;
+  badgePort?: GraphBadgeCommandPort;
+}
+
 /**
  * Application command boundary for graph behavior.
  *
@@ -22,7 +47,10 @@ export interface GraphSelectionResult {
  * lens commands will be introduced in later behavior-preserving increments.
  */
 export class GraphController {
-  constructor(private readonly store: GraphStore) {}
+  constructor(
+    private readonly store: GraphStore,
+    private readonly options: GraphControllerOptions = {}
+  ) {}
 
   executeSelection(command: GraphSelectionCommand): GraphSelectionResult {
     let changed: boolean;
@@ -66,6 +94,31 @@ export class GraphController {
     return this.executeSelection({ type: "clear-selection" });
   }
 
+  async executeBadge(command: GraphBadgeCommand): Promise<GraphBadgeCommandResult> {
+    const badge = this.options.queries?.getBadge(command.badgeId);
+    if (!badge) {
+      return { handled: false, badgeId: command.badgeId, reason: "badge-not-found" };
+    }
+    const port = this.options.badgePort;
+    if (!port) {
+      return { handled: false, badgeId: command.badgeId, reason: "badge-port-unavailable" };
+    }
+
+    switch (command.type) {
+      case "toggle-badge":
+        await port.toggleBadge(badge);
+        break;
+      case "open-badge-input":
+        await port.openBadgeInput(badge);
+        break;
+      case "expand-badge-chain":
+        await port.expandBadgeChain(badge);
+        break;
+    }
+
+    return { handled: true, badgeId: badge.id };
+  }
+
   private selectionResult(changed: boolean): GraphSelectionResult {
     const selectedNodeIds = this.store.getSelectedNodeIds();
     return {
@@ -75,4 +128,3 @@ export class GraphController {
     };
   }
 }
-
