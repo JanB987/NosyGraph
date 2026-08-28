@@ -6,6 +6,8 @@
 
 Current implementation: [`src/graph-application/GraphQueries.ts`](../../src/graph-application/GraphQueries.ts)
 
+The active legacy engine currently connects through [`LegacyGraphSnapshotAdapter`](../../src/graph-application/LegacyGraphSnapshotAdapter.ts). `GraphEngine.getArchitectureQueries()` is the temporary public entry point. The adapter copies legacy state; it does not take ownership or change graph behavior.
+
 ## Proposed API
 
 ```ts

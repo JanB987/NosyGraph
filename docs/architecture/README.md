@@ -77,8 +77,9 @@ GraphController <--------> Obsidian adapters
 - [x] Note and node-instance identities separated in host-neutral types.
 - [x] Expansion ownership represented explicitly.
 - [x] First read-only `GraphQueries` API added.
-- [ ] Adapt the active engine to expose a `GraphSnapshot`.
-- [ ] Add characterization tests before moving mutable state.
+- [x] Adapt the active engine to expose a read-only `GraphSnapshot`.
+- [x] Add initial query and adapter characterization tests.
+- [ ] Add snapshot coverage for edge and lens details before moving mutable state.
 
 ## Validation during the migration
 

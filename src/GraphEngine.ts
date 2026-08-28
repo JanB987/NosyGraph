@@ -7,6 +7,16 @@ import type { O3GraphEmbeddedGraphState, O3GraphEmbeddedLensState, O3GraphNodeOr
 import type { O3LinkType } from "./O3LinkType";
 import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
+import { GraphQueries } from "./graph-application/GraphQueries";
+import {
+  LegacyGraphSnapshotAdapter,
+  ROOT_GRAPH_CONTEXT_ID,
+  contextIdForLegacyNode,
+  uniqueExistingNodeIds,
+  type LegacyGraphReadExpansion,
+  type LegacyGraphReadNode,
+  type LegacyGraphReadState
+} from "./graph-application/LegacyGraphSnapshotAdapter";
 
 interface GraphNode {
   id: string;
@@ -413,6 +423,7 @@ export class GraphEngine {
   private container: HTMLElement;
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
+  private readonly architectureQueries: GraphQueries;
 
   private menuButton!: HTMLButtonElement;
   private fitButton!: HTMLButtonElement;
@@ -645,6 +656,27 @@ export class GraphEngine {
   ) {
     this.container = parent;
     this.graphPropertyKeys = normalizeGraphPropertyKeys(menuOptions.graphPropertyKeys);
+    const snapshotAdapter = new LegacyGraphSnapshotAdapter(
+      { getLegacyGraphReadState: () => this.getLegacyGraphReadState() },
+      {
+        readNote: (path, fallbackName) => {
+          const file = this.app.vault.getAbstractFileByPath(path);
+          if (!(file instanceof TFile)) {
+            return { id: path, path, name: fallbackName, properties: {} };
+          }
+          const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+          return {
+            id: file.path,
+            path: file.path,
+            name: file.basename || fallbackName,
+            properties: frontmatter && typeof frontmatter === "object"
+              ? { ...frontmatter }
+              : {}
+          };
+        }
+      }
+    );
+    this.architectureQueries = new GraphQueries(snapshotAdapter);
 
     for (const type of menuOptions.initialSelectedLinkTypes ?? []) {
       const t = String(type ?? "").trim();
@@ -12627,6 +12659,92 @@ export class GraphEngine {
         badges: this.getNodeBadgeSnapshot(node.id)
       };
     });
+  }
+
+  /**
+   * Entry point for new read-only features during the architecture migration.
+   * Callers receive GraphQueries, never the engine's mutable maps and arrays.
+   */
+  getArchitectureQueries(): GraphQueries {
+    return this.architectureQueries;
+  }
+
+  /**
+   * Copies the current legacy runtime into the temporary adapter contract.
+   * This method performs no mutation and can be removed once GraphStore owns
+   * these state categories.
+   */
+  getLegacyGraphReadState(): LegacyGraphReadState {
+    const existingNodeIds = new Set(this.nodes.map((node) => node.id));
+    const nodes: LegacyGraphReadNode[] = this.nodes.map((node) => {
+      const contextId = contextIdForLegacyNode(node.embeddedInstanceId);
+      const owner = this.getPrimaryNodeOwner(node.id);
+      const origin = node.embeddedInstanceId
+        ? {
+            kind: "embedded-graph" as const,
+            lensId: node.embeddedInstanceId,
+            sourceNodeId: node.embeddedSourceNodeId ?? node.id
+          }
+        : owner
+          ? {
+              kind: "badge-expansion" as const,
+              expansionId: this.badgeKey(owner.sourceNodeId, owner.linkType),
+              sourceNodeId: owner.sourceNodeId
+            }
+          : node.isBase || this.rootFilePaths.has(node.sourcePath)
+            ? { kind: "root" as const }
+            : { kind: "filter" as const, filterId: this.currentFilterId ?? "legacy-filter" };
+
+      return {
+        id: node.id,
+        noteId: node.sourcePath,
+        noteName: node.label,
+        contextId,
+        position: { x: node.x, y: node.y },
+        velocity: { x: node.vx, y: node.vy },
+        radius: this.getEffectiveNodeRadius(node),
+        pinned: Boolean(node.isPinned || this.pinnedNodePaths.has(node.id)),
+        selected: this.selectedNodeIds.has(node.id),
+        origin
+      };
+    });
+
+    const expansions: LegacyGraphReadExpansion[] = [];
+    for (const [expansionId, createdNodeIds] of this.expansionNodes) {
+      const separator = expansionId.lastIndexOf("::");
+      if (separator <= 0) continue;
+      const sourceNodeId = expansionId.slice(0, separator);
+      const linkTypeId = this.normalizeLinkType(expansionId.slice(separator + 2));
+      const sourceNode = this.nodeMap.get(sourceNodeId);
+      if (!sourceNode || !linkTypeId) continue;
+      const ownedNodeIds = uniqueExistingNodeIds(createdNodeIds, existingNodeIds);
+      const ownedNodeIdSet = new Set(ownedNodeIds);
+      const createdEdgeIds = this.edges
+        .filter((edge) =>
+          edge.from === sourceNodeId
+          && ownedNodeIdSet.has(edge.to)
+          && this.normalizeLinkType(edge.linkType ?? edge.type) === linkTypeId
+        )
+        .map((edge) => `${edge.from}::${edge.to}::${linkTypeId}`);
+      const childExpansionIds = Array.from(this.expansionParent.entries())
+        .filter(([, parentId]) => parentId === expansionId)
+        .map(([childId]) => childId);
+
+      expansions.push({
+        id: expansionId,
+        sourceNodeId,
+        sourceNoteId: sourceNode.sourcePath,
+        linkTypeId,
+        contextId: sourceNode.embeddedInstanceId
+          ? contextIdForLegacyNode(sourceNode.embeddedInstanceId)
+          : ROOT_GRAPH_CONTEXT_ID,
+        createdNodeIds: ownedNodeIds,
+        createdEdgeIds,
+        childExpansionIds
+      });
+    }
+
+    return { nodes, expansions };
   }
 
   private getPrimaryNodeOwner(nodeId: string): { sourceNodeId: string; linkType: string } | null {
