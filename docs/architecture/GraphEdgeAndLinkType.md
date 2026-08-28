@@ -1,0 +1,49 @@
+# GraphEdge and LinkType
+
+## Purpose
+
+A `LinkType` defines relationship semantics. A `GraphEdge` is one visible runtime instance of such a relationship.
+
+## LinkType
+
+```ts
+interface LinkType {
+  id: LinkTypeId;
+  property: string;
+  readProperties: readonly string[];
+  label: string;
+  direction: "child" | "parent";
+  discovery: "outgoing" | "incoming" | "both";
+  renderStyle: "line" | "folder";
+  duplicateNodes: boolean;
+  physics: LinkPhysicsSettings;
+}
+```
+
+## GraphEdge
+
+```ts
+interface GraphEdge {
+  id: EdgeId;
+  fromNodeId: NodeInstanceId;
+  toNodeId: NodeInstanceId;
+  linkTypeId: LinkTypeId;
+  contextId: GraphContextId;
+  origin: EdgeOrigin;
+}
+```
+
+## Functions
+
+```ts
+resolveRelationshipDirection(source, target, linkType): RelationshipEndpoints;
+buildVisibleEdges(nodes, relationships, linkTypes): readonly GraphEdge[];
+getEdgesForNode(nodeId, edges): readonly GraphEdge[];
+```
+
+Avoid subclasses for each link type. Data-driven semantics plus pure functions are easier to test and extend.
+
+## Connections
+
+Edges are stored in [GraphStore](GraphStore.md), rendered by [GraphRenderer](GraphRenderer.md), and converted into forces by [PhysicsEngine](PhysicsEngine.md).
+
