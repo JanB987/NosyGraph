@@ -79,7 +79,8 @@ GraphController <--------> Obsidian adapters
 - [x] First read-only `GraphQueries` API added.
 - [x] Adapt the active engine to expose a read-only `GraphSnapshot`.
 - [x] Add initial query and adapter characterization tests.
-- [ ] Add snapshot coverage for edge and lens details before moving mutable state.
+- [x] Add snapshot coverage for edge and lens details.
+- [ ] Introduce `GraphStore` and move the first low-risk state category into it.
 
 ## Validation during the migration
 

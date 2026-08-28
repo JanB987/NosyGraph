@@ -4,6 +4,8 @@
 
 `GraphLens` is a movable viewport into another graph context. It reuses normal graph rules rather than owning a second graph implementation.
 
+Current read model: [`src/graph-domain/GraphLens.ts`](../../src/graph-domain/GraphLens.ts)
+
 ## Core data
 
 ```ts
@@ -15,6 +17,7 @@ interface GraphLens {
   bounds: Rectangle;
   viewport: Viewport;
   locked: boolean;
+  maximized: boolean;
 }
 ```
 
@@ -38,3 +41,4 @@ resetLensViewport(lensId): void;
 - Contains nodes selected by `contextId`, accessible through [GraphQueries](GraphQueries.md).
 - Persisted in [GraphDocument](GraphDocument.md).
 
+During migration, each active embedded graph container is exposed as a lens. Its member nodes share the lens `contextId`, allowing `GraphQueries.getLensNodes(lensId)` to find them without reading renderer internals.

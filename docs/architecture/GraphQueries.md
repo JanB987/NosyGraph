@@ -8,7 +8,7 @@ Current implementation: [`src/graph-application/GraphQueries.ts`](../../src/grap
 
 The active legacy engine currently connects through [`LegacyGraphSnapshotAdapter`](../../src/graph-application/LegacyGraphSnapshotAdapter.ts). `GraphEngine.getArchitectureQueries()` is the temporary public entry point. The adapter copies legacy state; it does not take ownership or change graph behavior.
 
-## Proposed API
+## Current API
 
 ```ts
 class GraphQueries {
@@ -18,12 +18,17 @@ class GraphQueries {
   getNodeInstancesForNote(noteId: NoteId): readonly GraphNodeInstance[];
   getSelectedNodes(): readonly GraphNodeInstance[];
   getRootNodes(): readonly GraphNodeInstance[];
-  getBadgesForNode(nodeId: NodeInstanceId): readonly GraphBadge[];
   getNodesForBadge(nodeId: NodeInstanceId, linkTypeId: LinkTypeId): readonly GraphNodeInstance[];
   getNodesForExpansion(expansionId: ExpansionId): readonly GraphNodeInstance[];
+  getEdges(): readonly GraphEdge[];
+  getEdgesForNode(nodeId: NodeInstanceId): readonly GraphEdge[];
+  getLenses(): readonly GraphLens[];
+  getLens(lensId: LensId): GraphLens | undefined;
   getLensNodes(lensId: LensId): readonly GraphNodeInstance[];
 }
 ```
+
+`getBadgesForNode` remains planned until the badge model is connected to runtime data.
 
 ## Connections
 

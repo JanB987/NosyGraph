@@ -4,6 +4,8 @@
 
 A `LinkType` defines relationship semantics. A `GraphEdge` is one visible runtime instance of such a relationship.
 
+Current edge implementation: [`src/graph-domain/GraphEdge.ts`](../../src/graph-domain/GraphEdge.ts)
+
 ## LinkType
 
 ```ts
@@ -47,3 +49,4 @@ Avoid subclasses for each link type. Data-driven semantics plus pure functions a
 
 Edges are stored in [GraphStore](GraphStore.md), rendered by [GraphRenderer](GraphRenderer.md), and converted into forces by [PhysicsEngine](PhysicsEngine.md).
 
+During migration, `LegacyGraphSnapshotAdapter` maps the active engine's discovered, visible, overlay, and parent edges into this model. It copies endpoint IDs and classifies their origin without changing the renderer's edge collection.

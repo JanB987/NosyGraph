@@ -13,7 +13,9 @@ import {
   ROOT_GRAPH_CONTEXT_ID,
   contextIdForLegacyNode,
   uniqueExistingNodeIds,
+  type LegacyGraphReadEdge,
   type LegacyGraphReadExpansion,
+  type LegacyGraphReadLens,
   type LegacyGraphReadNode,
   type LegacyGraphReadState
 } from "./graph-application/LegacyGraphSnapshotAdapter";
@@ -12744,7 +12746,55 @@ export class GraphEngine {
       });
     }
 
-    return { nodes, expansions };
+    const edges: LegacyGraphReadEdge[] = this.edges.flatMap((edge) => {
+      const fromNode = this.nodeMap.get(edge.from);
+      const toNode = this.nodeMap.get(edge.to);
+      const linkTypeId = this.normalizeLinkType(edge.linkType ?? edge.type);
+      if (!fromNode || !toNode || !linkTypeId) return [];
+      const sharedEmbeddedContext = fromNode.embeddedInstanceId
+        && fromNode.embeddedInstanceId === toNode.embeddedInstanceId
+        ? fromNode.embeddedInstanceId
+        : undefined;
+      const origin = edge.relationship === "parent"
+        ? "parent" as const
+        : edge.mode === "overlay"
+          ? "overlay" as const
+          : edge.mode === "visible"
+            ? "visible" as const
+            : "discovered" as const;
+      return [{
+        id: `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType)}`,
+        fromNodeId: edge.from,
+        toNodeId: edge.to,
+        linkTypeId,
+        contextId: contextIdForLegacyNode(sharedEmbeddedContext),
+        origin
+      }];
+    });
+
+    const lenses: LegacyGraphReadLens[] = Array.from(this.embeddedGraphContainers.values()).map((container) => {
+      const bounds = this.getGraphLensBounds(container);
+      const zoom = Number(container.viewZoom);
+      const panX = Number(container.viewPanX);
+      const panY = Number(container.viewPanY);
+      return {
+        id: container.key,
+        sourceNodeId: container.origin,
+        documentId: container.graphPath,
+        contextId: contextIdForLegacyNode(container.key),
+        bounds: { ...bounds },
+        viewport: {
+          x: Number.isFinite(panX) ? panX : 0,
+          y: Number.isFinite(panY) ? panY : 0,
+          zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+        },
+        locked: container.interactionLocked === true
+          || this.lockedEmbeddedGraphContainerKeys.has(container.key),
+        maximized: container.lensMaximized === true
+      };
+    });
+
+    return { nodes, edges, expansions, lenses };
   }
 
   private getPrimaryNodeOwner(nodeId: string): { sourceNodeId: string; linkType: string } | null {

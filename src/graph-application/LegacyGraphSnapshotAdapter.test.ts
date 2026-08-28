@@ -38,7 +38,29 @@ describe("LegacyGraphSnapshotAdapter", () => {
           }
         }
       ],
-      expansions: []
+      edges: [
+        {
+          id: "A.md::duplicate:A.md::related",
+          fromNodeId: "A.md",
+          toNodeId: "duplicate:A.md",
+          linkTypeId: "related",
+          contextId: ROOT_GRAPH_CONTEXT_ID,
+          origin: "visible"
+        }
+      ],
+      expansions: [],
+      lenses: [
+        {
+          id: "lens-1",
+          sourceNodeId: "A.md",
+          documentId: "Embedded.md",
+          contextId: "embedded:lens-1",
+          bounds: { left: 0, top: 0, right: 200, bottom: 150 },
+          viewport: { x: 5, y: 10, zoom: 0.75 },
+          locked: true,
+          maximized: false
+        }
+      ]
     };
     let readCount = 0;
     const adapter = new LegacyGraphSnapshotAdapter(
@@ -60,6 +82,9 @@ describe("LegacyGraphSnapshotAdapter", () => {
     expect(snapshot.nodes).toHaveLength(2);
     expect(snapshot.nodes[0]).not.toBe(legacy.nodes[0]);
     expect(snapshot.nodes[0].position).not.toBe(legacy.nodes[0].position);
+    expect(snapshot.edges).toEqual(legacy.edges);
+    expect(snapshot.edges).not.toBe(legacy.edges);
+    expect(snapshot.lenses).toEqual(legacy.lenses);
+    expect(snapshot.lenses[0].bounds).not.toBe(legacy.lenses[0].bounds);
   });
 });
-
