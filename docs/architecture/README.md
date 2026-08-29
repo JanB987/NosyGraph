@@ -84,7 +84,8 @@ GraphController <--------> Obsidian adapters
 - [x] Introduce `GraphController` and route selection mutations through it.
 - [x] Connect `GraphBadge` to the live read-only snapshot and query API.
 - [x] Route standard node-badge intents through `GraphController` while delegating expansion behavior to the legacy engine.
-- [ ] Route the older parent-overlay badge controls through the same command boundary.
+- [x] Route the older parent-overlay badge controls through the same command boundary.
+- [ ] Extract legacy badge-target resolution into a dedicated expansion application service.
 
 ## Validation during the migration
 

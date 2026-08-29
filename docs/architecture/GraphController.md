@@ -83,7 +83,7 @@ O3NodeBadge modifier-aware DOM event
             legacy GraphEngine operation
 ```
 
-This removes the engine dependency from the badge view while preserving normal click, Alt-click, and Ctrl/Cmd-click behavior. The port is a migration seam, not the final home of expansion logic.
+This removes the engine dependency from the badge view while preserving normal click, Alt-click, and Ctrl/Cmd-click behavior. The orbiting parent badges and parent-actions overlay also emit `toggle-badge`, so every current badge click crosses this boundary. The port is a migration seam, not the final home of expansion logic.
 
 ## Connections
 

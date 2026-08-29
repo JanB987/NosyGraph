@@ -3242,9 +3242,10 @@ export class GraphEngine {
     });
     button.addEventListener("click", () => {
       this.clearCollapsePreview();
-      const currentNode = this.nodeMap.get(node.id);
-      if (!currentNode) return;
-      this.triggerParentExpansion(currentNode, linkType);
+      void this.graphController.executeBadge({
+        type: "toggle-badge",
+        badgeId: key
+      });
     });
 
     this.setBadgeButtonVisualState(button, node.id, linkType);
@@ -4955,7 +4956,10 @@ export class GraphEngine {
           setStyle(button, "borderColor", "rgba(110, 150, 220, 0.6)");
         }
         button.addEventListener("click", () => {
-          this.triggerParentExpansion(node, parentType);
+          void this.graphController.executeBadge({
+            type: "toggle-badge",
+            badgeId: this.badgeKey(node.id, parentType)
+          });
         });
         actions.appendChild(button);
       }

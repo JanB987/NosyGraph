@@ -44,6 +44,6 @@ The badge itself does not mutate graph or note state.
 
 `LegacyGraphSnapshotAdapter` exposes configured badges for outer and embedded nodes. Normal, parent, and duplicate-node semantics are preserved. `GraphQueries` can return all badges, one badge by stable ID, or the badges belonging to a node.
 
-Standard graph-node badge clicks now enter [GraphController](GraphController.md) as stable-ID commands. `O3NodeBadge` knows only how to render and emit one of three intents; it no longer imports Obsidian files, the Obsidian app, or `GraphEngine`. The legacy engine temporarily implements the output port so expansion behavior remains unchanged.
+All current graph-node badge clicks now enter [GraphController](GraphController.md) as stable-ID commands. `O3NodeBadge` knows only how to render and emit one of three intents; it no longer imports Obsidian files, the Obsidian app, or `GraphEngine`. The legacy engine temporarily implements the output port so expansion behavior remains unchanged.
 
-The older parent-overlay badge buttons still call their legacy handler directly. They are tracked as the next small migration step rather than being mixed into this DOM-wrapper change.
+The older orbiting parent badges and parent-actions overlay use the same `toggle-badge` command. This means normal badges and both parent-specific controls now share one application entry point even though their drawing code has not yet been unified.
