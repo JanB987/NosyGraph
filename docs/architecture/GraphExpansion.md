@@ -24,6 +24,7 @@ interface GraphExpansion {
 ## Pure operations
 
 ```ts
+planGraphBadgeToggle(input): GraphBadgeTogglePlan;
 resolveExpansionTargets(sourceNoteId, linkType, relationshipIndex): readonly NoteId[];
 createExpansionChangeSet(expansion, targetNotes): GraphChangeSet;
 createCollapseChangeSet(expansionId, snapshot): GraphChangeSet;
@@ -32,6 +33,7 @@ createCollapseChangeSet(expansionId, snapshot): GraphChangeSet;
 ## Connections
 
 - Triggered through [GraphBadge](GraphBadge.md).
+- Initially described by [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
 - Orchestrated by [GraphController](GraphController.md).
 - Stored in [GraphStore](GraphStore.md).
 - Queried through [GraphQueries](GraphQueries.md).

@@ -38,6 +38,7 @@ The factory refuses to combine a badge and node whose runtime IDs do not match. 
 - Created by [GraphController](GraphController.md).
 - Passed through `GraphBadgeCommandPort`.
 - Consumed temporarily by [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md).
+- Supplies stable identities to [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
 - Will become the input to extracted [GraphExpansion](GraphExpansion.md) behavior.
 
 ## Must not contain

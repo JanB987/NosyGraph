@@ -34,6 +34,7 @@ GraphController <--------> Obsidian adapters
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
 - [GraphBadgeRequest](GraphBadgeRequest.md) carries resolved badge intent without host objects.
+- [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
 ### Domain concepts
@@ -89,7 +90,8 @@ GraphController <--------> Obsidian adapters
 - [x] Route the older parent-overlay badge controls through the same command boundary.
 - [x] Extract legacy badge-target resolution into a dedicated command adapter.
 - [x] Introduce a host-neutral badge expansion request before extracting expansion calculations.
-- [ ] Characterize the inputs and results of normal badge toggle expansion.
+- [x] Characterize the inputs and results of normal badge toggle expansion.
+- [ ] Add a host-neutral relationship-target reader for normal badge expansion.
 
 ## Validation during the migration
 
