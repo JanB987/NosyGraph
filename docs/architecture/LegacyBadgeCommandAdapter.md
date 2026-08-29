@@ -10,12 +10,12 @@ It exists so migration code is explicit and testable. It is not intended to beco
 
 ## Responsibilities
 
-For a resolved [GraphBadge](GraphBadge.md), the adapter:
+For a resolved [GraphBadgeRequest](GraphBadgeRequest.md), the adapter:
 
-1. Finds the current legacy node by `badge.nodeId`.
+1. Finds the current legacy node by `request.nodeId`.
 2. Finds its current host file by `node.sourcePath`.
-3. Matches the current link-type definition by normalized `badge.linkTypeId`.
-4. Calls the injected toggle, input, or chain operation.
+3. Matches the current link-type definition by normalized `request.linkTypeId`.
+4. Dispatches `request.action` to the injected toggle, input, or chain operation.
 
 If any legacy object has disappeared between rendering and clicking, the adapter safely performs no operation.
 
@@ -36,6 +36,8 @@ GraphBadgeCommand
        v
 GraphController
        |
+GraphBadgeRequest
+       |
        v
 LegacyBadgeCommandAdapter
        | resolve current node, file, link type
@@ -46,7 +48,7 @@ injected legacy expansion operation
 ## Connections
 
 - Implements `GraphBadgeCommandPort` from [GraphController](GraphController.md).
-- Receives [GraphBadge](GraphBadge.md) read models.
+- Receives host-neutral [GraphBadgeRequest](GraphBadgeRequest.md) values.
 - Temporarily calls legacy behavior that will become [GraphExpansion](GraphExpansion.md) application logic.
 - Uses host objects supplied by the future [Obsidian adapters](ObsidianAdapters.md), without importing those objects itself.
 

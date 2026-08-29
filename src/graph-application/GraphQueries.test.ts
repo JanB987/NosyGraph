@@ -154,6 +154,8 @@ describe("GraphQueries", () => {
       "lens-1::B.md",
       "C.md"
     ]);
+    expect(graph.getNodeInstance("A.md")?.noteId).toBe("A.md");
+    expect(graph.getNodeInstance("missing")).toBeUndefined();
     expect(graph.getUniqueVisibleNotes().map((note) => note.id)).toEqual([
       "A.md",
       "B.md",

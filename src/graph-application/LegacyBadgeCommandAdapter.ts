@@ -1,5 +1,5 @@
-import type { GraphBadge } from "../graph-domain/GraphBadge";
 import type { NodeInstanceId } from "../graph-domain/graph-identifiers";
+import type { GraphBadgeRequest } from "./GraphBadgeRequest";
 import type { GraphBadgeCommandPort } from "./GraphController";
 
 /** Minimum legacy node data needed to resolve a badge command. */
@@ -52,33 +52,28 @@ export class LegacyBadgeCommandAdapter<
     private readonly options: LegacyBadgeCommandAdapterOptions<TNode, TFile, TLinkType>
   ) {}
 
-  toggleBadge(badge: GraphBadge): void | Promise<void> {
-    const target = this.resolveTarget(badge);
+  executeBadge(request: GraphBadgeRequest): void | Promise<void> {
+    const target = this.resolveTarget(request);
     if (!target) return;
-    return this.options.toggle(target);
-  }
-
-  openBadgeInput(badge: GraphBadge): void | Promise<void> {
-    const target = this.resolveTarget(badge);
-    if (!target) return;
-    return this.options.openInput(target);
-  }
-
-  expandBadgeChain(badge: GraphBadge): void | Promise<void> {
-    const target = this.resolveTarget(badge);
-    if (!target) return;
-    return this.options.expandChain(target);
+    switch (request.action) {
+      case "toggle-badge":
+        return this.options.toggle(target);
+      case "open-badge-input":
+        return this.options.openInput(target);
+      case "expand-badge-chain":
+        return this.options.expandChain(target);
+    }
   }
 
   private resolveTarget(
-    badge: GraphBadge
+    request: GraphBadgeRequest
   ): LegacyBadgeCommandTarget<TNode, TFile, TLinkType> | undefined {
-    const node = this.options.getNode(badge.nodeId);
+    const node = this.options.getNode(request.nodeId);
     if (!node) return undefined;
     const file = this.options.getFile(node.sourcePath);
     if (!file) return undefined;
     const linkType = this.options.getLinkTypes(node).find((candidate) =>
-      this.options.normalizeLinkType(String(candidate.property ?? "")) === badge.linkTypeId
+      this.options.normalizeLinkType(String(candidate.property ?? "")) === request.linkTypeId
     );
     return linkType ? { node, file, linkType } : undefined;
   }

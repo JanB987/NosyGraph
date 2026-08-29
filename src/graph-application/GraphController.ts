@@ -1,5 +1,9 @@
-import type { GraphBadge } from "../graph-domain/GraphBadge";
 import type { BadgeId, NodeInstanceId } from "../graph-domain/graph-identifiers";
+import {
+  createGraphBadgeRequest,
+  type GraphBadgeAction,
+  type GraphBadgeRequest
+} from "./GraphBadgeRequest";
 import type { GraphQueries } from "./GraphQueries";
 import { GraphStore } from "./GraphStore";
 
@@ -17,22 +21,20 @@ export interface GraphSelectionResult {
   selectedNodeCount: number;
 }
 
-export type GraphBadgeCommand =
-  | { type: "toggle-badge"; badgeId: BadgeId }
-  | { type: "open-badge-input"; badgeId: BadgeId }
-  | { type: "expand-badge-chain"; badgeId: BadgeId };
+export interface GraphBadgeCommand {
+  type: GraphBadgeAction;
+  badgeId: BadgeId;
+}
 
 /** Temporary output boundary implemented by the active legacy engine. */
 export interface GraphBadgeCommandPort {
-  toggleBadge(badge: GraphBadge): void | Promise<void>;
-  openBadgeInput(badge: GraphBadge): void | Promise<void>;
-  expandBadgeChain(badge: GraphBadge): void | Promise<void>;
+  executeBadge(request: GraphBadgeRequest): void | Promise<void>;
 }
 
 export interface GraphBadgeCommandResult {
   handled: boolean;
   badgeId: BadgeId;
-  reason?: "badge-not-found" | "badge-port-unavailable";
+  reason?: "badge-not-found" | "node-not-found" | "badge-port-unavailable";
 }
 
 export interface GraphControllerOptions {
@@ -99,22 +101,20 @@ export class GraphController {
     if (!badge) {
       return { handled: false, badgeId: command.badgeId, reason: "badge-not-found" };
     }
+    const node = this.options.queries?.getNodeInstance(badge.nodeId);
+    if (!node) {
+      return { handled: false, badgeId: command.badgeId, reason: "node-not-found" };
+    }
     const port = this.options.badgePort;
     if (!port) {
       return { handled: false, badgeId: command.badgeId, reason: "badge-port-unavailable" };
     }
 
-    switch (command.type) {
-      case "toggle-badge":
-        await port.toggleBadge(badge);
-        break;
-      case "open-badge-input":
-        await port.openBadgeInput(badge);
-        break;
-      case "expand-badge-chain":
-        await port.expandBadgeChain(badge);
-        break;
+    const request = createGraphBadgeRequest(command.type, badge, node);
+    if (!request) {
+      return { handled: false, badgeId: command.badgeId, reason: "node-not-found" };
     }
+    await port.executeBadge(request);
 
     return { handled: true, badgeId: badge.id };
   }

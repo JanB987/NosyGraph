@@ -13,6 +13,7 @@ The active legacy engine currently connects through [`LegacyGraphSnapshotAdapter
 ```ts
 class GraphQueries {
   getAllNodeInstances(): readonly GraphNodeInstance[];
+  getNodeInstance(nodeId: NodeInstanceId): GraphNodeInstance | undefined;
   getVisibleNodeInstances(contextId?: GraphContextId): readonly GraphNodeInstance[];
   getUniqueVisibleNotes(contextId?: GraphContextId): readonly GraphNote[];
   getNodeInstancesForNote(noteId: NoteId): readonly GraphNodeInstance[];
@@ -40,3 +41,5 @@ class GraphQueries {
 ## Design rule
 
 Queries answer questions and never change state. A badge click is therefore a controller command; asking which nodes belong to its expansion is a query.
+
+`GraphController` uses `getBadge` and `getNodeInstance` together to build a host-neutral [GraphBadgeRequest](GraphBadgeRequest.md).

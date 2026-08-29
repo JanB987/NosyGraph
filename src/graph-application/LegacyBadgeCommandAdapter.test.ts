@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GraphBadge } from "../graph-domain/GraphBadge";
+import type { GraphBadgeAction, GraphBadgeRequest } from "./GraphBadgeRequest";
 import { LegacyBadgeCommandAdapter } from "./LegacyBadgeCommandAdapter";
 
 interface TestNode {
@@ -15,18 +15,19 @@ interface TestLinkType {
   property: string;
 }
 
-const badge: GraphBadge = {
-  id: "A.md::parts",
+const request: GraphBadgeRequest = {
+  action: "toggle-badge",
+  badgeId: "A.md::parts",
   nodeId: "A.md",
+  noteId: "A.md",
   linkTypeId: "parts",
   contextId: "graph:root",
-  label: "Parts",
-  color: "#4488cc",
-  state: "collapsed",
-  semantic: "link",
-  hasRelationships: true,
-  duplicateNodes: false
+  semantic: "link"
 };
+
+function withAction(action: GraphBadgeAction): GraphBadgeRequest {
+  return { ...request, action };
+}
 
 function setup(overrides: {
   node?: TestNode;
@@ -53,9 +54,9 @@ describe("LegacyBadgeCommandAdapter", () => {
   it("resolves live legacy objects for every badge operation", async () => {
     const { adapter, calls } = setup();
 
-    await adapter.toggleBadge(badge);
-    await adapter.openBadgeInput(badge);
-    await adapter.expandBadgeChain(badge);
+    await adapter.executeBadge(withAction("toggle-badge"));
+    await adapter.executeBadge(withAction("open-badge-input"));
+    await adapter.executeBadge(withAction("expand-badge-chain"));
 
     expect(calls).toEqual([
       "toggle:A.md: Parts ",
@@ -67,7 +68,7 @@ describe("LegacyBadgeCommandAdapter", () => {
   it("does nothing when the node cannot be resolved", async () => {
     const { adapter, calls } = setup({ node: { id: "other", sourcePath: "other.md" } });
 
-    await adapter.toggleBadge(badge);
+    await adapter.executeBadge(request);
 
     expect(calls).toEqual([]);
   });
@@ -76,8 +77,8 @@ describe("LegacyBadgeCommandAdapter", () => {
     const missingFile = setup({ file: { path: "other.md" } });
     const missingLinkType = setup({ linkTypes: [{ property: "unrelated" }] });
 
-    await missingFile.adapter.openBadgeInput(badge);
-    await missingLinkType.adapter.expandBadgeChain(badge);
+    await missingFile.adapter.executeBadge(withAction("open-badge-input"));
+    await missingLinkType.adapter.executeBadge(withAction("expand-badge-chain"));
 
     expect(missingFile.calls).toEqual([]);
     expect(missingLinkType.calls).toEqual([]);

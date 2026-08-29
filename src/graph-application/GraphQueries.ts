@@ -28,6 +28,10 @@ export class GraphQueries {
     return [...this.snapshot().nodes];
   }
 
+  getNodeInstance(nodeId: NodeInstanceId): GraphNodeInstance | undefined {
+    return this.snapshot().nodes.find((node) => node.id === nodeId);
+  }
+
   getVisibleNodeInstances(contextId?: GraphContextId): readonly GraphNodeInstance[] {
     const nodes = this.snapshot().nodes;
     return contextId === undefined

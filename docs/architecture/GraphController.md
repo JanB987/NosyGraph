@@ -63,7 +63,7 @@ type GraphBadgeCommand =
   | { type: "expand-badge-chain"; badgeId: BadgeId };
 ```
 
-The controller resolves the stable ID through [GraphQueries](GraphQueries.md). It then calls `GraphBadgeCommandPort`, currently implemented by [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md). Unknown badges and unavailable ports return explicit unhandled results rather than silently mutating state.
+The controller resolves the stable badge ID and its node through [GraphQueries](GraphQueries.md), then creates a serializable [GraphBadgeRequest](GraphBadgeRequest.md). It passes that request to `GraphBadgeCommandPort`, currently implemented by [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md). Unknown badges, missing nodes, and unavailable ports return explicit unhandled results rather than silently mutating state.
 
 The standard runtime flow is now:
 
@@ -80,6 +80,8 @@ O3NodeBadge modifier-aware DOM event
            |           |
            v           v
      GraphQueries   LegacyBadgeCommandAdapter
+                            |
+                  GraphBadgeRequest
                             |
                             v
                legacy GraphEngine operation
