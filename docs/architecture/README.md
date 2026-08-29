@@ -50,6 +50,7 @@ GraphController <--------> Obsidian adapters
 - [GraphRenderer](GraphRenderer.md) draws snapshots and emits interaction intents.
 - [PhysicsEngine](PhysicsEngine.md) calculates positions without knowing about Obsidian.
 - [Obsidian adapters](ObsidianAdapters.md) isolate note access, writes, watchers, navigation, and persistence.
+- [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) is the temporary, tested bridge from badge commands to legacy expansion operations.
 
 ## Rules of the architecture
 
@@ -85,7 +86,8 @@ GraphController <--------> Obsidian adapters
 - [x] Connect `GraphBadge` to the live read-only snapshot and query API.
 - [x] Route standard node-badge intents through `GraphController` while delegating expansion behavior to the legacy engine.
 - [x] Route the older parent-overlay badge controls through the same command boundary.
-- [ ] Extract legacy badge-target resolution into a dedicated expansion application service.
+- [x] Extract legacy badge-target resolution into a dedicated command adapter.
+- [ ] Introduce a host-neutral badge expansion request before extracting expansion calculations.
 
 ## Validation during the migration
 

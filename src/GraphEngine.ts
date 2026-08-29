@@ -10,7 +10,7 @@ import { setStyle } from "./domStyle";
 import { GraphController } from "./graph-application/GraphController";
 import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
-import type { GraphBadge } from "./graph-domain/GraphBadge";
+import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import {
   LegacyGraphSnapshotAdapter,
   ROOT_GRAPH_CONTEXT_ID,
@@ -684,13 +684,21 @@ export class GraphEngine {
       }
     );
     this.architectureQueries = new GraphQueries(snapshotAdapter);
+    const badgePort = new LegacyBadgeCommandAdapter<GraphNode, TFile, O3LinkType>({
+      getNode: (nodeId) => this.nodeMap.get(nodeId),
+      getFile: (sourcePath) => {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        return file instanceof TFile ? file : undefined;
+      },
+      getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
+      normalizeLinkType: (value) => this.normalizeLinkType(value),
+      toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id),
+      openInput: ({ node, linkType }) => this.requestBadgeLinkInput(node.id, linkType),
+      expandChain: ({ node, file, linkType }) => this.expandLinkTypeChainFromNode(file, linkType, node.id)
+    });
     this.graphController = new GraphController(this.graphStore, {
       queries: this.architectureQueries,
-      badgePort: {
-        toggleBadge: (badge) => this.executeLegacyBadgeToggle(badge),
-        openBadgeInput: (badge) => this.executeLegacyBadgeInput(badge),
-        expandBadgeChain: (badge) => this.executeLegacyBadgeChain(badge)
-      }
+      badgePort
     });
 
     for (const type of menuOptions.initialSelectedLinkTypes ?? []) {
@@ -9836,37 +9844,6 @@ export class GraphEngine {
 
   requestBadgeLinkInput(sourceNodeId: string, linkType: O3LinkType): void {
     void this.openBadgeLinkInput(sourceNodeId, linkType);
-  }
-
-  private getLegacyBadgeCommandTarget(
-    badge: GraphBadge
-  ): { node: GraphNode; file: TFile; linkType: O3LinkType } | null {
-    const node = this.nodeMap.get(badge.nodeId);
-    if (!node) return null;
-    const file = this.app.vault.getAbstractFileByPath(node.sourcePath);
-    if (!(file instanceof TFile)) return null;
-    const linkType = this.getPersistableBadgeLinkTypesForNode(node).find(
-      (candidate) => this.normalizeLinkType(String(candidate.property ?? "")) === badge.linkTypeId
-    );
-    return linkType ? { node, file, linkType } : null;
-  }
-
-  private executeLegacyBadgeToggle(badge: GraphBadge): void {
-    const target = this.getLegacyBadgeCommandTarget(badge);
-    if (!target) return;
-    this.expandFromNode(target.file, target.linkType, target.node.id);
-  }
-
-  private executeLegacyBadgeInput(badge: GraphBadge): void {
-    const target = this.getLegacyBadgeCommandTarget(badge);
-    if (!target) return;
-    this.requestBadgeLinkInput(target.node.id, target.linkType);
-  }
-
-  private executeLegacyBadgeChain(badge: GraphBadge): Promise<void> | void {
-    const target = this.getLegacyBadgeCommandTarget(badge);
-    if (!target) return;
-    return this.expandLinkTypeChainFromNode(target.file, target.linkType, target.node.id);
   }
 
   private async openBadgeLinkInput(sourceNodeId: string, linkType: O3LinkType): Promise<void> {

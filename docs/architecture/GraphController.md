@@ -63,7 +63,7 @@ type GraphBadgeCommand =
   | { type: "expand-badge-chain"; badgeId: BadgeId };
 ```
 
-The controller resolves the stable ID through [GraphQueries](GraphQueries.md). It then calls `GraphBadgeCommandPort`, a temporary interface implemented by the legacy engine. Unknown badges and unavailable ports return explicit unhandled results rather than silently mutating state.
+The controller resolves the stable ID through [GraphQueries](GraphQueries.md). It then calls `GraphBadgeCommandPort`, currently implemented by [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md). Unknown badges and unavailable ports return explicit unhandled results rather than silently mutating state.
 
 The standard runtime flow is now:
 
@@ -76,11 +76,13 @@ O3NodeBadge modifier-aware DOM event
                  v
           GraphController
            |           |
+       resolves via     implements port
+           |           |
            v           v
-     GraphQueries   GraphBadgeCommandPort
-                         |
-                         v
-            legacy GraphEngine operation
+     GraphQueries   LegacyBadgeCommandAdapter
+                            |
+                            v
+               legacy GraphEngine operation
 ```
 
 This removes the engine dependency from the badge view while preserving normal click, Alt-click, and Ctrl/Cmd-click behavior. The orbiting parent badges and parent-actions overlay also emit `toggle-badge`, so every current badge click crosses this boundary. The port is a migration seam, not the final home of expansion logic.
