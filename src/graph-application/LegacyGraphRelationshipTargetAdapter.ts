@@ -1,4 +1,8 @@
-import type { LinkTypeId, NoteId } from "../graph-domain/graph-identifiers";
+import type {
+  GraphContextId,
+  LinkTypeId,
+  NoteId
+} from "../graph-domain/graph-identifiers";
 import type {
   GraphRelationshipTarget,
   GraphRelationshipTargetQuery,
@@ -13,7 +17,10 @@ export interface LegacyRelationshipTarget {
 
 export interface LegacyGraphRelationshipTargetAdapterOptions<TSource, TLinkType> {
   getSource(noteId: NoteId): TSource | undefined | Promise<TSource | undefined>;
-  getLinkType(linkTypeId: LinkTypeId): TLinkType | undefined | Promise<TLinkType | undefined>;
+  getLinkType(
+    linkTypeId: LinkTypeId,
+    contextId: GraphContextId
+  ): TLinkType | undefined | Promise<TLinkType | undefined>;
   resolveTargets(
     source: TSource,
     linkType: TLinkType
@@ -32,7 +39,7 @@ export class LegacyGraphRelationshipTargetAdapter<TSource, TLinkType>
   ): Promise<readonly GraphRelationshipTarget[]> {
     const source = await this.options.getSource(query.sourceNoteId);
     if (!source) return [];
-    const linkType = await this.options.getLinkType(query.linkTypeId);
+    const linkType = await this.options.getLinkType(query.linkTypeId, query.contextId);
     if (!linkType) return [];
 
     const targets = await this.options.resolveTargets(source, linkType);

@@ -29,7 +29,7 @@ Each dependency may also be asynchronous. This lets a later repository implement
 
 ## Current migration state
 
-The adapter and contract are tested but are not yet called by production expansion. [GraphBadgeToggleService](GraphBadgeToggleService.md) now composes this reader contract with planning; production integration waits for a plan executor boundary.
+`GraphEngine` now supplies the existing file, context-specific link-type, and relationship resolver functions to this adapter. [GraphBadgeToggleService](GraphBadgeToggleService.md) uses it for live normal link-badge expansion planning.
 
 ## Removal condition
 

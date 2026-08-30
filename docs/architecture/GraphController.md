@@ -82,12 +82,14 @@ O3NodeBadge modifier-aware DOM event
      GraphQueries   LegacyBadgeCommandAdapter
                             |
                   GraphBadgeRequest
-                            |
-                            v
-               legacy GraphEngine operation
+                     |              |
+          normal link toggle       other actions
+                     |              |
+                     v              v
+       GraphBadgeToggleHandler   legacy operation
 ```
 
-This removes the engine dependency from the badge view while preserving normal click, Alt-click, and Ctrl/Cmd-click behavior. The orbiting parent badges and parent-actions overlay also emit `toggle-badge`, so every current badge click crosses this boundary. The port is a migration seam, not the final home of expansion logic.
+This removes the engine dependency from the badge view while preserving normal click, Alt-click, and Ctrl/Cmd-click behavior. Normal link toggles now pass through [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md). Orbiting parent badges, the parent-actions overlay, link input, and chain expansion still use their legacy operation after crossing the controller boundary.
 
 ## Connections
 

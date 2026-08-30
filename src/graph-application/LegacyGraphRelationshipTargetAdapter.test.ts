@@ -29,7 +29,9 @@ describe("LegacyGraphRelationshipTargetAdapter", () => {
   it("returns unique canonical targets and preserves missing notes", async () => {
     const adapter = createAdapter();
 
-    expect(await adapter.readTargets({ sourceNoteId: "A.md", linkTypeId: "parts" }))
+    expect(await adapter.readTargets({
+      sourceNoteId: "A.md", linkTypeId: "parts", contextId: "graph:root"
+    }))
       .toEqual([
         { noteId: "B.md", label: "B", missing: false },
         { noteId: "Missing.md", label: "Missing", missing: true }
@@ -39,9 +41,13 @@ describe("LegacyGraphRelationshipTargetAdapter", () => {
   it("uses the note and link-type identities to resolve legacy inputs", async () => {
     const adapter = createAdapter();
 
-    expect(await adapter.readTargets({ sourceNoteId: "other.md", linkTypeId: "parts" }))
+    expect(await adapter.readTargets({
+      sourceNoteId: "other.md", linkTypeId: "parts", contextId: "graph:root"
+    }))
       .toEqual([]);
-    expect(await adapter.readTargets({ sourceNoteId: "A.md", linkTypeId: "other" }))
+    expect(await adapter.readTargets({
+      sourceNoteId: "A.md", linkTypeId: "other", contextId: "graph:root"
+    }))
       .toEqual([]);
   });
 
@@ -52,7 +58,9 @@ describe("LegacyGraphRelationshipTargetAdapter", () => {
       resolveTargets: async () => [{ path: "B.md", label: "", missing: false }]
     });
 
-    expect(await adapter.readTargets({ sourceNoteId: "A.md", linkTypeId: "parts" }))
+    expect(await adapter.readTargets({
+      sourceNoteId: "A.md", linkTypeId: "parts", contextId: "embedded:project"
+    }))
       .toEqual([{ noteId: "B.md", label: "B.md", missing: false }]);
   });
 });

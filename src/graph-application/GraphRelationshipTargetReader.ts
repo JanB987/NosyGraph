@@ -1,8 +1,13 @@
-import type { LinkTypeId, NoteId } from "../graph-domain/graph-identifiers";
+import type {
+  GraphContextId,
+  LinkTypeId,
+  NoteId
+} from "../graph-domain/graph-identifiers";
 
 export interface GraphRelationshipTargetQuery {
   sourceNoteId: NoteId;
   linkTypeId: LinkTypeId;
+  contextId: GraphContextId;
 }
 
 /** One canonical relationship target, including unresolved note links. */

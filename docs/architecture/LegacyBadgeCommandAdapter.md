@@ -12,10 +12,11 @@ It exists so migration code is explicit and testable. It is not intended to beco
 
 For a resolved [GraphBadgeRequest](GraphBadgeRequest.md), the adapter:
 
-1. Finds the current legacy node by `request.nodeId`.
-2. Finds its current host file by `node.sourcePath`.
-3. Matches the current link-type definition by normalized `request.linkTypeId`.
-4. Dispatches `request.action` to the injected toggle, input, or chain operation.
+1. Sends normal link-type toggle requests to [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md).
+2. For parent, input, and chain requests, finds the current legacy node by `request.nodeId`.
+3. Finds its current host file by `node.sourcePath`.
+4. Matches the current link-type definition by normalized `request.linkTypeId`.
+5. Dispatches the remaining action to its injected legacy operation.
 
 If any legacy object has disappeared between rendering and clicking, the adapter safely performs no operation.
 
@@ -40,9 +41,10 @@ GraphBadgeRequest
        |
        v
 LegacyBadgeCommandAdapter
-       | resolve current node, file, link type
-       v
-injected legacy expansion operation
+       |
+       +---- normal link toggle ----> GraphBadgeToggleHandler
+       |
+       +---- parent/input/chain ----> injected legacy operation
 ```
 
 ## Connections

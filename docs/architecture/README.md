@@ -101,7 +101,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose target reading and toggle planning in a `GraphBadgeToggleService`.
 - [x] Define a `GraphBadgeToggleExecutor` boundary for applying plans with legacy behavior.
 - [x] Compose planning and execution behind one normal-badge toggle handler.
-- [ ] Route live normal badge toggles through `GraphBadgeToggleHandler`.
+- [x] Route live normal badge toggles through `GraphBadgeToggleHandler`.
+- [ ] Manually verify outer and embedded normal toggles plus unchanged parent/input/chain actions.
 
 ## Validation during the migration
 

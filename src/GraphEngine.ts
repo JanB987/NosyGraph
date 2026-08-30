@@ -8,9 +8,13 @@ import type { O3LinkType } from "./O3LinkType";
 import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
 import { GraphController } from "./graph-application/GraphController";
+import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
+import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
 import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
+import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
+import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
 import {
   LegacyGraphSnapshotAdapter,
   ROOT_GRAPH_CONTEXT_ID,
@@ -684,6 +688,31 @@ export class GraphEngine {
       }
     );
     this.architectureQueries = new GraphQueries(snapshotAdapter);
+    const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
+      getSource: (noteId) => {
+        const file = this.app.vault.getAbstractFileByPath(noteId);
+        return file instanceof TFile ? file : undefined;
+      },
+      getLinkType: (linkTypeId, contextId) =>
+        this.getLegacyRelationshipLinkType(linkTypeId, contextId),
+      resolveTargets: (source, linkType) => this.resolveLinkedTargets(source, linkType)
+    });
+    const toggleService = new GraphBadgeToggleService(
+      this.architectureQueries,
+      relationshipTargetReader
+    );
+    const toggleExecutor = new LegacyGraphBadgeToggleExecutor<GraphNode, TFile, O3LinkType>({
+      getNode: (nodeId) => this.nodeMap.get(nodeId),
+      getFile: (sourcePath) => {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        return file instanceof TFile ? file : undefined;
+      },
+      getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
+      normalizeLinkType: (value) => this.normalizeLinkType(value),
+      isExpanded: (expansionId) => this.expandedByBadge.has(expansionId),
+      toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id)
+    });
+    const toggleHandler = new GraphBadgeToggleHandler(toggleService, toggleExecutor);
     const badgePort = new LegacyBadgeCommandAdapter<GraphNode, TFile, O3LinkType>({
       getNode: (nodeId) => this.nodeMap.get(nodeId),
       getFile: (sourcePath) => {
@@ -692,6 +721,7 @@ export class GraphEngine {
       },
       getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
       normalizeLinkType: (value) => this.normalizeLinkType(value),
+      handleNormalToggle: async (request) => { await toggleHandler.handle(request); },
       toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id),
       openInput: ({ node, linkType }) => this.requestBadgeLinkInput(node.id, linkType),
       expandChain: ({ node, file, linkType }) => this.expandLinkTypeChainFromNode(file, linkType, node.id)
@@ -11334,6 +11364,28 @@ export class GraphEngine {
       activeLinkTypes,
       container?.visibleLinkTypeDefinitions ?? [],
       this.visibleNodeBadgeLinkTypes
+    );
+  }
+
+  private getLegacyRelationshipLinkType(
+    linkTypeIdRaw: string,
+    contextIdRaw: string
+  ): O3LinkType | undefined {
+    const linkTypeId = this.normalizeLinkType(linkTypeIdRaw);
+    if (!linkTypeId) return undefined;
+    const contextId = String(contextIdRaw ?? "").trim();
+    const embeddedPrefix = "embedded:";
+    const embeddedContainer = contextId.startsWith(embeddedPrefix)
+      ? this.embeddedGraphContainers.get(contextId.slice(embeddedPrefix.length))
+      : undefined;
+    const candidates = [
+      ...(embeddedContainer?.linkTypes ?? []),
+      ...(embeddedContainer?.visibleLinkTypeDefinitions ?? []),
+      ...this.activeNodeBadgeLinkTypes,
+      ...this.visibleNodeBadgeLinkTypes
+    ];
+    return candidates.find((candidate) =>
+      this.normalizeLinkType(String(candidate.property ?? "")) === linkTypeId
     );
   }
 

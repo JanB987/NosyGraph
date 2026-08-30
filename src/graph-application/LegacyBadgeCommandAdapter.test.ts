@@ -33,6 +33,7 @@ function setup(overrides: {
   node?: TestNode;
   file?: TestFile;
   linkTypes?: TestLinkType[];
+  handleNormalToggle?: (request: GraphBadgeRequest) => void | Promise<void>;
 } = {}) {
   const calls: string[] = [];
   const node = overrides.node ?? { id: "A.md", sourcePath: "A.md" };
@@ -43,6 +44,7 @@ function setup(overrides: {
     getFile: (sourcePath) => sourcePath === file.path ? file : undefined,
     getLinkTypes: () => linkTypes,
     normalizeLinkType: (value) => value.trim().toLowerCase(),
+    handleNormalToggle: overrides.handleNormalToggle,
     toggle: (target) => { calls.push(`toggle:${target.node.id}:${target.linkType.property}`); },
     openInput: (target) => { calls.push(`input:${target.file.path}`); },
     expandChain: async (target) => { calls.push(`chain:${target.linkType.property}`); }
@@ -82,5 +84,25 @@ describe("LegacyBadgeCommandAdapter", () => {
 
     expect(missingFile.calls).toEqual([]);
     expect(missingLinkType.calls).toEqual([]);
+  });
+
+  it("routes only normal toggles through the new handler", async () => {
+    const handled: string[] = [];
+    const { adapter, calls } = setup({
+      node: { id: "other", sourcePath: "other.md" },
+      handleNormalToggle: async (nextRequest) => { handled.push(nextRequest.badgeId); }
+    });
+
+    await adapter.executeBadge(request);
+
+    expect(handled).toEqual(["A.md::parts"]);
+    expect(calls).toEqual([]);
+
+    const parent = setup({
+      handleNormalToggle: () => { handled.push("unexpected-parent"); }
+    });
+    await parent.adapter.executeBadge({ ...request, semantic: "parent" });
+    expect(handled).not.toContain("unexpected-parent");
+    expect(parent.calls).toEqual(["toggle:A.md: Parts "]);
   });
 });

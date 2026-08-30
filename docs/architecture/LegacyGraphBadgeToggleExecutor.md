@@ -37,7 +37,7 @@ The existing legacy operation is a toggle, not separate expand and collapse func
 
 ## Current migration state
 
-The executor is composed with planning by [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md), but the handler is not connected to live badge clicks. [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) remains the production path until the active engine constructs and uses the new path.
+The executor is composed with planning by [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) and now applies live normal link-badge toggle plans. Its injected operation is still the existing legacy toggle, preserving graph mutation and persistence behavior during this migration stage.
 
 ## Removal condition
 

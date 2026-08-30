@@ -63,7 +63,8 @@ export class GraphBadgeToggleService implements GraphBadgeTogglePlanner {
     const targets = badge.state === "collapsed"
       ? await this.targetReader.readTargets({
           sourceNoteId: request.noteId,
-          linkTypeId: request.linkTypeId
+          linkTypeId: request.linkTypeId,
+          contextId: request.contextId
         })
       : [];
 

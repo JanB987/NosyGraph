@@ -32,6 +32,7 @@ export interface LegacyBadgeCommandAdapterOptions<
   getFile(sourcePath: string): TFile | undefined;
   getLinkTypes(node: TNode): readonly TLinkType[];
   normalizeLinkType(value: string): string;
+  handleNormalToggle?(request: GraphBadgeRequest): void | Promise<void>;
   toggle(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
   openInput(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
   expandChain(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
@@ -53,6 +54,13 @@ export class LegacyBadgeCommandAdapter<
   ) {}
 
   executeBadge(request: GraphBadgeRequest): void | Promise<void> {
+    if (
+      request.action === "toggle-badge"
+      && request.semantic === "link"
+      && this.options.handleNormalToggle
+    ) {
+      return this.options.handleNormalToggle(request);
+    }
     const target = this.resolveTarget(request);
     if (!target) return;
     switch (request.action) {

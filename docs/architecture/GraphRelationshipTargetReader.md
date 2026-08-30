@@ -13,6 +13,7 @@ interface GraphRelationshipTargetReader {
   readTargets(query: {
     sourceNoteId: NoteId;
     linkTypeId: LinkTypeId;
+    contextId: GraphContextId;
   }): Promise<readonly GraphRelationshipTarget[]>;
 }
 ```
@@ -31,9 +32,9 @@ Missing notes are intentional results. NosyGraph currently displays unresolved i
 
 ## Why this is note-level
 
-Relationship data belongs to Markdown notes. Runtime node identity, graph context, duplicate-node placement, and expansion ownership are handled later by [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) and the future executor.
+Relationship data belongs to Markdown notes. Runtime node identity, duplicate-node placement, and expansion ownership are handled later by [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) and the executor.
 
-The query does not carry discovery direction or property aliases. Those are configuration details of the requested link type and are resolved behind this interface.
+`contextId` selects the correct link-type configuration for outer or embedded graphs. The query does not carry discovery direction or property aliases; those remain configuration details resolved behind this interface.
 
 ## Responsibilities
 

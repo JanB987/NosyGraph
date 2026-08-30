@@ -60,7 +60,7 @@ function setup(
   const reads: string[] = [];
   const reader: GraphRelationshipTargetReader = {
     readTargets: async (query) => {
-      reads.push(`${query.sourceNoteId}:${query.linkTypeId}`);
+      reads.push(`${query.sourceNoteId}:${query.linkTypeId}:${query.contextId}`);
       return targets;
     }
   };
@@ -86,7 +86,7 @@ describe("GraphBadgeToggleService", () => {
       targetNoteIds: ["B.md"],
       parentExpansionId: null
     });
-    expect(reads).toEqual(["A.md:parts"]);
+    expect(reads).toEqual(["A.md:parts:graph:root"]);
   });
 
   it("does not read relationships when planning collapse", async () => {
