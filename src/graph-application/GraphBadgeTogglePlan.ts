@@ -33,6 +33,8 @@ export type GraphBadgeTogglePlan =
       badgeId: BadgeId;
       expansionId: ExpansionId;
       sourceNodeId: NodeInstanceId;
+      sourceNoteId: NoteId;
+      linkTypeId: LinkTypeId;
       contextId: GraphContextId;
     }
   | {
@@ -59,6 +61,8 @@ export function planGraphBadgeToggle(input: GraphBadgeToggleInput): GraphBadgeTo
       badgeId: request.badgeId,
       expansionId: request.badgeId,
       sourceNodeId: request.nodeId,
+      sourceNoteId: request.noteId,
+      linkTypeId: request.linkTypeId,
       contextId: request.contextId
     };
   }

@@ -33,6 +33,7 @@ The pure `planGraphBadgeToggle(input)` function returns one of:
 - `unsupported`, keeping parent badges and non-toggle actions outside this normal-link planner.
 
 The expansion ID remains equal to the stable badge ID, matching current runtime behavior.
+Both expand and collapse plans carry source node, source note, link type, and context identities so [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md) never needs to parse a composite ID.
 
 ## Characterized legacy behavior
 
@@ -57,4 +58,5 @@ Parent badges currently invoke a separate host callback and have different relat
 - Receives targets from [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md).
 - Produces the decision needed to create or remove a [GraphExpansion](GraphExpansion.md).
 - Is produced by [GraphBadgeToggleService](GraphBadgeToggleService.md) and will be orchestrated by [GraphController](GraphController.md).
+- Is applied through [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md).
 - Will eventually produce changes applied to [GraphStore](GraphStore.md).

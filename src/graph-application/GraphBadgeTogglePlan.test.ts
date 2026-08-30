@@ -52,6 +52,8 @@ describe("planGraphBadgeToggle", () => {
       badgeId: "instance:A::parts",
       expansionId: "instance:A::parts",
       sourceNodeId: "instance:A",
+      sourceNoteId: "A.md",
+      linkTypeId: "parts",
       contextId: "lens:project"
     });
   });

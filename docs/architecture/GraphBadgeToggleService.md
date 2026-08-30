@@ -41,6 +41,9 @@ planGraphBadgeToggle
        |
        v
 GraphBadgeTogglePlan
+       |
+       v
+GraphBadgeToggleExecutor
 ```
 
 ## Behavior
@@ -59,7 +62,7 @@ Collapse operates on expansion ownership already present in graph state. Reading
 
 ## Current migration state
 
-The service is fully host-neutral and tested, but production badge commands still delegate to [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md). Wiring this planner into production waits until a plan executor can preserve legacy mutation and persistence behavior.
+The service is fully host-neutral and tested, and [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md) now defines the matching mutation boundary. Production badge commands still delegate to [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) until planning and execution are composed behind one handler.
 
 ## Must not own
 
