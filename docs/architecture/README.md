@@ -35,6 +35,7 @@ GraphController <--------> Obsidian adapters
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
 - [GraphBadgeRequest](GraphBadgeRequest.md) carries resolved badge intent without host objects.
 - [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
+- [GraphBadgeToggleService](GraphBadgeToggleService.md) composes live graph state and relationship targets into a complete plan.
 - [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md) resolves note-level expansion targets behind a host-neutral interface.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
@@ -94,7 +95,8 @@ GraphController <--------> Obsidian adapters
 - [x] Introduce a host-neutral badge expansion request before extracting expansion calculations.
 - [x] Characterize the inputs and results of normal badge toggle expansion.
 - [x] Add a host-neutral relationship-target reader for normal badge expansion.
-- [ ] Compose target reading and toggle planning in a `GraphBadgeToggleService`.
+- [x] Compose target reading and toggle planning in a `GraphBadgeToggleService`.
+- [ ] Define a `GraphBadgeToggleExecutor` boundary for applying plans with legacy behavior.
 
 ## Validation during the migration
 

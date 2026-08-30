@@ -56,5 +56,5 @@ Parent badges currently invoke a separate host callback and have different relat
 - Consumes [GraphBadgeRequest](GraphBadgeRequest.md).
 - Receives targets from [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md).
 - Produces the decision needed to create or remove a [GraphExpansion](GraphExpansion.md).
-- Will be orchestrated by [GraphController](GraphController.md).
+- Is produced by [GraphBadgeToggleService](GraphBadgeToggleService.md) and will be orchestrated by [GraphController](GraphController.md).
 - Will eventually produce changes applied to [GraphStore](GraphStore.md).

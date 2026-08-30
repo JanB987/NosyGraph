@@ -46,7 +46,7 @@ The query does not carry discovery direction or property aliases. Those are conf
 ## Connections
 
 - Receives note and link-type identities from [GraphBadgeRequest](GraphBadgeRequest.md).
-- Supplies target note IDs to [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
+- Supplies targets to [GraphBadgeToggleService](GraphBadgeToggleService.md), which passes their note IDs to [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
 - Will be implemented by an [Obsidian adapter](ObsidianAdapters.md).
 - Currently has a temporary [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md).
 

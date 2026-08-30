@@ -29,7 +29,7 @@ Each dependency may also be asynchronous. This lets a later repository implement
 
 ## Current migration state
 
-The adapter and contract are tested but are not yet called by production expansion. The next increment will compose the reader with [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) before legacy mutation is replaced.
+The adapter and contract are tested but are not yet called by production expansion. [GraphBadgeToggleService](GraphBadgeToggleService.md) now composes this reader contract with planning; production integration waits for a plan executor boundary.
 
 ## Removal condition
 
