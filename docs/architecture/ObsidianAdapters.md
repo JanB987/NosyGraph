@@ -10,7 +10,7 @@ One general-purpose gateway would become too large, so the boundary is divided b
 
 ### ObsidianNoteRepository
 
-Implements the [GraphNote](GraphNote.md) repository and relationship lookup contracts.
+Implements the [GraphNote](GraphNote.md) repository contract.
 
 ```ts
 getNote(id): Promise<GraphNote | undefined>;
@@ -18,6 +18,12 @@ getAllNotes(): Promise<readonly GraphNote[]>;
 getOutgoingLinks(noteId, property): Promise<readonly NoteId[]>;
 getIncomingLinks(noteId, property): Promise<readonly NoteId[]>;
 ```
+
+### ObsidianRelationshipTargetReader
+
+Implements [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md). It combines outgoing and incoming links according to link-type configuration, resolves property aliases, and preserves missing internal-note targets.
+
+During migration, [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md) wraps the existing resolver instead.
 
 ### ObsidianNoteWriter
 
@@ -42,4 +48,3 @@ Loads and saves [GraphDocument](GraphDocument.md) configuration and runtime stat
 ## Connections
 
 [GraphView](GraphView.md) owns adapter lifecycles. [GraphController](GraphController.md) uses their host-neutral interfaces. No domain class imports Obsidian.
-

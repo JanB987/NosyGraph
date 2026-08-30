@@ -21,7 +21,7 @@ interface GraphBadgeToggleInput {
 
 - [GraphBadgeRequest](GraphBadgeRequest.md) supplies node, note, link-type, and context identity.
 - `badgeState` determines expand versus collapse.
-- `targetNoteIds` come from relationship resolution, which is still legacy behavior.
+- `targetNoteIds` come from [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md).
 - `parentExpansionId` preserves nested expansion ownership.
 
 ## Results
@@ -54,6 +54,7 @@ Parent badges currently invoke a separate host callback and have different relat
 ## Connections
 
 - Consumes [GraphBadgeRequest](GraphBadgeRequest.md).
+- Receives targets from [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md).
 - Produces the decision needed to create or remove a [GraphExpansion](GraphExpansion.md).
 - Will be orchestrated by [GraphController](GraphController.md).
 - Will eventually produce changes applied to [GraphStore](GraphStore.md).
