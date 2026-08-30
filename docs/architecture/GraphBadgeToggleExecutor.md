@@ -34,7 +34,7 @@ An unchanged result is important for asynchronous command flow. Replaying an exp
 
 ## Connections
 
-- Consumes plans from [GraphBadgeToggleService](GraphBadgeToggleService.md).
+- Receives plans through [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md).
 - Is temporarily implemented by [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md).
 - A future implementation will apply change sets to [GraphStore](GraphStore.md).
 

@@ -17,8 +17,12 @@ export type GraphBadgeToggleServiceResult =
   | GraphBadgeTogglePlan
   | GraphBadgeToggleUnavailable;
 
+export interface GraphBadgeTogglePlanner {
+  plan(request: GraphBadgeRequest): Promise<GraphBadgeToggleServiceResult>;
+}
+
 /** Coordinates live graph reads and relationship reads for toggle planning. */
-export class GraphBadgeToggleService {
+export class GraphBadgeToggleService implements GraphBadgeTogglePlanner {
   constructor(
     private readonly queries: GraphQueries,
     private readonly targetReader: GraphRelationshipTargetReader

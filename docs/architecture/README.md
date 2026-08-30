@@ -37,6 +37,7 @@ GraphController <--------> Obsidian adapters
 - [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
 - [GraphBadgeToggleService](GraphBadgeToggleService.md) composes live graph state and relationship targets into a complete plan.
 - [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md) applies a validated plan and reports its outcome.
+- [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) joins planning and execution behind one application operation.
 - [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md) resolves note-level expansion targets behind a host-neutral interface.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
@@ -99,7 +100,8 @@ GraphController <--------> Obsidian adapters
 - [x] Add a host-neutral relationship-target reader for normal badge expansion.
 - [x] Compose target reading and toggle planning in a `GraphBadgeToggleService`.
 - [x] Define a `GraphBadgeToggleExecutor` boundary for applying plans with legacy behavior.
-- [ ] Compose planning and execution behind one normal-badge toggle handler.
+- [x] Compose planning and execution behind one normal-badge toggle handler.
+- [ ] Route live normal badge toggles through `GraphBadgeToggleHandler`.
 
 ## Validation during the migration
 
