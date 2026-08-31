@@ -41,6 +41,7 @@ GraphController <--------> Obsidian adapters
 - [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md) resolves note-level expansion targets behind a host-neutral interface.
 - [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) turns planned note IDs into complete graph entities.
 - [GraphExpansionTransitionService](GraphExpansionTransitionService.md) composes materialization and atomic expansion calculation.
+- [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md) calculates either expand or collapse through one boundary.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
 ### Domain concepts
@@ -113,7 +114,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose materialization and change-set creation behind one expansion transition service.
 - [x] Add atomic `GraphChangeSet` application to `GraphStore`.
 - [x] Create atomic collapse change sets with shared-ownership protection.
-- [ ] Compose expand and collapse calculation behind one toggle transition service.
+- [x] Compose expand and collapse calculation behind one toggle transition service.
+- [ ] Add a store-backed toggle executor with stale-transition protection.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

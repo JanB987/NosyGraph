@@ -48,3 +48,4 @@ This makes logs and tests more informative without throwing for expected stale-s
 - Delegates entity preparation to [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md).
 - Delegates atomic calculation to [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
 - Produces changes accepted by the atomic [GraphStore](GraphStore.md) application method.
+- Supplies the expand branch of [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md).

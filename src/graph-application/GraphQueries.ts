@@ -24,6 +24,10 @@ import type {
 export class GraphQueries {
   constructor(private readonly source: GraphSnapshotSource) {}
 
+  getSnapshot(): GraphSnapshot {
+    return this.source.getSnapshot();
+  }
+
   getAllNodeInstances(): readonly GraphNodeInstance[] {
     return [...this.snapshot().nodes];
   }

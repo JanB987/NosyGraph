@@ -39,3 +39,4 @@ The final [GraphStore](GraphStore.md) validation provides a second referential-i
 - Produces a [GraphChangeSet](GraphChangeSet.md).
 - Is the collapse counterpart to [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
 - Produces changes accepted atomically by [GraphStore](GraphStore.md).
+- Supplies the collapse branch of [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md).
