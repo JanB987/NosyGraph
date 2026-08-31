@@ -9,12 +9,14 @@ import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
 import { GraphController } from "./graph-application/GraphController";
 import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
+import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeToggleShadowService";
 import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
 import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
 import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
+import { ObsidianGraphExpansionNoteAdapter } from "./graph-application/ObsidianGraphExpansionNoteAdapter";
 import {
   LegacyGraphSnapshotAdapter,
   ROOT_GRAPH_CONTEXT_ID,
@@ -708,7 +710,7 @@ export class GraphEngine {
       this.architectureQueries,
       relationshipTargetReader
     );
-    const toggleExecutor = new LegacyGraphBadgeToggleExecutor<GraphNode, TFile, O3LinkType>({
+    const liveToggleExecutor = new LegacyGraphBadgeToggleExecutor<GraphNode, TFile, O3LinkType>({
       getNode: (nodeId) => this.nodeMap.get(nodeId),
       getFile: (sourcePath) => {
         const file = this.app.vault.getAbstractFileByPath(sourcePath);
@@ -719,6 +721,67 @@ export class GraphEngine {
       isExpanded: (expansionId) => this.expandedByBadge.has(expansionId),
       toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id)
     });
+    const expansionNoteReader = new ObsidianGraphExpansionNoteAdapter<TFile>({
+      getFile: (noteId) => {
+        const file = this.app.vault.getAbstractFileByPath(noteId);
+        return file instanceof TFile ? file : undefined;
+      },
+      getPath: (file) => file.path,
+      getName: (file) => file.basename,
+      getProperties: (file) => {
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        return frontmatter && typeof frontmatter === "object"
+          ? frontmatter as Record<string, unknown>
+          : undefined;
+      },
+      getConfiguredSize: (properties) => {
+        const raw = readFrontmatterPropertyByKey(
+          properties,
+          this.graphPropertyKeys,
+          "nodeIndividualSize"
+        );
+        const size = Number(raw);
+        return Number.isFinite(size) && Number.isInteger(size) && size > 0
+          ? this.clamp(size, 3, 120)
+          : undefined;
+      },
+      getIcon: (properties) => {
+        const raw = readFrontmatterPropertyByKey(
+          properties,
+          this.graphPropertyKeys,
+          "graphIcon"
+        );
+        const icon = typeof raw === "string" ? raw.trim() : "";
+        return icon || undefined;
+      }
+    });
+    const toggleExecutor = new GraphBadgeToggleShadowService(
+      snapshotAdapter,
+      expansionNoteReader,
+      liveToggleExecutor,
+      {
+        getMaterializerOptions: () => ({ defaultNodeRadius: this.nodeRadius }),
+        observe: ({ plan, calculation, execution }) => {
+          if (calculation.status === "failed") {
+            console.warn("[NosyGraph architecture shadow] Transition calculation failed.", {
+              plan,
+              error: calculation.error
+            });
+            return;
+          }
+          if (
+            execution.status === "applied"
+            && (!calculation.result.ok || calculation.result.effect !== execution.effect)
+          ) {
+            console.warn("[NosyGraph architecture shadow] Legacy execution disagreed with the calculated transition.", {
+              plan,
+              calculation: calculation.result,
+              execution
+            });
+          }
+        }
+      }
+    );
     const toggleHandler = new GraphBadgeToggleHandler(toggleService, toggleExecutor);
     const badgePort = new LegacyBadgeCommandAdapter<GraphNode, TFile, O3LinkType>({
       getNode: (nodeId) => this.nodeMap.get(nodeId),

@@ -25,7 +25,7 @@ interface GraphExpansionTargetMaterializer {
 ```
 
 - `GraphQueries` supplies existing notes, nodes, and edges.
-- `GraphExpansionNoteReader` is the narrow gateway for a note not already in the graph snapshot. Its Obsidian adapter will translate files and unresolved links into host-neutral `GraphNote` objects.
+- `GraphExpansionNoteReader` is the narrow gateway for a note not already in the graph snapshot. [ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md) translates files and unresolved links into host-neutral `GraphNote` objects.
 - `GraphExpansionNodePlacer` owns only the initial position calculation. The default radial implementation follows the current golden-angle layout, while a future physics implementation can replace it.
 
 ## Reuse and identity rules

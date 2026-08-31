@@ -37,6 +37,7 @@ An unchanged result is important for asynchronous command flow. Replaying an exp
 - Receives plans through [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md).
 - Is temporarily implemented by [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md).
 - Is also implemented by [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md), which applies atomic change sets with stale-transition protection. It is tested independently but is not live-connected yet.
+- Live execution is currently decorated by [GraphBadgeToggleShadowService](GraphBadgeToggleShadowService.md), which calculates the new transition without applying it.
 
 ## Must not decide
 

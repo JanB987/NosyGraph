@@ -43,6 +43,7 @@ GraphController <--------> Obsidian adapters
 - [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) turns planned note IDs into complete graph entities.
 - [GraphExpansionTransitionService](GraphExpansionTransitionService.md) composes materialization and atomic expansion calculation.
 - [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md) calculates either expand or collapse through one boundary.
+- [GraphBadgeToggleShadowService](GraphBadgeToggleShadowService.md) runs that calculation against a captured snapshot while preserving legacy mutation.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
 ### Domain concepts
@@ -63,6 +64,7 @@ GraphController <--------> Obsidian adapters
 - [GraphRenderer](GraphRenderer.md) draws snapshots and emits interaction intents.
 - [PhysicsEngine](PhysicsEngine.md) calculates positions without knowing about Obsidian.
 - [Obsidian adapters](ObsidianAdapters.md) isolate note access, writes, watchers, navigation, and persistence.
+- [ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md) reads expansion notes and missing targets through an injected Obsidian gateway.
 - [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) is the temporary, tested bridge from badge commands to legacy expansion operations.
 - [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md) translates the current link resolver into host-neutral targets.
 - [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md) safely applies plans through the current toggle operation.
@@ -117,7 +119,8 @@ GraphController <--------> Obsidian adapters
 - [x] Create atomic collapse change sets with shared-ownership protection.
 - [x] Compose expand and collapse calculation behind one toggle transition service.
 - [x] Add a store-backed toggle executor with stale-transition protection.
-- [ ] Adapt Obsidian note reads to the expansion materializer and compose the new path in non-mutating shadow mode.
+- [x] Adapt Obsidian note reads to the expansion materializer and compose the new path in non-mutating shadow mode.
+- [ ] Record and compare shadow change sets with the graph state produced by legacy execution.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

@@ -25,6 +25,8 @@ Implements [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md). It
 
 During migration, [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md) wraps the existing resolver instead.
 
+[ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md) is the first concrete read adapter for the new expansion pipeline. It converts vault files, cached frontmatter, and unresolved paths into `GraphNote` values without exposing Obsidian objects to the materializer.
+
 ### ObsidianNoteWriter
 
 ```ts
