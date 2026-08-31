@@ -57,6 +57,10 @@ export class GraphQueries {
     return result;
   }
 
+  getNote(noteId: NoteId): GraphNote | undefined {
+    return this.snapshot().notes.find((note) => note.id === noteId);
+  }
+
   getNodeInstancesForNote(noteId: NoteId): readonly GraphNodeInstance[] {
     return this.snapshot().nodes.filter((node) => node.noteId === noteId);
   }

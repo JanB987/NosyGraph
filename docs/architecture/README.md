@@ -39,6 +39,7 @@ GraphController <--------> Obsidian adapters
 - [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md) applies a validated plan and reports its outcome.
 - [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) joins planning and execution behind one application operation.
 - [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md) resolves note-level expansion targets behind a host-neutral interface.
+- [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) turns planned note IDs into complete graph entities.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
 ### Domain concepts
@@ -106,7 +107,8 @@ GraphController <--------> Obsidian adapters
 - [x] Route live normal badge toggles through `GraphBadgeToggleHandler`.
 - [x] Define the atomic `GraphChangeSet` data contract and helpers.
 - [x] Create expansion change sets from materialized target nodes and edges.
-- [ ] Extract a host-neutral boundary that materializes target notes, nodes, and edges.
+- [x] Extract a host-neutral boundary that materializes target notes, nodes, and edges.
+- [ ] Compose materialization and change-set creation behind one expansion transition service.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

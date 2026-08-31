@@ -156,6 +156,8 @@ describe("GraphQueries", () => {
     ]);
     expect(graph.getNodeInstance("A.md")?.noteId).toBe("A.md");
     expect(graph.getNodeInstance("missing")).toBeUndefined();
+    expect(graph.getNote("B.md")?.name).toBe("B");
+    expect(graph.getNote("missing")).toBeUndefined();
     expect(graph.getUniqueVisibleNotes().map((note) => note.id)).toEqual([
       "A.md",
       "B.md",

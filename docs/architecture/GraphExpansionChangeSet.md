@@ -19,7 +19,7 @@ interface GraphExpansionChangeSetInput {
 }
 ```
 
-Each materialized target contains the complete `GraphNote`, `GraphNodeInstance`, and `GraphEdge` that should exist after applying the expansion. The earlier [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) determines which note IDs must be present and their stable order.
+Each target from [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) contains the complete `GraphNote`, `GraphNodeInstance`, and `GraphEdge` that should exist after applying the expansion. The earlier [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) determines which note IDs must be present and their stable order.
 
 ## Output
 
@@ -39,5 +39,5 @@ On failure, it returns a reason instead of producing a partial change. Failures 
 - Consumes an `expand` result from [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
 - Produces a [GraphChangeSet](GraphChangeSet.md).
 - Creates and connects [GraphExpansion](GraphExpansion.md) ownership.
-- Will receive entities from the next materialization boundary.
+- Receives entities from [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md).
 - Its result will eventually be applied by [GraphStore](GraphStore.md).

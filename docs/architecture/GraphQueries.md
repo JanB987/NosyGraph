@@ -16,6 +16,7 @@ class GraphQueries {
   getNodeInstance(nodeId: NodeInstanceId): GraphNodeInstance | undefined;
   getVisibleNodeInstances(contextId?: GraphContextId): readonly GraphNodeInstance[];
   getUniqueVisibleNotes(contextId?: GraphContextId): readonly GraphNote[];
+  getNote(noteId: NoteId): GraphNote | undefined;
   getNodeInstancesForNote(noteId: NoteId): readonly GraphNodeInstance[];
   getSelectedNodes(): readonly GraphNodeInstance[];
   getRootNodes(): readonly GraphNodeInstance[];
@@ -36,6 +37,7 @@ class GraphQueries {
 
 - Reads [GraphStore](GraphStore.md) snapshots.
 - Resolves note data through the [GraphNote](GraphNote.md) repository contract.
+- Supplies existing entities to [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md).
 - Is used by [GraphController](GraphController.md), UI features, debugging tools, and tests.
 
 ## Design rule
