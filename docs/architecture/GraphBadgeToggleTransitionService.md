@@ -49,4 +49,4 @@ Nesting failures avoids reducing precise domain errors to a generic string.
 - Delegates collapse to [GraphCollapseChangeSet](GraphCollapseChangeSet.md).
 - Reads collapse state through [GraphQueries](GraphQueries.md).
 - Produces changes for atomic application by [GraphStore](GraphStore.md).
-- Will be used by the store-backed implementation of [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md).
+- Is used by [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md).

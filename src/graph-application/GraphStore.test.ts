@@ -51,6 +51,20 @@ function snapshot(): GraphSnapshot {
 }
 
 describe("GraphStore selection", () => {
+  it("advances its revision only for effective selection changes", () => {
+    const store = new GraphStore();
+
+    expect(store.getRevision()).toBe(0);
+    expect(store.selectOnly("A.md")).toBe(true);
+    expect(store.getRevision()).toBe(1);
+    expect(store.selectOnly("A.md")).toBe(false);
+    expect(store.getRevision()).toBe(1);
+    expect(store.clearSelection()).toBe(true);
+    expect(store.getRevision()).toBe(2);
+    expect(store.clearSelection()).toBe(false);
+    expect(store.getRevision()).toBe(2);
+  });
+
   it("selects one node and reports idempotent commands", () => {
     const store = new GraphStore();
 
@@ -90,6 +104,47 @@ describe("GraphStore selection", () => {
 });
 
 describe("GraphStore graph changes", () => {
+  it("rejects a change set calculated from an older revision", () => {
+    const store = new GraphStore(snapshot());
+    const expectedRevision = store.getRevision();
+    const changeSet = createEmptyGraphChangeSet({
+      kind: "badge-expand",
+      badgeId: "A::parts",
+      expansionId: "A::parts"
+    });
+    changeSet.notes = {
+      upsert: [{ ...snapshot().notes[0]!, name: "Changed" }],
+      removeIds: []
+    };
+
+    store.clearSelection();
+    expect(store.applyChangeSet(changeSet, expectedRevision)).toEqual({
+      applied: false,
+      reason: "revision-mismatch",
+      expectedRevision: 0,
+      actualRevision: 1
+    });
+    expect(store.getSnapshot().notes[0]?.name).toBe("A");
+  });
+
+  it("advances its revision only for non-empty applied change sets", () => {
+    const store = new GraphStore(snapshot());
+    const empty = createEmptyGraphChangeSet({
+      kind: "badge-expand",
+      badgeId: "A::parts",
+      expansionId: "A::parts"
+    });
+
+    expect(store.applyChangeSet(empty)).toEqual({ applied: true, changeCount: 0 });
+    expect(store.getRevision()).toBe(0);
+    empty.notes = {
+      upsert: [{ ...snapshot().notes[0]!, name: "Changed" }],
+      removeIds: []
+    };
+    expect(store.applyChangeSet(empty)).toEqual({ applied: true, changeCount: 1 });
+    expect(store.getRevision()).toBe(1);
+  });
+
   it("applies every expansion collection as one valid snapshot", () => {
     const store = new GraphStore(snapshot());
     const changeSet = createEmptyGraphChangeSet({

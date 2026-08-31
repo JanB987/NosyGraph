@@ -17,7 +17,12 @@ export type GraphBadgeToggleExecutionResult =
   | {
       status: "rejected";
       badgeId: BadgeId;
-      reason: "unsupported-plan" | "target-not-found";
+      reason:
+        | "unsupported-plan"
+        | "target-not-found"
+        | "transition-failed"
+        | "stale-transition"
+        | "store-rejected";
     };
 
 /** Applies a previously validated toggle plan. */

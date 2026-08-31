@@ -41,6 +41,7 @@ mouse, keyboard, marquee, context menu, or drag interaction
 
 ```ts
 class GraphStore {
+  getRevision(): number;
   getSelectedNodeIds(): readonly NodeInstanceId[];
   getSelectedNodeCount(): number;
   isNodeSelected(nodeId: NodeInstanceId): boolean;
@@ -49,7 +50,10 @@ class GraphStore {
   replaceSelection(nodeIds: Iterable<NodeInstanceId>): boolean;
   clearSelection(): boolean;
   getSnapshot(): GraphSnapshot;
-  applyChangeSet(changeSet: GraphChangeSet): GraphChangeSetApplyResult;
+  applyChangeSet(
+    changeSet: GraphChangeSet,
+    expectedRevision?: number
+  ): GraphChangeSetApplyResult;
 }
 ```
 
@@ -68,6 +72,8 @@ class GraphStore {
 
 A failed validation returns a structured reason and leaves every collection and selection unchanged. A successful validation swaps all replacement maps synchronously.
 
+The store also exposes a monotonically increasing revision. Effective graph and selection mutations advance it; idempotent commands and empty change sets do not. An asynchronous caller can capture `getRevision()` before calculating a change set and pass that value to `applyChangeSet`. A mismatch rejects the complete change set as `revision-mismatch`, preventing older calculations from overwriting newer user interaction.
+
 The live engine still owns these six collections during migration. We will connect the store only when the complete expand and collapse behavior is available, avoiding synchronized mutable copies.
 
 ## Connections
@@ -75,6 +81,7 @@ The live engine still owns these six collections during migration. We will conne
 - Mutated by [GraphController](GraphController.md).
 - Read through [GraphQueries](GraphQueries.md).
 - Applies transitions created by [GraphExpansionTransitionService](GraphExpansionTransitionService.md).
+- Is updated safely by [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md).
 - Snapshots are consumed by [GraphRenderer](GraphRenderer.md) and [PhysicsEngine](PhysicsEngine.md).
 - Serialized into [GraphDocument](GraphDocument.md) runtime state.
 

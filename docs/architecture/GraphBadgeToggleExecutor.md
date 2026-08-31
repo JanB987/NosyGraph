@@ -20,7 +20,7 @@ interface GraphBadgeToggleExecutor {
 
 - `applied`: expansion or collapse was performed.
 - `unchanged`: the requested state was already active.
-- `rejected`: the plan was unsupported or its runtime target could not be resolved.
+- `rejected`: the plan was unsupported, transition calculation failed, the transition became stale, or the target store rejected it.
 
 An unchanged result is important for asynchronous command flow. Replaying an expand plan must not accidentally toggle an already-expanded badge back to collapsed.
 
@@ -36,7 +36,7 @@ An unchanged result is important for asynchronous command flow. Replaying an exp
 
 - Receives plans through [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md).
 - Is temporarily implemented by [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md).
-- A future implementation will apply change sets to [GraphStore](GraphStore.md).
+- Is also implemented by [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md), which applies atomic change sets with stale-transition protection. It is tested independently but is not live-connected yet.
 
 ## Must not decide
 

@@ -37,6 +37,7 @@ GraphController <--------> Obsidian adapters
 - [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
 - [GraphBadgeToggleService](GraphBadgeToggleService.md) composes live graph state and relationship targets into a complete plan.
 - [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md) applies a validated plan and reports its outcome.
+- [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md) applies calculated transitions atomically and rejects stale asynchronous work.
 - [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) joins planning and execution behind one application operation.
 - [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md) resolves note-level expansion targets behind a host-neutral interface.
 - [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) turns planned note IDs into complete graph entities.
@@ -115,7 +116,8 @@ GraphController <--------> Obsidian adapters
 - [x] Add atomic `GraphChangeSet` application to `GraphStore`.
 - [x] Create atomic collapse change sets with shared-ownership protection.
 - [x] Compose expand and collapse calculation behind one toggle transition service.
-- [ ] Add a store-backed toggle executor with stale-transition protection.
+- [x] Add a store-backed toggle executor with stale-transition protection.
+- [ ] Adapt Obsidian note reads to the expansion materializer and compose the new path in non-mutating shadow mode.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

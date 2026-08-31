@@ -31,6 +31,12 @@ export type GraphChangeSetApplyResult =
   | { applied: true; changeCount: number }
   | {
       applied: false;
+      reason: "revision-mismatch";
+      expectedRevision: number;
+      actualRevision: number;
+    }
+  | {
+      applied: false;
       reason: "duplicate-id" | "conflicting-id" | "missing-reference" | "expansion-cycle";
       collection: GraphStoreCollectionName;
       entityId: string;
@@ -51,6 +57,7 @@ export class GraphStore implements GraphSnapshotSource {
   private expansions: Map<ExpansionId, GraphExpansion>;
   private lenses: Map<LensId, GraphLens>;
   private readonly selectedNodeIds = new Set<NodeInstanceId>();
+  private revision = 0;
 
   constructor(snapshot: GraphSnapshot = emptyGraphSnapshot()) {
     this.notes = indexEntities(snapshot.notes, copyNote);
@@ -78,7 +85,22 @@ export class GraphStore implements GraphSnapshotSource {
     };
   }
 
-  applyChangeSet(changeSet: GraphChangeSet): GraphChangeSetApplyResult {
+  getRevision(): number {
+    return this.revision;
+  }
+
+  applyChangeSet(
+    changeSet: GraphChangeSet,
+    expectedRevision: number = this.revision
+  ): GraphChangeSetApplyResult {
+    if (expectedRevision !== this.revision) {
+      return {
+        applied: false,
+        reason: "revision-mismatch",
+        expectedRevision,
+        actualRevision: this.revision
+      };
+    }
     const structuralFailure = validateChangeSetStructure(changeSet);
     if (structuralFailure) return structuralFailure;
 
@@ -123,7 +145,9 @@ export class GraphStore implements GraphSnapshotSource {
     this.lenses = nextLenses;
     this.selectedNodeIds.clear();
     for (const nodeId of nextSelectedNodeIds) this.selectedNodeIds.add(nodeId);
-    return { applied: true, changeCount: countGraphChanges(changeSet) };
+    const changeCount = countGraphChanges(changeSet);
+    if (changeCount > 0) this.revision += 1;
+    return { applied: true, changeCount };
   }
 
   getSelectedNodeIds(): readonly NodeInstanceId[] {
@@ -144,6 +168,7 @@ export class GraphStore implements GraphSnapshotSource {
     if (this.selectedNodeIds.size === 1 && this.selectedNodeIds.has(normalized)) return false;
     this.selectedNodeIds.clear();
     this.selectedNodeIds.add(normalized);
+    this.revision += 1;
     return true;
   }
 
@@ -155,6 +180,7 @@ export class GraphStore implements GraphSnapshotSource {
     } else {
       this.selectedNodeIds.add(normalized);
     }
+    this.revision += 1;
     return true;
   }
 
@@ -167,12 +193,14 @@ export class GraphStore implements GraphSnapshotSource {
     if (this.selectionEquals(next)) return false;
     this.selectedNodeIds.clear();
     for (const nodeId of next) this.selectedNodeIds.add(nodeId);
+    this.revision += 1;
     return true;
   }
 
   clearSelection(): boolean {
     if (this.selectedNodeIds.size === 0) return false;
     this.selectedNodeIds.clear();
+    this.revision += 1;
     return true;
   }
 
