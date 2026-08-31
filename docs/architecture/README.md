@@ -51,6 +51,7 @@ GraphController <--------> Obsidian adapters
 - [GraphExpansion](GraphExpansion.md) records ownership of nodes and edges added through a badge.
 - [GraphChangeSet](GraphChangeSet.md) describes atomic upserts and removals across graph state.
 - [GraphExpansionChangeSet](GraphExpansionChangeSet.md) creates atomic expansion changes from materialized entities.
+- [GraphCollapseChangeSet](GraphCollapseChangeSet.md) safely removes expansion subtrees while preserving shared ownership.
 - [GraphEdge and LinkType](GraphEdgeAndLinkType.md) separate visible edges from relationship rules.
 - [GraphLens](GraphLens.md) defines a viewport into another graph context.
 - [GraphGroup and GraphContainer](GraphGroupAndContainer.md) separate visual classification from spatial ownership.
@@ -111,7 +112,8 @@ GraphController <--------> Obsidian adapters
 - [x] Extract a host-neutral boundary that materializes target notes, nodes, and edges.
 - [x] Compose materialization and change-set creation behind one expansion transition service.
 - [x] Add atomic `GraphChangeSet` application to `GraphStore`.
-- [ ] Create atomic collapse change sets with shared-ownership protection.
+- [x] Create atomic collapse change sets with shared-ownership protection.
+- [ ] Compose expand and collapse calculation behind one toggle transition service.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

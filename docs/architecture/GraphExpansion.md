@@ -27,16 +27,17 @@ interface GraphExpansion {
 planGraphBadgeToggle(input): GraphBadgeTogglePlan;
 resolveExpansionTargets(sourceNoteId, linkType, relationshipIndex): readonly NoteId[];
 createGraphExpansionChangeSet(input): GraphExpansionChangeSetResult;
-createCollapseChangeSet(expansionId, snapshot): GraphChangeSet;
+createGraphCollapseChangeSet(plan, snapshot): GraphCollapseChangeSetResult;
 ```
 
-[GraphExpansionChangeSet](GraphExpansionChangeSet.md) now creates the atomic expansion output. The collapse factory remains a later extraction step.
+[GraphExpansionChangeSet](GraphExpansionChangeSet.md) creates atomic expansion output, while [GraphCollapseChangeSet](GraphCollapseChangeSet.md) calculates descendant-aware collapse output.
 
 ## Connections
 
 - Triggered through [GraphBadge](GraphBadge.md).
 - Initially described by [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
 - Created atomically through [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
+- Removed atomically through [GraphCollapseChangeSet](GraphCollapseChangeSet.md).
 - Orchestrated by [GraphController](GraphController.md).
 - Stored in [GraphStore](GraphStore.md).
 - Queried through [GraphQueries](GraphQueries.md).

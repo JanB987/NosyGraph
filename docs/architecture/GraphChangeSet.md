@@ -70,6 +70,7 @@ Shared nodes are represented by appearing in multiple [GraphExpansion](GraphExpa
 
 - Produced from [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
 - Expansion changes are created by [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
+- Collapse changes are created by [GraphCollapseChangeSet](GraphCollapseChangeSet.md).
 - Is applied atomically by [GraphStore](GraphStore.md) on the new in-memory path.
 - Will replace direct collection mutation in [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md).
 - Supplies the durable-state portion of future persistence and rendering effects.
