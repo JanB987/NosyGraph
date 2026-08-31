@@ -69,10 +69,11 @@ Shared nodes are represented by appearing in multiple [GraphExpansion](GraphExpa
 ## Connections
 
 - Produced from [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
+- Expansion changes are created by [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
 - Will be applied atomically by [GraphStore](GraphStore.md).
 - Will replace direct collection mutation in [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md).
 - Supplies the durable-state portion of future persistence and rendering effects.
 
 ## Current migration state
 
-The contract and helper functions are tested but are not connected to live execution. Live normal toggles still end in the existing legacy mutation after passing through the new handler.
+The contract, helpers, and pure expansion factory are tested but are not connected to live execution. Live normal toggles still end in the existing legacy mutation after passing through the new handler.

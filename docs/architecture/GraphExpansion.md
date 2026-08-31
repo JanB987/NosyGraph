@@ -26,16 +26,17 @@ interface GraphExpansion {
 ```ts
 planGraphBadgeToggle(input): GraphBadgeTogglePlan;
 resolveExpansionTargets(sourceNoteId, linkType, relationshipIndex): readonly NoteId[];
-createExpansionChangeSet(expansion, targetNotes): GraphChangeSet;
+createGraphExpansionChangeSet(input): GraphExpansionChangeSetResult;
 createCollapseChangeSet(expansionId, snapshot): GraphChangeSet;
 ```
 
-[GraphChangeSet](GraphChangeSet.md) now defines the atomic output shape. The expansion and collapse factory functions remain the next extraction step.
+[GraphExpansionChangeSet](GraphExpansionChangeSet.md) now creates the atomic expansion output. The collapse factory remains a later extraction step.
 
 ## Connections
 
 - Triggered through [GraphBadge](GraphBadge.md).
 - Initially described by [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
+- Created atomically through [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
 - Orchestrated by [GraphController](GraphController.md).
 - Stored in [GraphStore](GraphStore.md).
 - Queried through [GraphQueries](GraphQueries.md).

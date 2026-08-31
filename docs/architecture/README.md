@@ -48,6 +48,7 @@ GraphController <--------> Obsidian adapters
 - [GraphBadge](GraphBadge.md) describes an available node expansion.
 - [GraphExpansion](GraphExpansion.md) records ownership of nodes and edges added through a badge.
 - [GraphChangeSet](GraphChangeSet.md) describes atomic upserts and removals across graph state.
+- [GraphExpansionChangeSet](GraphExpansionChangeSet.md) creates atomic expansion changes from materialized entities.
 - [GraphEdge and LinkType](GraphEdgeAndLinkType.md) separate visible edges from relationship rules.
 - [GraphLens](GraphLens.md) defines a viewport into another graph context.
 - [GraphGroup and GraphContainer](GraphGroupAndContainer.md) separate visual classification from spatial ownership.
@@ -104,7 +105,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose planning and execution behind one normal-badge toggle handler.
 - [x] Route live normal badge toggles through `GraphBadgeToggleHandler`.
 - [x] Define the atomic `GraphChangeSet` data contract and helpers.
-- [ ] Create expansion change sets from materialized target nodes and edges.
+- [x] Create expansion change sets from materialized target nodes and edges.
+- [ ] Extract a host-neutral boundary that materializes target notes, nodes, and edges.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration
