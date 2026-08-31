@@ -44,6 +44,7 @@ GraphController <--------> Obsidian adapters
 - [GraphExpansionTransitionService](GraphExpansionTransitionService.md) composes materialization and atomic expansion calculation.
 - [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md) calculates either expand or collapse through one boundary.
 - [GraphBadgeToggleShadowService](GraphBadgeToggleShadowService.md) runs that calculation against a captured snapshot while preserving legacy mutation.
+- [GraphBadgeToggleShadowComparator](GraphBadgeToggleShadowComparator.md) compares calculated semantic state with the legacy result.
 - [GraphDocument](GraphDocument.md) describes persisted graph-note configuration and runtime state.
 
 ### Domain concepts
@@ -120,7 +121,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose expand and collapse calculation behind one toggle transition service.
 - [x] Add a store-backed toggle executor with stale-transition protection.
 - [x] Adapt Obsidian note reads to the expansion materializer and compose the new path in non-mutating shadow mode.
-- [ ] Record and compare shadow change sets with the graph state produced by legacy execution.
+- [x] Record and compare shadow change sets with the graph state produced by legacy execution.
+- [ ] Align legacy expansion-edge identity and origin with explicit expansion ownership.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

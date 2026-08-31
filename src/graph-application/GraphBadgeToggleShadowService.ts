@@ -1,4 +1,4 @@
-import type { GraphSnapshotSource } from "../graph-domain/GraphSnapshot";
+import type { GraphSnapshot, GraphSnapshotSource } from "../graph-domain/GraphSnapshot";
 import type {
   GraphBadgeToggleExecutionResult,
   GraphBadgeToggleExecutor
@@ -22,6 +22,8 @@ export type GraphBadgeToggleShadowCalculation =
 
 export interface GraphBadgeToggleShadowObservation {
   plan: GraphBadgeTogglePlan;
+  beforeSnapshot: GraphSnapshot;
+  afterSnapshot: GraphSnapshot;
   calculation: GraphBadgeToggleShadowCalculation;
   execution: GraphBadgeToggleExecutionResult;
 }
@@ -41,14 +43,21 @@ export class GraphBadgeToggleShadowService implements GraphBadgeToggleExecutor {
   ) {}
 
   async execute(plan: GraphBadgeTogglePlan): Promise<GraphBadgeToggleExecutionResult> {
-    const snapshot = this.snapshotSource.getSnapshot();
+    const beforeSnapshot = this.snapshotSource.getSnapshot();
     const shadowPromise = this.calculate(plan, new GraphQueries({
-      getSnapshot: () => snapshot
+      getSnapshot: () => beforeSnapshot
     }));
     const execution = await this.liveExecutor.execute(plan);
+    const afterSnapshot = this.snapshotSource.getSnapshot();
     const calculation = await shadowPromise;
     try {
-      this.options.observe?.({ plan, calculation, execution });
+      this.options.observe?.({
+        plan,
+        beforeSnapshot,
+        afterSnapshot,
+        calculation,
+        execution
+      });
     } catch {
       // Diagnostics must never change live badge behavior.
     }

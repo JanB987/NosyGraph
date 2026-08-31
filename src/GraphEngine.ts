@@ -9,6 +9,7 @@ import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
 import { GraphController } from "./graph-application/GraphController";
 import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
+import { GraphBadgeToggleShadowComparator } from "./graph-application/GraphBadgeToggleShadowComparator";
 import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeToggleShadowService";
 import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
 import { GraphQueries } from "./graph-application/GraphQueries";
@@ -755,28 +756,30 @@ export class GraphEngine {
         return icon || undefined;
       }
     });
+    const shadowComparator = new GraphBadgeToggleShadowComparator();
     const toggleExecutor = new GraphBadgeToggleShadowService(
       snapshotAdapter,
       expansionNoteReader,
       liveToggleExecutor,
       {
         getMaterializerOptions: () => ({ defaultNodeRadius: this.nodeRadius }),
-        observe: ({ plan, calculation, execution }) => {
-          if (calculation.status === "failed") {
-            console.warn("[NosyGraph architecture shadow] Transition calculation failed.", {
-              plan,
-              error: calculation.error
+        observe: (observation) => {
+          const comparison = shadowComparator.compare(observation);
+          if (comparison.status === "not-comparable") {
+            if (comparison.reason === "legacy-not-applied") return;
+            console.warn("[NosyGraph architecture shadow] Transition could not be compared.", {
+              plan: observation.plan,
+              reason: comparison.reason,
+              ...(observation.calculation.status === "failed"
+                ? { error: observation.calculation.error }
+                : {})
             });
             return;
           }
-          if (
-            execution.status === "applied"
-            && (!calculation.result.ok || calculation.result.effect !== execution.effect)
-          ) {
-            console.warn("[NosyGraph architecture shadow] Legacy execution disagreed with the calculated transition.", {
-              plan,
-              calculation: calculation.result,
-              execution
+          if (!comparison.matches) {
+            console.warn("[NosyGraph architecture shadow] Legacy state disagreed with the calculated transition.", {
+              plan: observation.plan,
+              differences: comparison.differences
             });
           }
         }
