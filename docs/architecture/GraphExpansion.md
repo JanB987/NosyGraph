@@ -30,6 +30,8 @@ createExpansionChangeSet(expansion, targetNotes): GraphChangeSet;
 createCollapseChangeSet(expansionId, snapshot): GraphChangeSet;
 ```
 
+[GraphChangeSet](GraphChangeSet.md) now defines the atomic output shape. The expansion and collapse factory functions remain the next extraction step.
+
 ## Connections
 
 - Triggered through [GraphBadge](GraphBadge.md).

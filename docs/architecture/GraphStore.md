@@ -59,6 +59,8 @@ class GraphStore {
 
 `GraphSnapshot` and all collections returned from the store are read-only.
 
+The [GraphChangeSet](GraphChangeSet.md) contract now exists, but `apply` remains a target API until nodes, edges, badges, expansions, notes, and lenses move from the legacy engine into this store.
+
 ## Connections
 
 - Mutated by [GraphController](GraphController.md).
