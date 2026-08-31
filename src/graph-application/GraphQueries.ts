@@ -114,7 +114,7 @@ export class GraphQueries {
     const snapshot = this.snapshot();
     const expansion = snapshot.expansions.find((candidate) => candidate.id === expansionId);
     if (!expansion) return [];
-    return this.nodesByIds(snapshot, expansion.createdNodeIds);
+    return this.nodesByIds(snapshot, expansion.ownedNodeIds);
   }
 
   getNodesForBadge(
@@ -126,7 +126,7 @@ export class GraphQueries {
 
     for (const expansion of snapshot.expansions) {
       if (expansion.sourceNodeId !== sourceNodeId || expansion.linkTypeId !== linkTypeId) continue;
-      for (const nodeId of expansion.createdNodeIds) nodeIds.add(nodeId);
+      for (const nodeId of expansion.ownedNodeIds) nodeIds.add(nodeId);
     }
 
     return this.nodesByIds(snapshot, nodeIds);

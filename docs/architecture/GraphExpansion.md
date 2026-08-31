@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`GraphExpansion` records which runtime objects were introduced through one badge. Explicit ownership makes collapse and nested duplicate behavior understandable and testable.
+`GraphExpansion` records which runtime objects are owned through one badge. An expansion may reuse an object that another expansion already owns, so ownership does not necessarily mean creation. Explicit ownership makes collapse and nested duplicate behavior understandable and testable.
 
 Current implementation: [`src/graph-domain/GraphExpansion.ts`](../../src/graph-domain/GraphExpansion.ts)
 
@@ -15,8 +15,8 @@ interface GraphExpansion {
   sourceNoteId: NoteId;
   linkTypeId: LinkTypeId;
   contextId: GraphContextId;
-  createdNodeIds: readonly NodeInstanceId[];
-  createdEdgeIds: readonly EdgeId[];
+  ownedNodeIds: readonly NodeInstanceId[];
+  ownedEdgeIds: readonly EdgeId[];
   childExpansionIds: readonly ExpansionId[];
 }
 ```

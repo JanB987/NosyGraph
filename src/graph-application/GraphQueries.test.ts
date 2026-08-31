@@ -120,8 +120,8 @@ function createSnapshot(): GraphSnapshot {
         sourceNoteId: "A.md",
         linkTypeId: "parts",
         contextId: ROOT_CONTEXT,
-        createdNodeIds: ["A.md::parts::B.md"],
-        createdEdgeIds: [],
+        ownedNodeIds: ["A.md::parts::B.md"],
+        ownedEdgeIds: [],
         childExpansionIds: []
       }
     ],

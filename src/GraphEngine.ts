@@ -12772,16 +12772,16 @@ export class GraphEngine {
     });
 
     const expansions: LegacyGraphReadExpansion[] = [];
-    for (const [expansionId, createdNodeIds] of this.expansionNodes) {
+    for (const [expansionId, expansionNodeIds] of this.expansionNodes) {
       const separator = expansionId.lastIndexOf("::");
       if (separator <= 0) continue;
       const sourceNodeId = expansionId.slice(0, separator);
       const linkTypeId = this.normalizeLinkType(expansionId.slice(separator + 2));
       const sourceNode = this.nodeMap.get(sourceNodeId);
       if (!sourceNode || !linkTypeId) continue;
-      const ownedNodeIds = uniqueExistingNodeIds(createdNodeIds, existingNodeIds);
+      const ownedNodeIds = uniqueExistingNodeIds(expansionNodeIds, existingNodeIds);
       const ownedNodeIdSet = new Set(ownedNodeIds);
-      const createdEdgeIds = this.edges
+      const ownedEdgeIds = this.edges
         .filter((edge) =>
           edge.from === sourceNodeId
           && ownedNodeIdSet.has(edge.to)
@@ -12800,8 +12800,8 @@ export class GraphEngine {
         contextId: sourceNode.embeddedInstanceId
           ? contextIdForLegacyNode(sourceNode.embeddedInstanceId)
           : ROOT_GRAPH_CONTEXT_ID,
-        createdNodeIds: ownedNodeIds,
-        createdEdgeIds,
+        ownedNodeIds,
+        ownedEdgeIds,
         childExpansionIds
       });
     }

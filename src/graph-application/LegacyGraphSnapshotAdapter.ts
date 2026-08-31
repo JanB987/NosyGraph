@@ -97,8 +97,8 @@ export class LegacyGraphSnapshotAdapter implements GraphSnapshotSource {
   private copyExpansion(expansion: LegacyGraphReadExpansion): GraphExpansion {
     return {
       ...expansion,
-      createdNodeIds: [...expansion.createdNodeIds],
-      createdEdgeIds: [...expansion.createdEdgeIds],
+      ownedNodeIds: [...expansion.ownedNodeIds],
+      ownedEdgeIds: [...expansion.ownedEdgeIds],
       childExpansionIds: [...expansion.childExpansionIds]
     };
   }
