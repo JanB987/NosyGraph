@@ -20,7 +20,13 @@ const request: GraphBadgeRequest = {
 
 function snapshot(state: "collapsed" | "expanded" = "collapsed"): GraphSnapshot {
   return {
-    notes: [{ id: "A.md", path: "A.md", name: "A", properties: {} }],
+    notes: [{
+      id: "A.md",
+      path: "A.md",
+      name: "A",
+      availability: "available",
+      properties: {}
+    }],
     nodes: [{
       id: "instance:A",
       noteId: "A.md",

@@ -40,6 +40,7 @@ function target(noteId: string, suffix = noteId): MaterializedGraphExpansionTarg
     id: noteId,
     path: noteId,
     name: noteId.replace(/\.md$/, ""),
+    availability: "available",
     properties: {}
   };
   const node: GraphNodeInstance = {

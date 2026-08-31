@@ -13,6 +13,7 @@ interface GraphNote {
   id: NoteId;
   path: string;
   name: string;
+  availability: "available" | "missing";
   properties: Readonly<Record<string, unknown>>;
   icon?: GraphIcon;
   configuredSize?: number;
@@ -33,6 +34,8 @@ interface NoteRepository {
 ```
 
 The Obsidian implementation belongs in [Obsidian adapters](ObsidianAdapters.md).
+
+`availability` keeps unresolved wiki-link targets in the host-neutral model without pretending that an Obsidian file exists. Missing notes still have a stable ID, path, and display name, but their properties are empty until a file is created.
 
 ## Why note and node stay separate
 

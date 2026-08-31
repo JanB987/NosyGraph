@@ -83,7 +83,13 @@ describe("LegacyGraphSnapshotAdapter", () => {
       {
         readNote: (path, fallbackName) => {
           readCount += 1;
-          return { id: path, path, name: fallbackName, properties: { status: "active" } };
+          return {
+            id: path,
+            path,
+            name: fallbackName,
+            availability: "available",
+            properties: { status: "active" }
+          };
         }
       }
     );
@@ -91,7 +97,13 @@ describe("LegacyGraphSnapshotAdapter", () => {
     const snapshot = adapter.getSnapshot();
 
     expect(snapshot.notes).toEqual([
-      { id: "A.md", path: "A.md", name: "A", properties: { status: "active" } }
+      {
+        id: "A.md",
+        path: "A.md",
+        name: "A",
+        availability: "available",
+        properties: { status: "active" }
+      }
     ]);
     expect(readCount).toBe(1);
     expect(snapshot.nodes).toHaveLength(2);

@@ -30,9 +30,9 @@ function node(
 function createSnapshot(): GraphSnapshot {
   return {
     notes: [
-      { id: "A.md", path: "A.md", name: "A", properties: {} },
-      { id: "B.md", path: "B.md", name: "B", properties: {} },
-      { id: "C.md", path: "C.md", name: "C", properties: {} }
+      { id: "A.md", path: "A.md", name: "A", availability: "available", properties: {} },
+      { id: "B.md", path: "B.md", name: "B", availability: "available", properties: {} },
+      { id: "C.md", path: "C.md", name: "C", availability: "available", properties: {} }
     ],
     edges: [
       {

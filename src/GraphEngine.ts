@@ -673,13 +673,20 @@ export class GraphEngine {
         readNote: (path, fallbackName) => {
           const file = this.app.vault.getAbstractFileByPath(path);
           if (!(file instanceof TFile)) {
-            return { id: path, path, name: fallbackName, properties: {} };
+            return {
+              id: path,
+              path,
+              name: fallbackName,
+              availability: "missing",
+              properties: {}
+            };
           }
           const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
           return {
             id: file.path,
             path: file.path,
             name: file.basename || fallbackName,
+            availability: "available",
             properties: frontmatter && typeof frontmatter === "object"
               ? { ...frontmatter }
               : {}
