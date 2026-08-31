@@ -40,4 +40,5 @@ On failure, it returns a reason instead of producing a partial change. Failures 
 - Produces a [GraphChangeSet](GraphChangeSet.md).
 - Creates and connects [GraphExpansion](GraphExpansion.md) ownership.
 - Receives entities from [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md).
+- Is orchestrated by [GraphExpansionTransitionService](GraphExpansionTransitionService.md).
 - Its result will eventually be applied by [GraphStore](GraphStore.md).

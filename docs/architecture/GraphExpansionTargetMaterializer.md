@@ -48,4 +48,5 @@ The operation returns an explicit failure for a stale badge, missing source node
 - Reads current state through [GraphQueries](GraphQueries.md).
 - Reads note data defined by [GraphNote](GraphNote.md).
 - Produces the materialized input for [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
+- Is orchestrated by [GraphExpansionTransitionService](GraphExpansionTransitionService.md).
 - Delegates initial geometry to the future [PhysicsEngine](PhysicsEngine.md) boundary.
