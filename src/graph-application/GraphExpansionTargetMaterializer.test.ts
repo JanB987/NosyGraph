@@ -116,7 +116,7 @@ describe("DefaultGraphExpansionTargetMaterializer", () => {
         toNodeId: "B.md",
         linkTypeId: "parts",
         contextId: "graph:root",
-        origin: "discovered"
+        origin: "badge-expansion"
       }
     }]);
   });

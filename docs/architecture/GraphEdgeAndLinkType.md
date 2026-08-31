@@ -35,6 +35,8 @@ interface GraphEdge {
 }
 ```
 
+`origin` distinguishes edges introduced by a badge expansion from independently discovered, visible, overlay, and parent edges. This distinction lets collapse remove an expansion edge without deleting the same relationship when another graph rule still keeps it visible.
+
 ## Functions
 
 ```ts
@@ -49,4 +51,4 @@ Avoid subclasses for each link type. Data-driven semantics plus pure functions a
 
 Edges are stored in [GraphStore](GraphStore.md), rendered by [GraphRenderer](GraphRenderer.md), and converted into forces by [PhysicsEngine](PhysicsEngine.md).
 
-During migration, `LegacyGraphSnapshotAdapter` maps the active engine's discovered, visible, overlay, and parent edges into this model. It copies endpoint IDs and classifies their origin without changing the renderer's edge collection.
+During migration, `LegacyGraphSnapshotAdapter` maps the active engine's discovered, visible, overlay, and parent edges into this model. New host-neutral expansion edges use `badge-expansion`. The adapter copies endpoint IDs and classifies their origin without changing the renderer's edge collection.

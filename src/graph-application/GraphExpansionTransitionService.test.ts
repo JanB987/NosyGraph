@@ -81,7 +81,7 @@ const target: MaterializedGraphExpansionTarget = {
     toNodeId: "B.md",
     linkTypeId: plan.linkTypeId,
     contextId: plan.contextId,
-    origin: "discovered"
+    origin: "badge-expansion"
   }
 };
 

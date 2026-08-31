@@ -64,7 +64,7 @@ function target(noteId: string, suffix = noteId): MaterializedGraphExpansionTarg
     toNodeId: node.id,
     linkTypeId: plan.linkTypeId,
     contextId: plan.contextId,
-    origin: "discovered"
+    origin: "badge-expansion"
   };
   return { note, node, edge };
 }

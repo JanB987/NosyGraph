@@ -123,7 +123,7 @@ describe("GraphStore graph changes", () => {
         toNodeId: "B",
         linkTypeId: "parts",
         contextId: "graph:root",
-        origin: "discovered"
+        origin: "badge-expansion"
       }],
       removeIds: []
     };

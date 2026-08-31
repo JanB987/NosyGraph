@@ -12794,7 +12794,14 @@ export class GraphEngine {
           && ownedNodeIdSet.has(edge.to)
           && this.normalizeLinkType(edge.linkType ?? edge.type) === linkTypeId
         )
-        .map((edge) => `${edge.from}::${edge.to}::${linkTypeId}`);
+        .map((edge) =>
+          `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(
+            edge.from,
+            edge.to,
+            edge.type,
+            edge.linkType
+          )}`
+        );
       const childExpansionIds = Array.from(this.expansionParent.entries())
         .filter(([, parentId]) => parentId === expansionId)
         .map(([childId]) => childId);

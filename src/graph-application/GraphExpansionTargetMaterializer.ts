@@ -91,7 +91,7 @@ implements GraphExpansionTargetMaterializer {
   ) {
     this.defaultNodeRadius = positiveNumber(options.defaultNodeRadius, 20);
     this.preferredDistance = positiveNumber(options.preferredDistance, 120);
-    this.edgeOrigin = options.edgeOrigin ?? "discovered";
+    this.edgeOrigin = options.edgeOrigin ?? "badge-expansion";
   }
 
   async materialize(
@@ -245,7 +245,7 @@ export function createContextGraphNodeId(
 export function createGraphExpansionEdge(
   plan: GraphBadgeExpandPlan,
   targetNodeId: NodeInstanceId,
-  origin: GraphEdgeOrigin = "discovered"
+  origin: GraphEdgeOrigin = "badge-expansion"
 ): GraphEdge {
   return {
     id: `edge::${plan.sourceNodeId}::${targetNodeId}::${plan.linkTypeId}::${plan.linkTypeId}`,

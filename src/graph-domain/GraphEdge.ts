@@ -6,7 +6,12 @@ import type {
 } from "./graph-identifiers";
 
 /** Explains how a visible edge entered the runtime graph. */
-export type GraphEdgeOrigin = "discovered" | "overlay" | "visible" | "parent";
+export type GraphEdgeOrigin =
+  | "badge-expansion"
+  | "discovered"
+  | "overlay"
+  | "visible"
+  | "parent";
 
 /** One visible relationship between two runtime node instances. */
 export interface GraphEdge {
@@ -17,4 +22,3 @@ export interface GraphEdge {
   contextId: GraphContextId;
   origin: GraphEdgeOrigin;
 }
-
