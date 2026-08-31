@@ -1,13 +1,130 @@
-import type { NodeInstanceId } from "../graph-domain/graph-identifiers";
+import type { GraphBadge } from "../graph-domain/GraphBadge";
+import {
+  countGraphChanges,
+  type GraphChangeSet,
+  type GraphEntityChanges
+} from "../graph-domain/GraphChangeSet";
+import type { GraphEdge } from "../graph-domain/GraphEdge";
+import type { GraphExpansion } from "../graph-domain/GraphExpansion";
+import type { GraphLens } from "../graph-domain/GraphLens";
+import type { GraphNodeInstance } from "../graph-domain/GraphNodeInstance";
+import type { GraphNote } from "../graph-domain/GraphNote";
+import type { GraphSnapshot, GraphSnapshotSource } from "../graph-domain/GraphSnapshot";
+import type {
+  BadgeId,
+  EdgeId,
+  ExpansionId,
+  LensId,
+  NodeInstanceId,
+  NoteId
+} from "../graph-domain/graph-identifiers";
+
+export type GraphStoreCollectionName =
+  | "notes"
+  | "nodes"
+  | "edges"
+  | "badges"
+  | "expansions"
+  | "lenses";
+
+export type GraphChangeSetApplyResult =
+  | { applied: true; changeCount: number }
+  | {
+      applied: false;
+      reason: "duplicate-id" | "conflicting-id" | "missing-reference" | "expansion-cycle";
+      collection: GraphStoreCollectionName;
+      entityId: string;
+      referenceId?: string;
+    };
 
 /**
  * Incremental owner of mutable graph runtime state.
  *
- * Selection is the first migrated state category. Nodes, edges, expansions,
- * and lenses will move here in later behavior-preserving increments.
+ * Selection is already connected to the live engine. Snapshot collections and
+ * atomic changes are available for the new path but are not live-connected yet.
  */
-export class GraphStore {
+export class GraphStore implements GraphSnapshotSource {
+  private notes: Map<NoteId, GraphNote>;
+  private nodes: Map<NodeInstanceId, GraphNodeInstance>;
+  private edges: Map<EdgeId, GraphEdge>;
+  private badges: Map<BadgeId, GraphBadge>;
+  private expansions: Map<ExpansionId, GraphExpansion>;
+  private lenses: Map<LensId, GraphLens>;
   private readonly selectedNodeIds = new Set<NodeInstanceId>();
+
+  constructor(snapshot: GraphSnapshot = emptyGraphSnapshot()) {
+    this.notes = indexEntities(snapshot.notes, copyNote);
+    this.nodes = indexEntities(snapshot.nodes, copyNode);
+    this.edges = indexEntities(snapshot.edges, copyEntity);
+    this.badges = indexEntities(snapshot.badges, copyEntity);
+    this.expansions = indexEntities(snapshot.expansions, copyExpansion);
+    this.lenses = indexEntities(snapshot.lenses, copyLens);
+    for (const node of snapshot.nodes) {
+      if (node.selected) this.selectedNodeIds.add(node.id);
+    }
+  }
+
+  getSnapshot(): GraphSnapshot {
+    return {
+      notes: Array.from(this.notes.values(), copyNote),
+      nodes: Array.from(this.nodes.values(), (node) => copyNode({
+        ...node,
+        selected: this.selectedNodeIds.has(node.id)
+      })),
+      edges: Array.from(this.edges.values(), copyEntity),
+      badges: Array.from(this.badges.values(), copyEntity),
+      expansions: Array.from(this.expansions.values(), copyExpansion),
+      lenses: Array.from(this.lenses.values(), copyLens)
+    };
+  }
+
+  applyChangeSet(changeSet: GraphChangeSet): GraphChangeSetApplyResult {
+    const structuralFailure = validateChangeSetStructure(changeSet);
+    if (structuralFailure) return structuralFailure;
+
+    const currentNodes = new Map(
+      Array.from(this.nodes.entries(), ([id, node]) => [
+        id,
+        { ...node, selected: this.selectedNodeIds.has(id) }
+      ])
+    );
+    const nextNotes = applyEntityChanges(this.notes, changeSet.notes, copyNote);
+    const nextNodes = applyEntityChanges(currentNodes, changeSet.nodes, copyNode);
+    const nextEdges = applyEntityChanges(this.edges, changeSet.edges, copyEntity);
+    const nextBadges = applyEntityChanges(this.badges, changeSet.badges, copyEntity);
+    const nextExpansions = applyEntityChanges(
+      this.expansions,
+      changeSet.expansions,
+      copyExpansion
+    );
+    const nextLenses = applyEntityChanges(this.lenses, changeSet.lenses, copyLens);
+    const referenceFailure = validateReferences({
+      notes: nextNotes,
+      nodes: nextNodes,
+      edges: nextEdges,
+      badges: nextBadges,
+      expansions: nextExpansions,
+      lenses: nextLenses
+    });
+    if (referenceFailure) return referenceFailure;
+
+    const nextSelectedNodeIds = new Set(this.selectedNodeIds);
+    for (const nodeId of changeSet.nodes.removeIds) nextSelectedNodeIds.delete(nodeId);
+    for (const node of changeSet.nodes.upsert) {
+      if (node.selected) nextSelectedNodeIds.add(node.id);
+      else nextSelectedNodeIds.delete(node.id);
+    }
+
+    this.notes = nextNotes;
+    this.nodes = nextNodes;
+    this.edges = nextEdges;
+    this.badges = nextBadges;
+    this.expansions = nextExpansions;
+    this.lenses = nextLenses;
+    this.selectedNodeIds.clear();
+    for (const nodeId of nextSelectedNodeIds) this.selectedNodeIds.add(nodeId);
+    return { applied: true, changeCount: countGraphChanges(changeSet) };
+  }
 
   getSelectedNodeIds(): readonly NodeInstanceId[] {
     return Array.from(this.selectedNodeIds);
@@ -72,3 +189,219 @@ export class GraphStore {
   }
 }
 
+interface GraphStateMaps {
+  notes: ReadonlyMap<NoteId, GraphNote>;
+  nodes: ReadonlyMap<NodeInstanceId, GraphNodeInstance>;
+  edges: ReadonlyMap<EdgeId, GraphEdge>;
+  badges: ReadonlyMap<BadgeId, GraphBadge>;
+  expansions: ReadonlyMap<ExpansionId, GraphExpansion>;
+  lenses: ReadonlyMap<LensId, GraphLens>;
+}
+
+function emptyGraphSnapshot(): GraphSnapshot {
+  return { notes: [], nodes: [], edges: [], badges: [], expansions: [], lenses: [] };
+}
+
+function indexEntities<TEntity extends { id: string }>(
+  entities: readonly TEntity[],
+  copy: (entity: TEntity) => TEntity
+): Map<string, TEntity> {
+  return new Map(entities.map((entity) => [entity.id, copy(entity)]));
+}
+
+function applyEntityChanges<TEntity extends { id: string }>(
+  current: ReadonlyMap<string, TEntity>,
+  changes: GraphEntityChanges<TEntity, string>,
+  copy: (entity: TEntity) => TEntity
+): Map<string, TEntity> {
+  const next = new Map(current);
+  for (const id of changes.removeIds) next.delete(id);
+  for (const entity of changes.upsert) next.set(entity.id, copy(entity));
+  return next;
+}
+
+function validateChangeSetStructure(changeSet: GraphChangeSet): GraphChangeSetApplyResult | null {
+  const collections: Array<[
+    GraphStoreCollectionName,
+    GraphEntityChanges<{ id: string }, string>
+  ]> = [
+    ["notes", changeSet.notes],
+    ["nodes", changeSet.nodes],
+    ["edges", changeSet.edges],
+    ["badges", changeSet.badges],
+    ["expansions", changeSet.expansions],
+    ["lenses", changeSet.lenses]
+  ];
+  for (const [collection, changes] of collections) {
+    const upsertIds = new Set<string>();
+    for (const entity of changes.upsert) {
+      if (upsertIds.has(entity.id)) {
+        return { applied: false, reason: "duplicate-id", collection, entityId: entity.id };
+      }
+      upsertIds.add(entity.id);
+    }
+    const removeIds = new Set<string>();
+    for (const id of changes.removeIds) {
+      if (removeIds.has(id)) {
+        return { applied: false, reason: "duplicate-id", collection, entityId: id };
+      }
+      if (upsertIds.has(id)) {
+        return { applied: false, reason: "conflicting-id", collection, entityId: id };
+      }
+      removeIds.add(id);
+    }
+  }
+  return null;
+}
+
+function validateReferences(state: GraphStateMaps): GraphChangeSetApplyResult | null {
+  for (const node of state.nodes.values()) {
+    if (!state.notes.has(node.noteId)) {
+      return missingReference("nodes", node.id, node.noteId);
+    }
+    if (
+      node.origin.kind === "badge-expansion"
+      && !state.expansions.has(node.origin.expansionId)
+    ) {
+      return missingReference("nodes", node.id, node.origin.expansionId);
+    }
+  }
+  for (const edge of state.edges.values()) {
+    if (!state.nodes.has(edge.fromNodeId)) {
+      return missingReference("edges", edge.id, edge.fromNodeId);
+    }
+    if (!state.nodes.has(edge.toNodeId)) {
+      return missingReference("edges", edge.id, edge.toNodeId);
+    }
+  }
+  for (const badge of state.badges.values()) {
+    if (!state.nodes.has(badge.nodeId)) {
+      return missingReference("badges", badge.id, badge.nodeId);
+    }
+    if (badge.expansionId && !state.expansions.has(badge.expansionId)) {
+      return missingReference("badges", badge.id, badge.expansionId);
+    }
+  }
+  for (const expansion of state.expansions.values()) {
+    if (!state.nodes.has(expansion.sourceNodeId)) {
+      return missingReference("expansions", expansion.id, expansion.sourceNodeId);
+    }
+    if (!state.notes.has(expansion.sourceNoteId)) {
+      return missingReference("expansions", expansion.id, expansion.sourceNoteId);
+    }
+    for (const nodeId of expansion.ownedNodeIds) {
+      if (!state.nodes.has(nodeId)) return missingReference("expansions", expansion.id, nodeId);
+    }
+    for (const edgeId of expansion.ownedEdgeIds) {
+      if (!state.edges.has(edgeId)) return missingReference("expansions", expansion.id, edgeId);
+    }
+    for (const childId of expansion.childExpansionIds) {
+      if (!state.expansions.has(childId)) {
+        return missingReference("expansions", expansion.id, childId);
+      }
+    }
+  }
+  const cycleId = findExpansionCycle(state.expansions);
+  if (cycleId) {
+    return {
+      applied: false,
+      reason: "expansion-cycle",
+      collection: "expansions",
+      entityId: cycleId
+    };
+  }
+  for (const lens of state.lenses.values()) {
+    if (!state.nodes.has(lens.sourceNodeId)) {
+      return missingReference("lenses", lens.id, lens.sourceNodeId);
+    }
+  }
+  return null;
+}
+
+function findExpansionCycle(
+  expansions: ReadonlyMap<ExpansionId, GraphExpansion>
+): ExpansionId | null {
+  const visiting = new Set<ExpansionId>();
+  const visited = new Set<ExpansionId>();
+  const visit = (id: ExpansionId): ExpansionId | null => {
+    if (visiting.has(id)) return id;
+    if (visited.has(id)) return null;
+    visiting.add(id);
+    for (const childId of expansions.get(id)?.childExpansionIds ?? []) {
+      const cycleId = visit(childId);
+      if (cycleId) return cycleId;
+    }
+    visiting.delete(id);
+    visited.add(id);
+    return null;
+  };
+  for (const id of expansions.keys()) {
+    const cycleId = visit(id);
+    if (cycleId) return cycleId;
+  }
+  return null;
+}
+
+function missingReference(
+  collection: GraphStoreCollectionName,
+  entityId: string,
+  referenceId: string
+): GraphChangeSetApplyResult {
+  return {
+    applied: false,
+    reason: "missing-reference",
+    collection,
+    entityId,
+    referenceId
+  };
+}
+
+function copyNote(note: GraphNote): GraphNote {
+  return { ...note, properties: copyGraphRecord(note.properties) };
+}
+
+function copyGraphRecord(
+  record: Readonly<Record<string, unknown>>
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [key, copyGraphValue(value)])
+  );
+}
+
+function copyGraphValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(copyGraphValue);
+  if (value && typeof value === "object") {
+    return copyGraphRecord(value as Readonly<Record<string, unknown>>);
+  }
+  return value;
+}
+
+function copyNode(node: GraphNodeInstance): GraphNodeInstance {
+  return {
+    ...node,
+    position: { ...node.position },
+    velocity: { ...node.velocity },
+    origin: { ...node.origin }
+  };
+}
+
+function copyExpansion(expansion: GraphExpansion): GraphExpansion {
+  return {
+    ...expansion,
+    ownedNodeIds: [...expansion.ownedNodeIds],
+    ownedEdgeIds: [...expansion.ownedEdgeIds],
+    childExpansionIds: [...expansion.childExpansionIds]
+  };
+}
+
+function copyLens(lens: GraphLens): GraphLens {
+  return {
+    ...lens,
+    bounds: { ...lens.bounds },
+    viewport: { ...lens.viewport }
+  };
+}
+
+function copyEntity<TEntity extends object>(entity: TEntity): TEntity {
+  return { ...entity };
+}

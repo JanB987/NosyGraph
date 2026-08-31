@@ -11,6 +11,7 @@ import type {
 import type { GraphExpansionTargetMaterializer } from "./GraphExpansionTargetMaterializer";
 import { GraphExpansionTransitionService } from "./GraphExpansionTransitionService";
 import { GraphQueries } from "./GraphQueries";
+import { GraphStore } from "./GraphStore";
 
 const plan: GraphBadgeExpandPlan = {
   kind: "expand",
@@ -138,6 +139,29 @@ describe("GraphExpansionTransitionService", () => {
       id: badge.id,
       state: "expanded",
       expansionId: plan.expansionId
+    });
+  });
+
+  it("produces a change set accepted atomically by GraphStore", async () => {
+    const store = new GraphStore(snapshot());
+    const transition = new GraphExpansionTransitionService(
+      new GraphQueries(store),
+      materializer()
+    );
+    const result = await transition.create(plan);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(store.applyChangeSet(result.changeSet)).toEqual({
+      applied: true,
+      changeCount: 5
+    });
+    expect(store.getSnapshot()).toMatchObject({
+      notes: [expect.objectContaining({ id: "A.md" }), targetNote],
+      nodes: [sourceNode, target.node],
+      edges: [target.edge],
+      badges: [expect.objectContaining({ state: "expanded" })],
+      expansions: [expect.objectContaining({ id: plan.expansionId })]
     });
   });
 

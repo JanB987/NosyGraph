@@ -6,7 +6,7 @@
 
 Current implementation: [`src/graph-application/GraphStore.ts`](../../src/graph-application/GraphStore.ts)
 
-The migration begins with selection state. Other state categories remain in the legacy engine until their individual behavior is characterized.
+Selection state is connected to the live engine. The store can now also be initialized from a `GraphSnapshot`, return detached snapshots, and atomically apply a [GraphChangeSet](GraphChangeSet.md). Those snapshot collections are tested but are not connected to live execution yet.
 
 ## Current selection call flow
 
@@ -37,7 +37,7 @@ mouse, keyboard, marquee, context menu, or drag interaction
 - [GraphLens](GraphLens.md) and container contexts
 - Viewports and transient UI-independent runtime state
 
-## Proposed API
+## Current API
 
 ```ts
 class GraphStore {
@@ -48,23 +48,33 @@ class GraphStore {
   toggleSelection(nodeId: NodeInstanceId): boolean;
   replaceSelection(nodeIds: Iterable<NodeInstanceId>): boolean;
   clearSelection(): boolean;
-
-  // Target API after later state categories are migrated:
   getSnapshot(): GraphSnapshot;
-  apply(changeSet: GraphChangeSet): void;
-  replace(snapshot: GraphSnapshot): void;
-  subscribe(listener: GraphStateListener): Unsubscribe;
+  applyChangeSet(changeSet: GraphChangeSet): GraphChangeSetApplyResult;
 }
 ```
 
 `GraphSnapshot` and all collections returned from the store are read-only.
 
-The [GraphChangeSet](GraphChangeSet.md) contract now exists, but `apply` remains a target API until nodes, edges, badges, expansions, notes, and lenses move from the legacy engine into this store.
+## Atomic application
+
+`applyChangeSet` builds replacement maps for notes, nodes, edges, badges, expansions, and lenses before changing store state. It validates:
+
+- Duplicate and conflicting upsert/removal IDs.
+- Note references from nodes and expansions.
+- Node references from edges, badges, expansions, and lenses.
+- Edge ownership references from expansions.
+- Badge-to-expansion and nested expansion references.
+- Cycles in nested expansion ownership.
+
+A failed validation returns a structured reason and leaves every collection and selection unchanged. A successful validation swaps all replacement maps synchronously.
+
+The live engine still owns these six collections during migration. We will connect the store only when the complete expand and collapse behavior is available, avoiding synchronized mutable copies.
 
 ## Connections
 
 - Mutated by [GraphController](GraphController.md).
 - Read through [GraphQueries](GraphQueries.md).
+- Applies transitions created by [GraphExpansionTransitionService](GraphExpansionTransitionService.md).
 - Snapshots are consumed by [GraphRenderer](GraphRenderer.md) and [PhysicsEngine](PhysicsEngine.md).
 - Serialized into [GraphDocument](GraphDocument.md) runtime state.
 

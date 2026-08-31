@@ -110,7 +110,8 @@ GraphController <--------> Obsidian adapters
 - [x] Create expansion change sets from materialized target nodes and edges.
 - [x] Extract a host-neutral boundary that materializes target notes, nodes, and edges.
 - [x] Compose materialization and change-set creation behind one expansion transition service.
-- [ ] Add atomic `GraphChangeSet` application to `GraphStore`.
+- [x] Add atomic `GraphChangeSet` application to `GraphStore`.
+- [ ] Create atomic collapse change sets with shared-ownership protection.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

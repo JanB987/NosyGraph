@@ -47,4 +47,4 @@ This makes logs and tests more informative without throwing for expected stale-s
 - Reads current state through [GraphQueries](GraphQueries.md).
 - Delegates entity preparation to [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md).
 - Delegates atomic calculation to [GraphExpansionChangeSet](GraphExpansionChangeSet.md).
-- Will pass successful changes to the future atomic [GraphStore](GraphStore.md) application method.
+- Produces changes accepted by the atomic [GraphStore](GraphStore.md) application method.
