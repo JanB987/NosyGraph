@@ -19,6 +19,10 @@ export class ObsidianGraphExpansionNoteAdapter<TFile>
   ) {}
 
   async readNote(noteId: NoteId): Promise<GraphNote | undefined> {
+    return this.readNoteNow(noteId);
+  }
+
+  readNoteNow(noteId: NoteId, fallbackName?: string): GraphNote | undefined {
     const normalizedId = String(noteId ?? "").trim();
     if (!normalizedId) return undefined;
 
@@ -27,7 +31,7 @@ export class ObsidianGraphExpansionNoteAdapter<TFile>
       return {
         id: normalizedId,
         path: normalizedId,
-        name: noteNameFromPath(normalizedId),
+        name: String(fallbackName ?? "").trim() || noteNameFromPath(normalizedId),
         availability: "missing",
         properties: {}
       };
@@ -41,7 +45,9 @@ export class ObsidianGraphExpansionNoteAdapter<TFile>
     return {
       id: path,
       path,
-      name: String(this.options.getName(file) ?? "").trim() || noteNameFromPath(path),
+      name: String(this.options.getName(file) ?? "").trim()
+        || String(fallbackName ?? "").trim()
+        || noteNameFromPath(path),
       availability: "available",
       properties: { ...properties },
       ...(configuredSize !== undefined ? { configuredSize } : {}),

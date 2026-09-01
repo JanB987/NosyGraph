@@ -3,6 +3,7 @@ import type { GraphBadgeToggleShadowObservation } from "./GraphBadgeToggleShadow
 import { GraphStore } from "./GraphStore";
 
 export type GraphBadgeToggleComparedCollection =
+  | "notes"
   | "nodes"
   | "edges"
   | "badges"
@@ -70,6 +71,7 @@ function compareSnapshots(
   actual: GraphSnapshot
 ): GraphBadgeToggleShadowDifference[] {
   return [
+    ...compareCollection("notes", expected.notes, actual.notes, projectNote),
     ...compareCollection("nodes", expected.nodes, actual.nodes, projectNode),
     ...compareCollection("edges", expected.edges, actual.edges, projectEntity),
     ...compareCollection("badges", expected.badges, actual.badges, projectBadge),
@@ -113,6 +115,19 @@ function compareCollection<TEntity extends { id: string }>(
     }
   }
   return differences;
+}
+
+function projectNote(
+  entity: GraphSnapshot["notes"][number]
+): Readonly<Record<string, unknown>> {
+  return {
+    path: entity.path,
+    name: entity.name,
+    availability: entity.availability,
+    properties: entity.properties,
+    configuredSize: entity.configuredSize,
+    icon: entity.icon
+  };
 }
 
 function projectNode(entity: GraphSnapshot["nodes"][number]): Readonly<Record<string, unknown>> {

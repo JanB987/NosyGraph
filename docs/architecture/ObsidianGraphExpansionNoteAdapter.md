@@ -8,6 +8,8 @@ Current implementation: [`src/graph-application/ObsidianGraphExpansionNoteAdapte
 
 The adapter receives small callbacks rather than importing the Obsidian API into domain logic. The current engine owned by [GraphView](GraphView.md) supplies those callbacks from the vault and metadata cache during the migration.
 
+`readNoteNow` exposes the same conversion synchronously for [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md). Asynchronous expansion reads delegate to that function, so both paths use one definition of note identity and metadata.
+
 ## Conversion
 
 For an existing vault file it creates a [GraphNote](GraphNote.md) containing:
@@ -26,4 +28,5 @@ An empty identity or an existing file without a usable path returns `undefined`,
 - Implements `GraphExpansionNoteReader` from [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md).
 - Reads host data supplied by [Obsidian adapters](ObsidianAdapters.md).
 - Is used by [GraphBadgeToggleShadowService](GraphBadgeToggleShadowService.md).
+- Supplies note conversion to [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md).
 - Does not mutate notes, metadata, graph state, or UI state.

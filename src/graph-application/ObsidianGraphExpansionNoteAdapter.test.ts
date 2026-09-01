@@ -51,6 +51,18 @@ describe("ObsidianGraphExpansionNoteAdapter", () => {
     });
   });
 
+  it("shares synchronous snapshot conversion and preserves a missing fallback name", () => {
+    const reader = adapter([]);
+
+    expect(reader.readNoteNow("Folder/Missing.md", "Display name")).toEqual({
+      id: "Folder/Missing.md",
+      path: "Folder/Missing.md",
+      name: "Display name",
+      availability: "missing",
+      properties: {}
+    });
+  });
+
   it("rejects an empty identity", async () => {
     await expect(adapter([]).readNote("  ")).resolves.toBeUndefined();
   });

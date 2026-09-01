@@ -10,7 +10,7 @@ It is a read adapter. It copies state and never changes legacy nodes, edges, bad
 
 ## Responsibilities
 
-- Deduplicate visible runtime nodes into [GraphNote](GraphNote.md) records.
+- Deduplicate visible runtime nodes into [GraphNote](GraphNote.md) records using [ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md), shared with expansion materialization.
 - Deep-copy mutable node coordinates and expansion ownership arrays.
 - Preserve node-instance identities and graph contexts.
 - Expose configured [GraphBadge](GraphBadge.md) state.

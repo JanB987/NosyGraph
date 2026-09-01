@@ -217,6 +217,32 @@ describe("GraphBadgeToggleShadowComparator", () => {
     ]);
   });
 
+  it("reports note metadata differences independently from node physics", () => {
+    const observation = successfulObservation();
+    observation.afterSnapshot = {
+      ...observation.afterSnapshot,
+      notes: observation.afterSnapshot.notes.map((note) => note.id === "B.md"
+        ? {
+            ...note,
+            availability: "missing",
+            properties: { status: "changed" },
+            configuredSize: 32,
+            icon: "🔎"
+          }
+        : note)
+    };
+
+    const result = new GraphBadgeToggleShadowComparator().compare(observation);
+    expect(result).toMatchObject({ status: "compared", matches: false });
+    if (result.status !== "compared") throw new Error("Expected comparison");
+    expect(result.differences).toEqual([{
+      collection: "notes",
+      entityId: "B.md",
+      kind: "value-mismatch",
+      fields: ["availability", "properties", "configuredSize", "icon"]
+    }]);
+  });
+
   it("does not compare an unapplied legacy action", () => {
     const observation = successfulObservation();
     observation.execution = {

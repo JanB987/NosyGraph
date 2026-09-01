@@ -126,7 +126,9 @@ GraphController <--------> Obsidian adapters
 - [x] Record and compare shadow change sets with the graph state produced by legacy execution.
 - [x] Align legacy expansion-edge identity and origin with explicit expansion ownership.
 - [x] Materialize badges for newly visible expansion target nodes.
-- [ ] Compare note-state semantics and remove remaining systematic shadow differences.
+- [x] Compare note-state semantics and unify snapshot and expansion note conversion.
+- [ ] Create the shadow-mode manual regression matrix and diagnostic checklist.
+- [ ] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

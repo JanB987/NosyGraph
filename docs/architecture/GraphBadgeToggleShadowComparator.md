@@ -17,6 +17,7 @@ The comparator is diagnostic only. It neither executes a plan nor changes either
 
 ## Compared semantics
 
+- Notes: path, display name, availability, frontmatter properties, configured size, and icon.
 - Nodes: note identity, graph context, and ownership origin.
 - Edges: endpoints, LinkType, context, and origin.
 - Badges: identity, presentation-independent behavior fields, state, and expansion identity.
@@ -36,5 +37,5 @@ The result is `not-comparable` when shadow calculation throws, transition calcul
 
 - Consumes observations from [GraphBadgeToggleShadowService](GraphBadgeToggleShadowService.md).
 - Uses [GraphStore](GraphStore.md) to materialize expected state atomically.
-- Compares [GraphNodeInstance](GraphNodeInstance.md), [GraphEdge](GraphEdgeAndLinkType.md), [GraphBadge](GraphBadge.md), and [GraphExpansion](GraphExpansion.md) records.
+- Compares [GraphNote](GraphNote.md), [GraphNodeInstance](GraphNodeInstance.md), [GraphEdge](GraphEdgeAndLinkType.md), [GraphBadge](GraphBadge.md), and [GraphExpansion](GraphExpansion.md) records.
 - Reports migration gaps to the current engine without affecting live behavior.

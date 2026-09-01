@@ -674,59 +674,7 @@ export class GraphEngine {
   ) {
     this.container = parent;
     this.graphPropertyKeys = normalizeGraphPropertyKeys(menuOptions.graphPropertyKeys);
-    const snapshotAdapter = new LegacyGraphSnapshotAdapter(
-      { getLegacyGraphReadState: () => this.getLegacyGraphReadState() },
-      {
-        readNote: (path, fallbackName) => {
-          const file = this.app.vault.getAbstractFileByPath(path);
-          if (!(file instanceof TFile)) {
-            return {
-              id: path,
-              path,
-              name: fallbackName,
-              availability: "missing",
-              properties: {}
-            };
-          }
-          const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-          return {
-            id: file.path,
-            path: file.path,
-            name: file.basename || fallbackName,
-            availability: "available",
-            properties: frontmatter && typeof frontmatter === "object"
-              ? { ...frontmatter }
-              : {}
-          };
-        }
-      }
-    );
-    this.architectureQueries = new GraphQueries(snapshotAdapter);
-    const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
-      getSource: (noteId) => {
-        const file = this.app.vault.getAbstractFileByPath(noteId);
-        return file instanceof TFile ? file : undefined;
-      },
-      getLinkType: (linkTypeId, contextId) =>
-        this.getLegacyRelationshipLinkType(linkTypeId, contextId),
-      resolveTargets: (source, linkType) => this.resolveLinkedTargets(source, linkType)
-    });
-    const toggleService = new GraphBadgeToggleService(
-      this.architectureQueries,
-      relationshipTargetReader
-    );
-    const liveToggleExecutor = new LegacyGraphBadgeToggleExecutor<GraphNode, TFile, O3LinkType>({
-      getNode: (nodeId) => this.nodeMap.get(nodeId),
-      getFile: (sourcePath) => {
-        const file = this.app.vault.getAbstractFileByPath(sourcePath);
-        return file instanceof TFile ? file : undefined;
-      },
-      getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
-      normalizeLinkType: (value) => this.normalizeLinkType(value),
-      isExpanded: (expansionId) => this.expandedByBadge.has(expansionId),
-      toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id)
-    });
-    const expansionNoteReader = new ObsidianGraphExpansionNoteAdapter<TFile>({
+    const architectureNoteReader = new ObsidianGraphExpansionNoteAdapter<TFile>({
       getFile: (noteId) => {
         const file = this.app.vault.getAbstractFileByPath(noteId);
         return file instanceof TFile ? file : undefined;
@@ -760,6 +708,46 @@ export class GraphEngine {
         return icon || undefined;
       }
     });
+    const snapshotAdapter = new LegacyGraphSnapshotAdapter(
+      { getLegacyGraphReadState: () => this.getLegacyGraphReadState() },
+      {
+        readNote: (path, fallbackName) => architectureNoteReader.readNoteNow(
+          path,
+          fallbackName
+        ) ?? {
+          id: path,
+          path,
+          name: fallbackName,
+          availability: "missing",
+          properties: {}
+        }
+      }
+    );
+    this.architectureQueries = new GraphQueries(snapshotAdapter);
+    const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
+      getSource: (noteId) => {
+        const file = this.app.vault.getAbstractFileByPath(noteId);
+        return file instanceof TFile ? file : undefined;
+      },
+      getLinkType: (linkTypeId, contextId) =>
+        this.getLegacyRelationshipLinkType(linkTypeId, contextId),
+      resolveTargets: (source, linkType) => this.resolveLinkedTargets(source, linkType)
+    });
+    const toggleService = new GraphBadgeToggleService(
+      this.architectureQueries,
+      relationshipTargetReader
+    );
+    const liveToggleExecutor = new LegacyGraphBadgeToggleExecutor<GraphNode, TFile, O3LinkType>({
+      getNode: (nodeId) => this.nodeMap.get(nodeId),
+      getFile: (sourcePath) => {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        return file instanceof TFile ? file : undefined;
+      },
+      getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
+      normalizeLinkType: (value) => this.normalizeLinkType(value),
+      isExpanded: (expansionId) => this.expandedByBadge.has(expansionId),
+      toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id)
+    });
     const expansionBadgeReader = new LegacyGraphExpansionBadgeAdapter({
       getDefinitions: (contextId) => this.getPersistableBadgeLinkTypesForContext(contextId)
         .flatMap((linkType) => {
@@ -779,7 +767,7 @@ export class GraphEngine {
     const shadowComparator = new GraphBadgeToggleShadowComparator();
     const toggleExecutor = new GraphBadgeToggleShadowService(
       snapshotAdapter,
-      expansionNoteReader,
+      architectureNoteReader,
       expansionBadgeReader,
       liveToggleExecutor,
       {
