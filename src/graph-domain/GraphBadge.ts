@@ -6,6 +6,13 @@ import type {
   NodeInstanceId
 } from "./graph-identifiers";
 
+export function createGraphBadgeId(
+  nodeId: NodeInstanceId,
+  linkTypeId: LinkTypeId
+): BadgeId {
+  return `${nodeId}::${linkTypeId}`;
+}
+
 export type GraphBadgeState = "collapsed" | "expanded";
 export type GraphBadgeSemantic = "link" | "parent";
 
@@ -23,4 +30,3 @@ export interface GraphBadge {
   duplicateNodes: boolean;
   expansionId?: ExpansionId;
 }
-

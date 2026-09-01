@@ -66,13 +66,26 @@ function target(noteId: string, suffix = noteId): MaterializedGraphExpansionTarg
     contextId: plan.contextId,
     origin: "badge-expansion"
   };
-  return { note, node, edge };
+  return { note, node, edge, badges: [] };
 }
 
 describe("createGraphExpansionChangeSet", () => {
   it("creates ordered entity upserts and expansion ownership", () => {
     const b = target("B.md");
     const c = target("C.md");
+    const targetBadge: GraphBadge = {
+      id: `${b.node.id}::related`,
+      nodeId: b.node.id,
+      linkTypeId: "related",
+      contextId: plan.contextId,
+      label: "Related",
+      color: "#8844cc",
+      state: "collapsed",
+      semantic: "link",
+      hasRelationships: true,
+      duplicateNodes: false
+    };
+    b.badges = [targetBadge];
     const result = createGraphExpansionChangeSet({
       plan,
       badge,
@@ -89,11 +102,14 @@ describe("createGraphExpansionChangeSet", () => {
     expect(result.changeSet.notes.upsert.map((note) => note.id)).toEqual(["B.md", "C.md"]);
     expect(result.changeSet.nodes.upsert).toEqual([b.node, c.node]);
     expect(result.changeSet.edges.upsert).toEqual([b.edge, c.edge]);
-    expect(result.changeSet.badges.upsert).toEqual([{
-      ...badge,
-      state: "expanded",
-      expansionId: plan.expansionId
-    }]);
+    expect(result.changeSet.badges.upsert).toEqual([
+      {
+        ...badge,
+        state: "expanded",
+        expansionId: plan.expansionId
+      },
+      targetBadge
+    ]);
     expect(result.changeSet.expansions.upsert).toEqual([{
       id: plan.expansionId,
       sourceNodeId: plan.sourceNodeId,
@@ -220,5 +236,24 @@ describe("createGraphExpansionChangeSet", () => {
       badge,
       targets: [b, duplicateEdge]
     })).toEqual({ ok: false, reason: "duplicate-edge-id", targetNoteId: "C.md" });
+
+    const duplicateBadge = target("C.md");
+    b.badges = [{
+      ...badge,
+      id: "shared-badge",
+      nodeId: b.node.id,
+      state: "collapsed"
+    }];
+    duplicateBadge.badges = [{
+      ...badge,
+      id: "shared-badge",
+      nodeId: duplicateBadge.node.id,
+      state: "collapsed"
+    }];
+    expect(createGraphExpansionChangeSet({
+      plan,
+      badge,
+      targets: [b, duplicateBadge]
+    })).toEqual({ ok: false, reason: "duplicate-badge-id", targetNoteId: "C.md" });
   });
 });

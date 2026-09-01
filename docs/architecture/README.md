@@ -41,6 +41,7 @@ GraphController <--------> Obsidian adapters
 - [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) joins planning and execution behind one application operation.
 - [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md) resolves note-level expansion targets behind a host-neutral interface.
 - [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) turns planned note IDs into complete graph entities.
+- [LegacyGraphExpansionBadgeAdapter](LegacyGraphExpansionBadgeAdapter.md) materializes configured badges for new expansion nodes.
 - [GraphExpansionTransitionService](GraphExpansionTransitionService.md) composes materialization and atomic expansion calculation.
 - [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md) calculates either expand or collapse through one boundary.
 - [GraphBadgeToggleShadowService](GraphBadgeToggleShadowService.md) runs that calculation against a captured snapshot while preserving legacy mutation.
@@ -124,7 +125,8 @@ GraphController <--------> Obsidian adapters
 - [x] Adapt Obsidian note reads to the expansion materializer and compose the new path in non-mutating shadow mode.
 - [x] Record and compare shadow change sets with the graph state produced by legacy execution.
 - [x] Align legacy expansion-edge identity and origin with explicit expansion ownership.
-- [ ] Materialize badges for newly visible expansion target nodes.
+- [x] Materialize badges for newly visible expansion target nodes.
+- [ ] Compare note-state semantics and remove remaining systematic shadow differences.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

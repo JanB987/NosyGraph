@@ -85,6 +85,7 @@ describe("GraphBadgeToggleShadowService", () => {
           properties: {}
         })
       },
+      { readBadges: async () => [] },
       liveExecutor(),
       { observe: (value) => { observation = value; } }
     );
@@ -106,6 +107,7 @@ describe("GraphBadgeToggleShadowService", () => {
     const service = new GraphBadgeToggleShadowService(
       { getSnapshot: snapshot },
       { readNote: async () => { throw new Error("cache unavailable"); } },
+      { readBadges: async () => [] },
       liveExecutor(),
       { observe: (value) => { observation = value; } }
     );
@@ -118,6 +120,7 @@ describe("GraphBadgeToggleShadowService", () => {
     const service = new GraphBadgeToggleShadowService(
       { getSnapshot: snapshot },
       { readNote: async () => undefined },
+      { readBadges: async () => [] },
       liveExecutor(),
       { observe: () => { throw new Error("diagnostic failure"); } }
     );

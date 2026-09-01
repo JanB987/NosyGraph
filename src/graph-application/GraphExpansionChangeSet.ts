@@ -17,6 +17,7 @@ export interface MaterializedGraphExpansionTarget {
   note: GraphNote;
   node: GraphNodeInstance;
   edge: GraphEdge;
+  badges: readonly GraphBadge[];
 }
 
 export interface GraphExpansionChangeSetInput {
@@ -32,7 +33,8 @@ export type GraphExpansionChangeSetFailureReason =
   | "target-set-mismatch"
   | "target-outdated"
   | "duplicate-node-id"
-  | "duplicate-edge-id";
+  | "duplicate-edge-id"
+  | "duplicate-badge-id";
 
 export type GraphExpansionChangeSetResult =
   | { ok: true; changeSet: GraphChangeSet }
@@ -93,6 +95,7 @@ export function createGraphExpansionChangeSet(
   const orderedTargets: MaterializedGraphExpansionTarget[] = [];
   const nodeIds = new Set<string>();
   const edgeIds = new Set<string>();
+  const badgeIds = new Set<string>([badge.id]);
   for (const targetNoteId of plan.targetNoteIds) {
     const target = targetByNoteId.get(targetNoteId)!;
     if (
@@ -113,6 +116,20 @@ export function createGraphExpansionChangeSet(
     }
     nodeIds.add(target.node.id);
     edgeIds.add(target.edge.id);
+    for (const targetBadge of target.badges) {
+      if (
+        targetBadge.nodeId !== target.node.id
+        || targetBadge.contextId !== plan.contextId
+        || targetBadge.state !== "collapsed"
+        || targetBadge.expansionId !== undefined
+      ) {
+        return { ok: false, reason: "target-outdated", targetNoteId };
+      }
+      if (badgeIds.has(targetBadge.id)) {
+        return { ok: false, reason: "duplicate-badge-id", targetNoteId };
+      }
+      badgeIds.add(targetBadge.id);
+    }
     orderedTargets.push(target);
   }
 
@@ -149,7 +166,10 @@ export function createGraphExpansionChangeSet(
       nodes: { upsert: orderedTargets.map((target) => target.node), removeIds: [] },
       edges: { upsert: orderedTargets.map((target) => target.edge), removeIds: [] },
       badges: {
-        upsert: [{ ...badge, state: "expanded", expansionId: plan.expansionId }],
+        upsert: [
+          { ...badge, state: "expanded", expansionId: plan.expansionId },
+          ...orderedTargets.flatMap((target) => target.badges)
+        ],
         removeIds: []
       },
       expansions: { upsert: expansionUpserts, removeIds: [] }

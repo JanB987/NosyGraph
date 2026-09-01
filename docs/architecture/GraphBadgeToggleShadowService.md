@@ -43,5 +43,6 @@ This is a migration tool, not a permanent second state owner. It should be remov
 - Wraps [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md).
 - Composes [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md), [GraphExpansionTransitionService](GraphExpansionTransitionService.md), and [GraphBadgeToggleTransitionService](GraphBadgeToggleTransitionService.md).
 - Reads target notes through [ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md).
+- Reads configured target-node badges through [LegacyGraphExpansionBadgeAdapter](LegacyGraphExpansionBadgeAdapter.md).
 - Supplies observations to [GraphBadgeToggleShadowComparator](GraphBadgeToggleShadowComparator.md).
 - Reports diagnostics without applying changes to [GraphStore](GraphStore.md).

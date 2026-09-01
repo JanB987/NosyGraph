@@ -9,6 +9,7 @@ import {
   createDuplicateGraphNodeId,
   DefaultGraphExpansionTargetMaterializer,
   RadialGraphExpansionNodePlacer,
+  type GraphExpansionBadgeReader,
   type GraphExpansionNoteReader,
   type GraphExpansionNodePlacer
 } from "./GraphExpansionTargetMaterializer";
@@ -76,11 +77,13 @@ function snapshot(overrides: Partial<GraphSnapshot> = {}): GraphSnapshot {
 function setup(
   graphSnapshot = snapshot(),
   readNote: GraphExpansionNoteReader["readNote"] = async (id) => note(id),
-  nodePlacer: GraphExpansionNodePlacer = { place: () => ({ x: 25, y: 50 }) }
+  nodePlacer: GraphExpansionNodePlacer = { place: () => ({ x: 25, y: 50 }) },
+  readBadges: GraphExpansionBadgeReader["readBadges"] = async () => []
 ) {
   const materializer = new DefaultGraphExpansionTargetMaterializer(
     new GraphQueries({ getSnapshot: () => graphSnapshot }),
     { readNote },
+    { readBadges },
     nodePlacer,
     { defaultNodeRadius: 24, preferredDistance: 160 }
   );
@@ -117,7 +120,8 @@ describe("DefaultGraphExpansionTargetMaterializer", () => {
         linkTypeId: "parts",
         contextId: "graph:root",
         origin: "badge-expansion"
-      }
+      },
+      badges: []
     }]);
   });
 
@@ -142,19 +146,60 @@ describe("DefaultGraphExpansionTargetMaterializer", () => {
       edges: [existingEdge]
     });
     let reads = 0;
+    let badgeReads = 0;
     const result = await setup(graphSnapshot, async () => {
       reads += 1;
       return undefined;
+    }, undefined, async () => {
+      badgeReads += 1;
+      return [];
     }).materialize(plan, badge);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(reads).toBe(0);
+    expect(badgeReads).toBe(0);
     expect(result.targets[0]).toEqual({
       note: note("B.md"),
       node: existingNode,
-      edge: existingEdge
+      edge: existingEdge,
+      badges: []
     });
+  });
+
+  it("materializes configured badges for a newly visible node", async () => {
+    const result = await setup(
+      snapshot(),
+      async (id) => note(id),
+      undefined,
+      async ({ targetNode }) => [{
+        id: `${targetNode.id}::related`,
+        nodeId: targetNode.id,
+        linkTypeId: "related",
+        contextId: targetNode.contextId,
+        label: "Related",
+        color: "#8844cc",
+        state: "collapsed",
+        semantic: "link",
+        hasRelationships: true,
+        duplicateNodes: false
+      }]
+    ).materialize(plan, badge);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.targets[0]?.badges).toEqual([{
+      id: "B.md::related",
+      nodeId: "B.md",
+      linkTypeId: "related",
+      contextId: "graph:root",
+      label: "Related",
+      color: "#8844cc",
+      state: "collapsed",
+      semantic: "link",
+      hasRelationships: true,
+      duplicateNodes: false
+    }]);
   });
 
   it("does not count a reused sibling twice when placing a new node", async () => {
@@ -233,6 +278,16 @@ describe("DefaultGraphExpansionTargetMaterializer", () => {
     expect(await setup(snapshot(), async () => note("Other.md")).materialize(plan, badge)).toEqual({
       ok: false,
       reason: "target-note-outdated",
+      targetNoteId: "B.md"
+    });
+    expect(await setup(
+      snapshot(),
+      async (id) => note(id),
+      undefined,
+      async () => [{ ...badge, nodeId: "wrong-node" }]
+    ).materialize(plan, badge)).toEqual({
+      ok: false,
+      reason: "target-badge-outdated",
       targetNoteId: "B.md"
     });
   });

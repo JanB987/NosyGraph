@@ -2,6 +2,7 @@
 import { App, Component, EventRef, Menu, TFile } from "obsidian";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE } from "./linkResolver";
 import { type GraphPropertyKeys, normalizeGraphPropertyKeys, readFrontmatterPropertyByKey } from "./GraphPropertyKeys";
+import { createGraphBadgeId } from "./graph-domain/GraphBadge";
 import { createGraphBadgeExpansionEdgeId } from "./graph-domain/GraphEdge";
 import type { GraphEdge as ModelGraphEdge } from "./GraphModel";
 import type { O3GraphEmbeddedGraphState, O3GraphEmbeddedLensState, O3GraphNodeOrigin, O3GraphRuntimeNodeSnapshot, O3GraphRuntimeState } from "./O3GraphState";
@@ -17,6 +18,7 @@ import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
+import { LegacyGraphExpansionBadgeAdapter } from "./graph-application/LegacyGraphExpansionBadgeAdapter";
 import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
 import { ObsidianGraphExpansionNoteAdapter } from "./graph-application/ObsidianGraphExpansionNoteAdapter";
 import {
@@ -758,10 +760,27 @@ export class GraphEngine {
         return icon || undefined;
       }
     });
+    const expansionBadgeReader = new LegacyGraphExpansionBadgeAdapter({
+      getDefinitions: (contextId) => this.getPersistableBadgeLinkTypesForContext(contextId)
+        .flatMap((linkType) => {
+          const linkTypeId = this.normalizeLinkType(String(linkType.property ?? ""));
+          if (!linkTypeId) return [];
+          return [{
+            linkTypeId,
+            label: String(linkType.key ?? linkType.property ?? "").trim() || linkTypeId,
+            color: this.getBadgeBaseColor(linkTypeId, linkType.color),
+            semantic: linkType.semantic === "parent" ? "parent" as const : "link" as const,
+            duplicateNodes: linkType.linkDuplicateNodes === true
+          }];
+        }),
+      hasRelationships: (noteId, linkTypeId) =>
+        this.hasBadgeYamlLinks(noteId, linkTypeId)
+    });
     const shadowComparator = new GraphBadgeToggleShadowComparator();
     const toggleExecutor = new GraphBadgeToggleShadowService(
       snapshotAdapter,
       expansionNoteReader,
+      expansionBadgeReader,
       liveToggleExecutor,
       {
         getMaterializerOptions: () => ({ defaultNodeRadius: this.nodeRadius }),
@@ -2696,7 +2715,7 @@ export class GraphEngine {
   }
 
   private badgeKey(nodeId: string, linkType: string): string {
-    return `${nodeId}::${linkType}`;
+    return createGraphBadgeId(nodeId, linkType);
   }
 
   private isBadgeExpanded(sourcePath: string, linkType: string): boolean {
@@ -11432,9 +11451,18 @@ export class GraphEngine {
   }
 
   private getPersistableBadgeLinkTypesForNode(node: GraphNode): O3LinkType[] {
-    const activeLinkTypes = this.getLinkTypesForNode(node);
-    if (!node.embeddedInstanceId) return activeLinkTypes;
-    const container = this.embeddedGraphContainers.get(node.embeddedInstanceId);
+    return this.getPersistableBadgeLinkTypesForContext(
+      contextIdForLegacyNode(node.embeddedInstanceId)
+    );
+  }
+
+  private getPersistableBadgeLinkTypesForContext(contextId: string): O3LinkType[] {
+    const embeddedPrefix = "embedded:";
+    if (!contextId.startsWith(embeddedPrefix)) return this.activeNodeBadgeLinkTypes;
+    const container = this.embeddedGraphContainers.get(
+      contextId.slice(embeddedPrefix.length)
+    );
+    const activeLinkTypes = container?.linkTypes ?? this.activeNodeBadgeLinkTypes;
     return this.mergeBadgeLinkTypeDefinitions(
       activeLinkTypes,
       container?.visibleLinkTypeDefinitions ?? [],

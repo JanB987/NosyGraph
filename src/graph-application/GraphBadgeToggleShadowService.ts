@@ -11,6 +11,7 @@ import {
 import { GraphExpansionTransitionService } from "./GraphExpansionTransitionService";
 import {
   DefaultGraphExpansionTargetMaterializer,
+  type GraphExpansionBadgeReader,
   type GraphExpansionNoteReader,
   type GraphExpansionTargetMaterializerOptions
 } from "./GraphExpansionTargetMaterializer";
@@ -38,6 +39,7 @@ export class GraphBadgeToggleShadowService implements GraphBadgeToggleExecutor {
   constructor(
     private readonly snapshotSource: GraphSnapshotSource,
     private readonly noteReader: GraphExpansionNoteReader,
+    private readonly badgeReader: GraphExpansionBadgeReader,
     private readonly liveExecutor: GraphBadgeToggleExecutor,
     private readonly options: GraphBadgeToggleShadowServiceOptions = {}
   ) {}
@@ -72,6 +74,7 @@ export class GraphBadgeToggleShadowService implements GraphBadgeToggleExecutor {
       const materializer = new DefaultGraphExpansionTargetMaterializer(
         queries,
         this.noteReader,
+        this.badgeReader,
         undefined,
         this.options.getMaterializerOptions?.()
       );

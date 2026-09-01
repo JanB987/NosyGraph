@@ -6,6 +6,8 @@
 
 Current read model: [`src/graph-domain/GraphBadge.ts`](../../src/graph-domain/GraphBadge.ts)
 
+`createGraphBadgeId(nodeId, linkTypeId)` provides the stable identity used by legacy snapshots and newly materialized target-node badges.
+
 ## Core data
 
 ```ts
@@ -28,7 +30,7 @@ interface GraphBadge {
 
 ```ts
 buildNodeBadges(node, note, linkTypes): readonly GraphBadge[];
-getBadgeId(nodeId, linkTypeId): BadgeId;
+createGraphBadgeId(nodeId, linkTypeId): BadgeId;
 ```
 
 ## Click flow
@@ -42,7 +44,7 @@ The badge itself does not mutate graph or note state.
 
 ## Current migration state
 
-`LegacyGraphSnapshotAdapter` exposes configured badges for outer and embedded nodes. Normal, parent, and duplicate-node semantics are preserved. `GraphQueries` can return all badges, one badge by stable ID, or the badges belonging to a node.
+[LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) exposes configured badges for outer and embedded nodes. [LegacyGraphExpansionBadgeAdapter](LegacyGraphExpansionBadgeAdapter.md) creates the same host-neutral records for nodes that a new expansion will make visible. Normal, parent, and duplicate-node semantics are preserved. `GraphQueries` can return all badges, one badge by stable ID, or the badges belonging to a node.
 
 All current graph-node badge clicks now enter [GraphController](GraphController.md) as stable-ID commands. `O3NodeBadge` knows only how to render and emit one of three intents; it no longer imports Obsidian files, the Obsidian app, or `GraphEngine`. [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) temporarily implements the output port so expansion behavior remains unchanged.
 

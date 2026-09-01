@@ -82,7 +82,8 @@ const target: MaterializedGraphExpansionTarget = {
     linkTypeId: plan.linkTypeId,
     contextId: plan.contextId,
     origin: "badge-expansion"
-  }
+  },
+  badges: []
 };
 
 function snapshot(overrides: Partial<GraphSnapshot> = {}): GraphSnapshot {

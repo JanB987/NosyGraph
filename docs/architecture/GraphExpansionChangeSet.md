@@ -19,13 +19,14 @@ interface GraphExpansionChangeSetInput {
 }
 ```
 
-Each target from [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) contains the complete `GraphNote`, `GraphNodeInstance`, and `GraphEdge` that should exist after applying the expansion. The earlier [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) determines which note IDs must be present and their stable order.
+Each target from [GraphExpansionTargetMaterializer](GraphExpansionTargetMaterializer.md) contains the complete `GraphNote`, `GraphNodeInstance`, `GraphEdge`, and newly configured child badges that should exist after applying the expansion. The earlier [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) determines which note IDs must be present and their stable order.
 
 ## Output
 
 On success, the change set:
 
 - Upserts target notes, node instances, and edges.
+- Upserts configured badges belonging to newly visible target nodes.
 - Changes the clicked badge to `expanded`.
 - Creates a `GraphExpansion` with explicit node and edge ownership.
 - Preserves a reused node's original origin while adding it to the new expansion's ownership.

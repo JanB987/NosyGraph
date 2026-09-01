@@ -23,6 +23,15 @@ export interface GraphExpansionNoteReader {
   readNote(noteId: NoteId): Promise<GraphNote | undefined>;
 }
 
+export interface GraphExpansionBadgeReadInput {
+  targetNote: GraphNote;
+  targetNode: GraphNodeInstance;
+}
+
+export interface GraphExpansionBadgeReader {
+  readBadges(input: GraphExpansionBadgeReadInput): Promise<readonly GraphBadge[]>;
+}
+
 export interface GraphExpansionNodePlacementInput {
   sourceNode: GraphNodeInstance;
   targetNote: GraphNote;
@@ -50,7 +59,8 @@ export type GraphExpansionTargetMaterializationResult =
         | "badge-outdated"
         | "source-node-not-found"
         | "target-note-unavailable"
-        | "target-note-outdated";
+        | "target-note-outdated"
+        | "target-badge-outdated";
       targetNoteId?: NoteId;
     };
 
@@ -90,6 +100,7 @@ implements GraphExpansionTargetMaterializer {
   constructor(
     private readonly queries: GraphQueries,
     private readonly noteReader: GraphExpansionNoteReader,
+    private readonly badgeReader: GraphExpansionBadgeReader,
     private readonly nodePlacer: GraphExpansionNodePlacer = new RadialGraphExpansionNodePlacer(),
     options: GraphExpansionTargetMaterializerOptions = {}
   ) {
@@ -149,7 +160,18 @@ implements GraphExpansionTargetMaterializer {
         && edge.contextId === plan.contextId
       );
       const edge = existingEdge ?? createGraphExpansionEdge(plan, node.id, this.edgeOrigin);
-      targets.push({ note, node, edge });
+      const badges = existingNode
+        ? []
+        : await this.badgeReader.readBadges({ targetNote: note, targetNode: node });
+      if (badges.some((targetBadge) =>
+        targetBadge.nodeId !== node.id
+        || targetBadge.contextId !== plan.contextId
+        || targetBadge.state !== "collapsed"
+        || targetBadge.expansionId !== undefined
+      )) {
+        return { ok: false, reason: "target-badge-outdated", targetNoteId };
+      }
+      targets.push({ note, node, edge, badges });
     }
 
     return { ok: true, targets };
