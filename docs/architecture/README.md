@@ -67,6 +67,7 @@ GraphController <--------> Obsidian adapters
 - [Obsidian adapters](ObsidianAdapters.md) isolate note access, writes, watchers, navigation, and persistence.
 - [ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md) reads expansion notes and missing targets through an injected Obsidian gateway.
 - [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) is the temporary, tested bridge from badge commands to legacy expansion operations.
+- [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) exposes a detached, host-neutral snapshot of the current engine.
 - [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md) translates the current link resolver into host-neutral targets.
 - [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md) safely applies plans through the current toggle operation.
 
@@ -122,7 +123,8 @@ GraphController <--------> Obsidian adapters
 - [x] Add a store-backed toggle executor with stale-transition protection.
 - [x] Adapt Obsidian note reads to the expansion materializer and compose the new path in non-mutating shadow mode.
 - [x] Record and compare shadow change sets with the graph state produced by legacy execution.
-- [ ] Align legacy expansion-edge identity and origin with explicit expansion ownership.
+- [x] Align legacy expansion-edge identity and origin with explicit expansion ownership.
+- [ ] Materialize badges for newly visible expansion target nodes.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 
 ## Validation during the migration

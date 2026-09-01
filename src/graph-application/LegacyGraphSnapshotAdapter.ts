@@ -1,5 +1,5 @@
 import type { GraphBadge } from "../graph-domain/GraphBadge";
-import type { GraphEdge } from "../graph-domain/GraphEdge";
+import type { GraphEdge, GraphEdgeOrigin } from "../graph-domain/GraphEdge";
 import type { GraphExpansion } from "../graph-domain/GraphExpansion";
 import type { GraphLens } from "../graph-domain/GraphLens";
 import type { GraphNodeInstance } from "../graph-domain/GraphNodeInstance";
@@ -37,6 +37,33 @@ export interface LegacyGraphReadSource {
 
 export interface LegacyGraphNoteReader {
   readNote(path: string, fallbackName: string): GraphNote;
+}
+
+export interface LegacyGraphEdgeIdentityInput {
+  legacyId: string;
+  badgeExpansionId: string;
+  ownedByBadgeExpansion: boolean;
+  relationship?: "parent";
+  mode?: "overlay" | "visible";
+}
+
+/** Preserves special legacy edges and normalizes edges owned by badge expansion. */
+export function resolveLegacyGraphEdgeIdentity(
+  input: LegacyGraphEdgeIdentityInput
+): { id: string; origin: GraphEdgeOrigin } {
+  if (input.relationship === "parent") {
+    return { id: input.legacyId, origin: "parent" };
+  }
+  if (input.mode === "overlay") {
+    return { id: input.legacyId, origin: "overlay" };
+  }
+  if (input.mode === "visible") {
+    return { id: input.legacyId, origin: "visible" };
+  }
+  if (input.ownedByBadgeExpansion) {
+    return { id: input.badgeExpansionId, origin: "badge-expansion" };
+  }
+  return { id: input.legacyId, origin: "discovered" };
 }
 
 /**

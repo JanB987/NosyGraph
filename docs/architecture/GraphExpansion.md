@@ -41,3 +41,4 @@ createGraphCollapseChangeSet(plan, snapshot): GraphCollapseChangeSetResult;
 - Orchestrated by [GraphController](GraphController.md).
 - Stored in [GraphStore](GraphStore.md).
 - Queried through [GraphQueries](GraphQueries.md).
+- Read from the current engine through [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md), including stable owned-edge identities.

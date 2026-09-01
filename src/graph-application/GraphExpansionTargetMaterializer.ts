@@ -1,5 +1,9 @@
 import type { GraphBadge } from "../graph-domain/GraphBadge";
-import type { GraphEdge, GraphEdgeOrigin } from "../graph-domain/GraphEdge";
+import {
+  createGraphBadgeExpansionEdgeId,
+  type GraphEdge,
+  type GraphEdgeOrigin
+} from "../graph-domain/GraphEdge";
 import type { GraphNodeInstance, GraphPoint } from "../graph-domain/GraphNodeInstance";
 import type { GraphNote } from "../graph-domain/GraphNote";
 import type {
@@ -248,7 +252,11 @@ export function createGraphExpansionEdge(
   origin: GraphEdgeOrigin = "badge-expansion"
 ): GraphEdge {
   return {
-    id: `edge::${plan.sourceNodeId}::${targetNodeId}::${plan.linkTypeId}::${plan.linkTypeId}`,
+    id: createGraphBadgeExpansionEdgeId(
+      plan.sourceNodeId,
+      targetNodeId,
+      plan.linkTypeId
+    ),
     fromNodeId: plan.sourceNodeId,
     toNodeId: targetNodeId,
     linkTypeId: plan.linkTypeId,

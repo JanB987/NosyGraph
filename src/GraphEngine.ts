@@ -2,6 +2,7 @@
 import { App, Component, EventRef, Menu, TFile } from "obsidian";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE } from "./linkResolver";
 import { type GraphPropertyKeys, normalizeGraphPropertyKeys, readFrontmatterPropertyByKey } from "./GraphPropertyKeys";
+import { createGraphBadgeExpansionEdgeId } from "./graph-domain/GraphEdge";
 import type { GraphEdge as ModelGraphEdge } from "./GraphModel";
 import type { O3GraphEmbeddedGraphState, O3GraphEmbeddedLensState, O3GraphNodeOrigin, O3GraphRuntimeNodeSnapshot, O3GraphRuntimeState } from "./O3GraphState";
 import type { O3LinkType } from "./O3LinkType";
@@ -22,6 +23,7 @@ import {
   LegacyGraphSnapshotAdapter,
   ROOT_GRAPH_CONTEXT_ID,
   contextIdForLegacyNode,
+  resolveLegacyGraphEdgeIdentity,
   uniqueExistingNodeIds,
   type LegacyGraphReadBadge,
   type LegacyGraphReadEdge,
@@ -12860,14 +12862,25 @@ export class GraphEngine {
           && ownedNodeIdSet.has(edge.to)
           && this.normalizeLinkType(edge.linkType ?? edge.type) === linkTypeId
         )
-        .map((edge) =>
-          `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(
+        .map((edge) => {
+          const legacyId = `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(
             edge.from,
             edge.to,
             edge.type,
             edge.linkType
-          )}`
-        );
+          )}`;
+          return resolveLegacyGraphEdgeIdentity({
+            legacyId,
+            badgeExpansionId: createGraphBadgeExpansionEdgeId(
+              edge.from,
+              edge.to,
+              linkTypeId
+            ),
+            ownedByBadgeExpansion: true,
+            ...(edge.relationship ? { relationship: edge.relationship } : {}),
+            ...(edge.mode ? { mode: edge.mode } : {})
+          }).id;
+        });
       const childExpansionIds = Array.from(this.expansionParent.entries())
         .filter(([, parentId]) => parentId === expansionId)
         .map(([childId]) => childId);
@@ -12922,20 +12935,30 @@ export class GraphEngine {
         && fromNode.embeddedInstanceId === toNode.embeddedInstanceId
         ? fromNode.embeddedInstanceId
         : undefined;
-      const origin = edge.relationship === "parent"
-        ? "parent" as const
-        : edge.mode === "overlay"
-          ? "overlay" as const
-          : edge.mode === "visible"
-            ? "visible" as const
-            : "discovered" as const;
+      const legacyId = `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType)}`;
+      const badgeExpansionId = createGraphBadgeExpansionEdgeId(
+        edge.from,
+        edge.to,
+        linkTypeId
+      );
+      const ownedByBadgeExpansion = expansions.some((expansion) =>
+        expansion.ownedEdgeIds.includes(legacyId)
+        || expansion.ownedEdgeIds.includes(badgeExpansionId)
+      );
+      const identity = resolveLegacyGraphEdgeIdentity({
+        legacyId,
+        badgeExpansionId,
+        ownedByBadgeExpansion,
+        ...(edge.relationship ? { relationship: edge.relationship } : {}),
+        ...(edge.mode ? { mode: edge.mode } : {})
+      });
       return [{
-        id: `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType)}`,
+        id: identity.id,
         fromNodeId: edge.from,
         toNodeId: edge.to,
         linkTypeId,
         contextId: contextIdForLegacyNode(sharedEmbeddedContext),
-        origin
+        origin: identity.origin
       }];
     });
 

@@ -2,8 +2,42 @@ import { describe, expect, it } from "vitest";
 import {
   LegacyGraphSnapshotAdapter,
   ROOT_GRAPH_CONTEXT_ID,
+  resolveLegacyGraphEdgeIdentity,
   type LegacyGraphReadState
 } from "./LegacyGraphSnapshotAdapter";
+
+describe("resolveLegacyGraphEdgeIdentity", () => {
+  const base = {
+    legacyId: "edge::legacy",
+    badgeExpansionId: "edge::A::B::parts::parts",
+    ownedByBadgeExpansion: true
+  };
+
+  it("uses stable identity and origin for a badge-owned regular edge", () => {
+    expect(resolveLegacyGraphEdgeIdentity(base)).toEqual({
+      id: "edge::A::B::parts::parts",
+      origin: "badge-expansion"
+    });
+  });
+
+  it("preserves an unowned discovered edge", () => {
+    expect(resolveLegacyGraphEdgeIdentity({
+      ...base,
+      ownedByBadgeExpansion: false
+    })).toEqual({ id: "edge::legacy", origin: "discovered" });
+  });
+
+  it.each([
+    [{ relationship: "parent" as const }, "parent"],
+    [{ mode: "overlay" as const }, "overlay"],
+    [{ mode: "visible" as const }, "visible"]
+  ])("preserves special legacy semantics for %o", (semantics, origin) => {
+    expect(resolveLegacyGraphEdgeIdentity({ ...base, ...semantics })).toEqual({
+      id: "edge::legacy",
+      origin
+    });
+  });
+});
 
 describe("LegacyGraphSnapshotAdapter", () => {
   it("deduplicates notes and returns detached runtime collections", () => {

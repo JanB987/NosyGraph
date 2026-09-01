@@ -5,6 +5,15 @@ import type {
   NodeInstanceId
 } from "./graph-identifiers";
 
+/** Stable identity shared by materialized and legacy-adapted badge expansion edges. */
+export function createGraphBadgeExpansionEdgeId(
+  fromNodeId: NodeInstanceId,
+  toNodeId: NodeInstanceId,
+  linkTypeId: LinkTypeId
+): EdgeId {
+  return `edge::${fromNodeId}::${toNodeId}::${linkTypeId}::${linkTypeId}`;
+}
+
 /** Explains how a visible edge entered the runtime graph. */
 export type GraphEdgeOrigin =
   | "badge-expansion"
