@@ -112,6 +112,8 @@ interface GraphRuntimeState extends GraphSnapshotSource {
 - `StoreGraphRuntimeState` wraps `GraphStore` and is tested but not selected by production composition.
 - Do not add bidirectional synchronization methods.
 
+Implemented as dormant, tested types: [GraphRuntimeState](GraphRuntimeState.md), [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md), and [StoreGraphRuntimeState](StoreGraphRuntimeState.md). Production remains on the existing legacy composition.
+
 ### Stage 2 — kinematics boundary
 
 - Extract physics input/output projections from legacy node objects.
@@ -179,4 +181,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-After the manual badge matrix is complete, add only the runtime-mode types and the two narrow runtime-state wrappers. Production composition remains in legacy mode. That gives subsequent renderer and physics work a stable boundary without changing visible behavior.
+The runtime-mode types and two narrow runtime-state wrappers now exist without production wiring. The next implementation increment separates structural revisions from physics kinematics frames. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

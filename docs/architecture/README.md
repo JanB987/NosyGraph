@@ -32,6 +32,9 @@ GraphController <--------> Obsidian adapters
 - [GraphView](GraphView.md) owns the Obsidian view lifecycle.
 - [GraphController](GraphController.md) executes user and host commands.
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
+- [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
+- [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
+- [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
 - [GraphBadgeRequest](GraphBadgeRequest.md) carries resolved badge intent without host objects.
 - [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
@@ -135,7 +138,8 @@ GraphController <--------> Obsidian adapters
 - [x] Create the shadow-mode manual regression matrix and diagnostic checklist.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
 - [x] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
-- [ ] Introduce dormant runtime-mode types and state wrappers without changing production composition.
+- [x] Introduce dormant runtime-mode types and state wrappers without changing production composition.
+- [ ] Separate structural revision from kinematics frame sequencing before live runtime composition.
 
 ## Validation during the migration
 

@@ -80,6 +80,7 @@ The live engine still owns these six collections during migration. We will conne
 
 - Mutated by [GraphController](GraphController.md).
 - Read through [GraphQueries](GraphQueries.md).
+- Wrapped by [StoreGraphRuntimeState](StoreGraphRuntimeState.md) when a graph eventually runs in store mode.
 - Applies transitions created by [GraphExpansionTransitionService](GraphExpansionTransitionService.md).
 - Is updated safely by [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md).
 - Snapshots are consumed by [GraphRenderer](GraphRenderer.md) and [PhysicsEngine](PhysicsEngine.md).
