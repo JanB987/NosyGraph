@@ -60,6 +60,7 @@ GraphController <--------> Obsidian adapters
 - [GraphKinematicsFrame](GraphKinematicsFrame.md) carries sequenced positions and velocities stamped with their structural revision.
 - [GraphPhysicsInput](GraphPhysicsInput.md) contains only versioned nodes and edges required by physics.
 - [GraphPhysicsSettings](GraphPhysicsSettings.md) normalizes global simulation values and distinct force/direction LinkType policies.
+- [GraphPhysicsConstraints](GraphPhysicsConstraints.md) separates persisted pins from transient locks, targets, and freezes.
 - [GraphNote](GraphNote.md) represents a Markdown note independently of its visualization.
 - [GraphBadge](GraphBadge.md) describes an available node expansion.
 - [GraphExpansion](GraphExpansion.md) records ownership of nodes and edges added through a badge.
@@ -151,7 +152,8 @@ GraphController <--------> Obsidian adapters
 - [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
 - [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.
-- [ ] Separate persistent pin intent from transient physics constraints in dormant types.
+- [x] Separate persistent pin intent from transient physics constraints in dormant types.
+- [ ] Project persistent pins and transient constraints into one detached physics constraint state.
 
 ## Validation during the migration
 

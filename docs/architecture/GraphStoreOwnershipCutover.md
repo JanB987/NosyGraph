@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-The runtime-mode wrappers, dormant kinematics boundaries, and normalized [GraphPhysicsSettings](GraphPhysicsSettings.md) now exist without production wiring. The next implementation increment separates persistent pins from transient physics constraints. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+The runtime-mode wrappers, dormant kinematics boundaries, normalized [GraphPhysicsSettings](GraphPhysicsSettings.md), and distinct [GraphPhysicsConstraints](GraphPhysicsConstraints.md) now exist without production wiring. The next implementation increment projects persistent and transient constraints into one detached physics input. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

@@ -82,6 +82,6 @@ Force distance is clamped to `20..800` and strength to `0.001..0.3`. Direction v
 - Will receive host values through an Obsidian/legacy adapter rather than importing `O3LinkType` here.
 - Keeps simulation configuration outside [GraphStore](GraphStore.md) semantic collections and frame sequencing.
 
-## Next extraction
+## Constraint separation
 
-Represent persistent pin intent separately from transient locks, dragging, topology freezes, and whole-simulation freeze state.
+[GraphPhysicsConstraints](GraphPhysicsConstraints.md) now represents persistent pin intent separately from transient locks, dragging, topology freezes, and whole-simulation freeze state. The types remain dormant.
