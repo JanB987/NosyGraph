@@ -87,4 +87,4 @@ The live engine still owns these six collections during migration. We will conne
 
 ## Migration rule
 
-Move one state category at a time. Once state moves into this store, delete its old duplicate owner rather than synchronizing two mutable copies.
+Move independent state categories one at a time. Coupled notes, nodes, edges, badges, and expansions switch as one consistency unit through the exclusive runtime modes defined in [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md). Once state moves into this store, delete its old duplicate owner rather than synchronizing two mutable copies.

@@ -28,6 +28,8 @@ interface PhysicsEngine {
 - Supplies frames for [GraphRenderer](GraphRenderer.md).
 - Honors [GraphContainer](GraphGroupAndContainer.md) isolation without knowing group or note semantics.
 
+[GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md) separates rapidly changing kinematics frames from the structural revision used to guard asynchronous graph transitions.
+
 ## Must not know
 
 - Note paths or frontmatter
@@ -35,4 +37,3 @@ interface PhysicsEngine {
 - Badges and menus
 - Canvas elements
 - Persistence formats
-

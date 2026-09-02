@@ -75,6 +75,7 @@ GraphController <--------> Obsidian adapters
 ### Migration validation
 
 - [Badge Toggle Shadow Regression](BadgeToggleShadowRegression.md) defines the repeatable manual matrix and evidence required before live state cutover.
+- [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md) defines exclusive runtime modes, activation gates, and the staged move out of `GraphEngine`.
 
 ## Rules of the architecture
 
@@ -133,7 +134,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compare note-state semantics and unify snapshot and expansion note conversion.
 - [x] Create the shadow-mode manual regression matrix and diagnostic checklist.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
-- [ ] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
+- [x] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
+- [ ] Introduce dormant runtime-mode types and state wrappers without changing production composition.
 
 ## Validation during the migration
 

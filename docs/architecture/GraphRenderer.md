@@ -36,3 +36,4 @@ class GraphRenderer {
 
 The renderer never reads or writes notes.
 
+Its role in the ownership migration is defined by [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md). Store mode must supply renderer-owned visual handles and read-only semantic projections rather than allowing drawing helpers to mutate graph collections.
