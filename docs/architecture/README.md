@@ -37,6 +37,7 @@ GraphController <--------> Obsidian adapters
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
 - [GraphPhysicsConstraintProjector](GraphPhysicsConstraintProjector.md) combines semantic pins with detached transient constraints.
 - [GraphPhysicsContainerProjector](GraphPhysicsContainerProjector.md) validates and detaches container membership, bounds, gravity, and ancestry.
+- [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md) assembles all detached physics inputs behind one versioned boundary.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
@@ -159,7 +160,8 @@ GraphController <--------> Obsidian adapters
 - [x] Project persistent pins and transient constraints into one detached physics constraint state.
 - [x] Model container membership and bounds as host-neutral physics constraints.
 - [x] Validate and detach container physics projections against graph snapshots.
-- [ ] Compose all versioned physics inputs behind one runtime boundary.
+- [x] Compose all versioned physics inputs behind one runtime boundary.
+- [ ] Define the host-neutral `PhysicsEngine` code contract and deterministic test implementation.
 
 ## Validation during the migration
 

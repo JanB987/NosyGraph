@@ -23,6 +23,8 @@ interface PhysicsEngine {
 }
 ```
 
+The complete `setGraph`, settings, and constraint data is assembled by [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md). The next increment turns this proposed interface into a compiled, tested contract.
+
 ## Connections
 
 - Receives [GraphPhysicsInput](GraphPhysicsInput.md) from [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md).
