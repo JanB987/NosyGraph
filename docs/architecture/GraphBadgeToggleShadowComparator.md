@@ -39,3 +39,4 @@ The result is `not-comparable` when shadow calculation throws, transition calcul
 - Uses [GraphStore](GraphStore.md) to materialize expected state atomically.
 - Compares [GraphNote](GraphNote.md), [GraphNodeInstance](GraphNodeInstance.md), [GraphEdge](GraphEdgeAndLinkType.md), [GraphBadge](GraphBadge.md), and [GraphExpansion](GraphExpansion.md) records.
 - Reports migration gaps to the current engine without affecting live behavior.
+- Is manually verified through [Badge Toggle Shadow Regression](BadgeToggleShadowRegression.md).

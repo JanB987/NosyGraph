@@ -46,3 +46,4 @@ This is a migration tool, not a permanent second state owner. It should be remov
 - Reads configured target-node badges through [LegacyGraphExpansionBadgeAdapter](LegacyGraphExpansionBadgeAdapter.md).
 - Supplies observations to [GraphBadgeToggleShadowComparator](GraphBadgeToggleShadowComparator.md).
 - Reports diagnostics without applying changes to [GraphStore](GraphStore.md).
+- Is exercised by [Badge Toggle Shadow Regression](BadgeToggleShadowRegression.md).

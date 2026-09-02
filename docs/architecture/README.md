@@ -72,6 +72,10 @@ GraphController <--------> Obsidian adapters
 - [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md) translates the current link resolver into host-neutral targets.
 - [LegacyGraphBadgeToggleExecutor](LegacyGraphBadgeToggleExecutor.md) safely applies plans through the current toggle operation.
 
+### Migration validation
+
+- [Badge Toggle Shadow Regression](BadgeToggleShadowRegression.md) defines the repeatable manual matrix and evidence required before live state cutover.
+
 ## Rules of the architecture
 
 1. A Markdown note and a visible graph-node instance are different objects.
@@ -127,9 +131,9 @@ GraphController <--------> Obsidian adapters
 - [x] Align legacy expansion-edge identity and origin with explicit expansion ownership.
 - [x] Materialize badges for newly visible expansion target nodes.
 - [x] Compare note-state semantics and unify snapshot and expansion note conversion.
-- [ ] Create the shadow-mode manual regression matrix and diagnostic checklist.
-- [ ] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
+- [x] Create the shadow-mode manual regression matrix and diagnostic checklist.
 - [ ] Complete a documented manual regression pass before replacing live legacy mutation.
+- [ ] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
 
 ## Validation during the migration
 
