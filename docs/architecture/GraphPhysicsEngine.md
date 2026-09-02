@@ -49,4 +49,4 @@ It intentionally applies no forces, settings, pins, or containers. Those behavio
 
 ## Next extraction
 
-Add an application coordinator that loads composed input, steps this port, and publishes frames through `GraphKinematicsStore` with sequence protection.
+[GraphPhysicsCoordinator](GraphPhysicsCoordinator.md) now loads composed input, steps this port, and publishes frames through `GraphKinematicsStore` with sequence and structural-revision protection.
