@@ -35,6 +35,7 @@ GraphController <--------> Obsidian adapters
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
+- [GraphPhysicsConstraintProjector](GraphPhysicsConstraintProjector.md) combines semantic pins with detached transient constraints.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
@@ -153,7 +154,8 @@ GraphController <--------> Obsidian adapters
 - [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.
 - [x] Separate persistent pin intent from transient physics constraints in dormant types.
-- [ ] Project persistent pins and transient constraints into one detached physics constraint state.
+- [x] Project persistent pins and transient constraints into one detached physics constraint state.
+- [ ] Model container membership and bounds as host-neutral physics constraints.
 
 ## Validation during the migration
 

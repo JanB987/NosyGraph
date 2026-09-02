@@ -53,10 +53,16 @@ export function copyGraphPhysicsConstraintState(
       ...pin,
       position: { ...pin.position }
     })),
-    transientNodeConstraints: state.transientNodeConstraints.map((constraint) =>
-      "position" in constraint
-        ? { ...constraint, position: { ...constraint.position } }
-        : { ...constraint }
+    transientNodeConstraints: state.transientNodeConstraints.map(
+      copyGraphTransientNodeConstraint
     )
   };
+}
+
+export function copyGraphTransientNodeConstraint(
+  constraint: GraphTransientNodeConstraint
+): GraphTransientNodeConstraint {
+  return "position" in constraint
+    ? { ...constraint, position: { ...constraint.position } }
+    : { ...constraint };
 }

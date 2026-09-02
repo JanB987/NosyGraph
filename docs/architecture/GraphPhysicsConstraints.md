@@ -45,6 +45,6 @@ The function copies arrays and coordinate objects so input producers, physics, a
 - Transient constraints originate in [GraphController](GraphController.md), renderer intents, direction layout, and topology coordination.
 - The observed legacy mapping is recorded in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Constraint projection
 
-Add a pure projector that derives persistent pin constraints from a snapshot and combines them with detached transient constraint input.
+[GraphPhysicsConstraintProjector](GraphPhysicsConstraintProjector.md) now derives persistent pins from a snapshot and combines them with detached transient input. Container membership and boundary constraints remain a separate next step.
