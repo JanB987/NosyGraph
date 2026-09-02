@@ -29,6 +29,6 @@ Explicit `parentContainerIds` replace legacy graph-path ancestry at the physics 
 - Is distinct from render-facing lens viewport state in [GraphLens](GraphLens.md).
 - Preserves requirements found in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Validated projection
 
-Add a projector that validates container origins, members, bounds, and ancestry against the current graph snapshot and reports rejected references.
+[GraphPhysicsContainerProjector](GraphPhysicsContainerProjector.md) now validates origins, members, bounds, gravity, and ancestry against a snapshot and reports rejected references.

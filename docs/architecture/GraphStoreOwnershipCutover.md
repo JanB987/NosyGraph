@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-The runtime-mode wrappers and dormant physics boundaries now include explicit [GraphPhysicsContainers](GraphPhysicsContainers.md) without production wiring. The next implementation increment validates and detaches container projections against semantic snapshots. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+The runtime-mode wrappers and dormant physics boundaries now include validated [GraphPhysicsContainerProjector](GraphPhysicsContainerProjector.md) output without production wiring. The next implementation increment composes graph, settings, node constraints, and containers behind one versioned physics-runtime input. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
