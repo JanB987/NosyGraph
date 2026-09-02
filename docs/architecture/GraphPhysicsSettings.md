@@ -79,7 +79,7 @@ Force distance is clamped to `20..800` and strength to `0.001..0.3`. Direction v
 
 - Configures [PhysicsEngine](PhysicsEngine.md).
 - Selects policy for edges in [GraphPhysicsInput](GraphPhysicsInput.md) by `linkTypeId`.
-- Will receive host values through an Obsidian/legacy adapter rather than importing `O3LinkType` here.
+- Receives legacy-shaped values through [LegacyGraphPhysicsSettingsAdapter](LegacyGraphPhysicsSettingsAdapter.md) rather than importing `O3LinkType` here.
 - Keeps simulation configuration outside [GraphStore](GraphStore.md) semantic collections and frame sequencing.
 
 ## Constraint separation

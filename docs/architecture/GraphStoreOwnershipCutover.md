@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-The dormant physics boundaries now meet through [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md), including protected frame publication, without production wiring. The next implementation increment adapts legacy configuration and constraint/container reads into these host-neutral inputs. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+The dormant physics boundaries now meet through [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md), and [LegacyGraphPhysicsSettingsAdapter](LegacyGraphPhysicsSettingsAdapter.md) translates current configuration without production wiring. The next implementation increment adapts transient legacy constraints. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

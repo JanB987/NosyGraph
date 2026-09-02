@@ -40,6 +40,7 @@ GraphController <--------> Obsidian adapters
 - [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md) assembles all detached physics inputs behind one versioned boundary.
 - [GraphPhysicsEngine](GraphPhysicsEngine.md) defines the compiled motion port and a deterministic orchestration test implementation.
 - [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md) protects engine stepping and kinematics-frame publication.
+- [LegacyGraphPhysicsSettingsAdapter](LegacyGraphPhysicsSettingsAdapter.md) translates legacy global and LinkType settings without host imports.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
@@ -165,7 +166,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose all versioned physics inputs behind one runtime boundary.
 - [x] Define the host-neutral `PhysicsEngine` code contract and deterministic test implementation.
 - [x] Coordinate physics input, stepping, and protected kinematics-frame publication.
-- [ ] Adapt legacy physics configuration and transient/container state into the host-neutral inputs.
+- [x] Adapt legacy global and LinkType physics configuration into host-neutral settings input.
+- [ ] Adapt legacy transient lock, drag, direction, and freeze state into constraint input.
 
 ## Validation during the migration
 
