@@ -57,6 +57,6 @@ Avoid subclasses for each link type. Data-driven semantics plus pure functions a
 
 ## Connections
 
-Edges are stored in [GraphStore](GraphStore.md), rendered by [GraphRenderer](GraphRenderer.md), and converted into forces by [PhysicsEngine](PhysicsEngine.md).
+Edges are stored in [GraphStore](GraphStore.md), rendered by [GraphRenderer](GraphRenderer.md), and reduced to force-facing fields by [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) for [PhysicsEngine](PhysicsEngine.md).
 
 During migration, [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) maps the active engine's discovered, visible, overlay, parent, and expansion-owned edges into this model. The adapter copies endpoint IDs and classifies their origin without changing the renderer's edge collection.

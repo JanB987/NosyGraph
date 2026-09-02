@@ -121,7 +121,7 @@ Implemented as dormant, tested types: [GraphRuntimeState](GraphRuntimeState.md),
 - Compose positions into render snapshots.
 - Characterize dragging, pinning, freezing, embedded boundaries, and layout settings.
 
-The host-neutral [GraphKinematicsFrame](GraphKinematicsFrame.md) and dormant [GraphKinematicsStore](GraphKinematicsStore.md) now establish separate sequencing. [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) overlays only revision-compatible frames and reports missing or obsolete node entries. Physics projections and live behavior characterization remain pending.
+The host-neutral [GraphKinematicsFrame](GraphKinematicsFrame.md) and dormant [GraphKinematicsStore](GraphKinematicsStore.md) now establish separate sequencing. [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) overlays only revision-compatible frames and reports missing or obsolete node entries. [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) supplies a minimal, detached physics model. Live physics behavior characterization remains pending.
 
 ### Stage 3 — store-mode initialization
 
@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-The runtime-mode wrappers, independent kinematics owner, and detached snapshot composer now exist without production wiring. The next implementation increment extracts host-neutral physics input projections. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+The runtime-mode wrappers and dormant kinematics input/output boundaries now exist without production wiring. The next implementation increment characterizes how the legacy engine derives context, pinning, and link-force inputs. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

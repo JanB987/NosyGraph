@@ -48,4 +48,5 @@ The reusable `copyGraphSnapshot()` function lives beside the `GraphSnapshot` dom
 - Reads semantic snapshots from [GraphRuntimeState](GraphRuntimeState.md).
 - Reads motion from [GraphKinematicsStore](GraphKinematicsStore.md).
 - Produces the future input for [GraphRenderer](GraphRenderer.md).
+- Supplies detached snapshots to [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md).
 - Enforces the structural/frame compatibility rule from [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md).

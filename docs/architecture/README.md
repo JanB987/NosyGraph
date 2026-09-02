@@ -34,6 +34,7 @@ GraphController <--------> Obsidian adapters
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
+- [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
@@ -57,6 +58,7 @@ GraphController <--------> Obsidian adapters
 
 - [GraphNodeInstance](GraphNodeInstance.md) is one visible occurrence of a note.
 - [GraphKinematicsFrame](GraphKinematicsFrame.md) carries sequenced positions and velocities stamped with their structural revision.
+- [GraphPhysicsInput](GraphPhysicsInput.md) contains only versioned nodes and edges required by physics.
 - [GraphNote](GraphNote.md) represents a Markdown note independently of its visualization.
 - [GraphBadge](GraphBadge.md) describes an available node expansion.
 - [GraphExpansion](GraphExpansion.md) records ownership of nodes and edges added through a badge.
@@ -144,7 +146,8 @@ GraphController <--------> Obsidian adapters
 - [x] Introduce dormant runtime-mode types and state wrappers without changing production composition.
 - [x] Separate structural revision from kinematics frame sequencing in dormant domain and store types.
 - [x] Compose compatible kinematics frames into detached render snapshots.
-- [ ] Extract host-neutral physics input projections from semantic snapshots and current motion.
+- [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
+- [ ] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 
 ## Validation during the migration
 
