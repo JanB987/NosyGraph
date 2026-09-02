@@ -31,4 +31,4 @@ Diagnostics from each projector remain grouped as `graph`, `constraints`, and `c
 
 ## Next extraction
 
-Define the host-neutral `PhysicsEngine` interface in code and provide a deterministic no-op/test implementation before adapting the legacy loop.
+[GraphPhysicsEngine](GraphPhysicsEngine.md) now supplies the compiled host-neutral interface and deterministic test implementation. The next extraction coordinates stepping and protected frame publication.

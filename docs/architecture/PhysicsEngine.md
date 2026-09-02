@@ -4,14 +4,14 @@
 
 `PhysicsEngine` evolves positions for graph bodies. It is host-neutral and rendering-neutral.
 
-## Proposed contract
+## Compiled contract
+
+Current implementation and test double: [GraphPhysicsEngine](GraphPhysicsEngine.md).
 
 ```ts
-interface PhysicsEngine {
-  setGraph(input: GraphPhysicsInput): void;
-  updateSettings(settings: GraphPhysicsSettings): void;
-  updateConstraints(constraints: GraphPhysicsConstraintState): void;
-  updateContainers(containers: GraphPhysicsContainerState): void;
+interface GraphPhysicsEngine {
+  setInput(input: GraphPhysicsRuntimeInput): void;
+  getStatus(): "stopped" | "running" | "frozen";
   start(): void;
   reheat(amount?: number): void;
   freeze(): void;
@@ -19,11 +19,10 @@ interface PhysicsEngine {
   stop(): void;
   step(deltaTime: number): GraphKinematicsFrameInput;
   setNodePosition(nodeId: NodeInstanceId, point: Point): void;
-  setNodePinned(nodeId: NodeInstanceId, pinned: boolean): void;
 }
 ```
 
-The complete `setGraph`, settings, and constraint data is assembled by [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md). The next increment turns this proposed interface into a compiled, tested contract.
+The complete graph, settings, and constraint data is assembled by [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md). The compiled port accepts that one runtime input rather than reading separate legacy owners.
 
 ## Connections
 
