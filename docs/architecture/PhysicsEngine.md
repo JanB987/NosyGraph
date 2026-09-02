@@ -9,7 +9,7 @@
 ```ts
 interface PhysicsEngine {
   setGraph(input: GraphPhysicsInput): void;
-  updateSettings(settings: PhysicsSettings): void;
+  updateSettings(settings: GraphPhysicsSettings): void;
   start(): void;
   reheat(amount?: number): void;
   freeze(): void;
@@ -24,6 +24,7 @@ interface PhysicsEngine {
 ## Connections
 
 - Receives [GraphPhysicsInput](GraphPhysicsInput.md) from [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md).
+- Uses normalized global and LinkType policy from [GraphPhysicsSettings](GraphPhysicsSettings.md).
 - Returns [GraphKinematicsFrame](GraphKinematicsFrame.md) inputs for publication by [GraphKinematicsStore](GraphKinematicsStore.md).
 - Supplies independently sequenced motion for [GraphRenderer](GraphRenderer.md) without advancing structural graph revisions.
 - Honors [GraphContainer](GraphGroupAndContainer.md) isolation without knowing group or note semantics.

@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-The runtime-mode wrappers, dormant kinematics boundaries, and source-level legacy physics characterization now exist without production wiring. The next implementation increment adds host-neutral physics settings and LinkType force-policy normalization. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+The runtime-mode wrappers, dormant kinematics boundaries, and normalized [GraphPhysicsSettings](GraphPhysicsSettings.md) now exist without production wiring. The next implementation increment separates persistent pins from transient physics constraints. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

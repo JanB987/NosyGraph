@@ -131,7 +131,7 @@ These are runtime-control states, not structural graph state and not ordinary ki
 
 ## Extraction consequences
 
-The next host-neutral settings model should:
+The host-neutral [GraphPhysicsSettings](GraphPhysicsSettings.md) model now addresses items 1 through 5 below. Constraint and container work remains:
 
 1. Separate physics settings from render-only `textFadeThreshold`.
 2. Carry damping and settling cadence explicitly instead of leaving hidden constants.
