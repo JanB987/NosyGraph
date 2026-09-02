@@ -24,6 +24,8 @@ interface GraphNodeInstance {
 
 `NodeOrigin` distinguishes roots, filters, [badge expansions](GraphExpansion.md), and embedded graph instances.
 
+`position` and `velocity` remain in this shape so existing snapshots stay compatible during migration. The future runtime will compose them from [GraphKinematicsFrame](GraphKinematicsFrame.md); semantic node ownership and high-frequency motion will not share a revision counter.
+
 ## Connections
 
 - Stored in [GraphStore](GraphStore.md).

@@ -121,6 +121,8 @@ Implemented as dormant, tested types: [GraphRuntimeState](GraphRuntimeState.md),
 - Compose positions into render snapshots.
 - Characterize dragging, pinning, freezing, embedded boundaries, and layout settings.
 
+The host-neutral [GraphKinematicsFrame](GraphKinematicsFrame.md) and dormant [GraphKinematicsStore](GraphKinematicsStore.md) now establish separate sequencing. Snapshot composition, physics projections, and live behavior characterization remain pending.
+
 ### Stage 3 — store-mode initialization
 
 - Build one initial validated `GraphSnapshot` from graph configuration and Obsidian read adapters.
@@ -181,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-The runtime-mode types and two narrow runtime-state wrappers now exist without production wiring. The next implementation increment separates structural revisions from physics kinematics frames. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+The runtime-mode wrappers and independent kinematics frame owner now exist without production wiring. The next implementation increment composes compatible motion into detached snapshots. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

@@ -24,11 +24,13 @@ interface PhysicsEngine {
 ## Connections
 
 - Receives physics projections of [GraphStore](GraphStore.md) snapshots.
-- Returns positions that [GraphController](GraphController.md) can apply to the store.
-- Supplies frames for [GraphRenderer](GraphRenderer.md).
+- Publishes [GraphKinematicsFrame](GraphKinematicsFrame.md) values to [GraphKinematicsStore](GraphKinematicsStore.md).
+- Supplies independently sequenced motion for [GraphRenderer](GraphRenderer.md) without advancing structural graph revisions.
 - Honors [GraphContainer](GraphGroupAndContainer.md) isolation without knowing group or note semantics.
 
 [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md) separates rapidly changing kinematics frames from the structural revision used to guard asynchronous graph transitions.
+
+The frame and owner now exist as dormant, tested architecture. The legacy physics loop is not connected to them yet.
 
 ## Must not know
 

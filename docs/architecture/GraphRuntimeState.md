@@ -41,6 +41,6 @@ Legacy mode returns `runtime-read-only` when application code attempts to apply 
 - Applies [GraphChangeSet](GraphChangeSet.md) values only when the active implementation supports them.
 - Follows the exclusive-mode rules in [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md).
 
-## Next extraction
+## Kinematics separation
 
-Separate the structural revision from physics kinematics frame sequencing before this boundary is connected to live production composition.
+[GraphKinematicsStore](GraphKinematicsStore.md) now provides an independent sequence for physics frames. The next extraction composes a compatible frame into a detached render snapshot; neither boundary is connected to live production composition yet.
