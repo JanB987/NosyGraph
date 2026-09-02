@@ -44,6 +44,7 @@ The function copies arrays and coordinate objects so input producers, physics, a
 - Persistent pins originate in semantic graph state and persistence.
 - Transient constraints originate in [GraphController](GraphController.md), renderer intents, direction layout, and topology coordination.
 - The observed legacy mapping is recorded in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
+- [LegacyGraphPhysicsConstraintAdapter](LegacyGraphPhysicsConstraintAdapter.md) translates current runtime collections into these variants.
 
 ## Constraint projection
 
