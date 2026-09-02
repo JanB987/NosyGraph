@@ -38,3 +38,5 @@ The version fields let physics identify both the semantic topology and the motio
 - Uses composed positions from [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md).
 - Will be consumed by [PhysicsEngine](PhysicsEngine.md).
 - Its node contexts support future [GraphContainer](GraphGroupAndContainer.md) isolation policy.
+
+The source trace in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md) shows that exact isolation also requires container membership, bounds, and transient constraint state; `contextId` alone is not a parity-complete physics input.

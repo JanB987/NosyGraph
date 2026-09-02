@@ -32,6 +32,8 @@ interface PhysicsEngine {
 
 The frame owner, snapshot composer, and input projector now exist as dormant, tested architecture. The legacy physics loop is not connected to them yet.
 
+[Legacy Physics Characterization](LegacyPhysicsCharacterization.md) records the exact current defaults, force precedence, direction targets, container isolation, pins, transient locks, freeze behavior, and settling rules that an implementation must preserve or deliberately supersede.
+
 ## Must not know
 
 - Note paths or frontmatter

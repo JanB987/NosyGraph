@@ -84,6 +84,7 @@ GraphController <--------> Obsidian adapters
 
 - [Badge Toggle Shadow Regression](BadgeToggleShadowRegression.md) defines the repeatable manual matrix and evidence required before live state cutover.
 - [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md) defines exclusive runtime modes, activation gates, and the staged move out of `GraphEngine`.
+- [Legacy Physics Characterization](LegacyPhysicsCharacterization.md) records the live force, direction, pin, container, freeze, and settling behavior that extraction must preserve.
 
 ## Rules of the architecture
 
@@ -147,7 +148,8 @@ GraphController <--------> Obsidian adapters
 - [x] Separate structural revision from kinematics frame sequencing in dormant domain and store types.
 - [x] Compose compatible kinematics frames into detached render snapshots.
 - [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
-- [ ] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
+- [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
+- [ ] Introduce host-neutral physics settings and LinkType force-policy normalization.
 
 ## Validation during the migration
 
