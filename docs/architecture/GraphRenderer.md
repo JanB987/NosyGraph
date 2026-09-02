@@ -29,9 +29,9 @@ class GraphRenderer {
 
 ## Connections
 
-- Reads snapshots from [GraphStore](GraphStore.md).
+- Will read detached semantic and motion snapshots from [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md).
 - Emits intents to [GraphController](GraphController.md).
-- Uses positions from [PhysicsEngine](PhysicsEngine.md).
+- Uses independently sequenced positions from [GraphKinematicsStore](GraphKinematicsStore.md).
 - Renders [GraphLens](GraphLens.md) contexts with clipping and local transforms.
 
 The renderer never reads or writes notes.

@@ -39,6 +39,6 @@ An accepted frame advances even when its coordinates equal the previous frame. S
 - Will supply the latest compatible positions and velocities to a render-snapshot composer.
 - Remains separate from [GraphRuntimeState](GraphRuntimeState.md), which owns semantic snapshots and structural changes.
 
-## Next extraction
+## Snapshot composition
 
-Add a host-neutral composer that overlays a compatible kinematics frame onto a semantic `GraphSnapshot` without mutating either source.
+[GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) now overlays compatible frames without mutating either source. The next extraction defines the smaller node and edge projections that physics actually consumes.

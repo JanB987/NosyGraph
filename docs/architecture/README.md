@@ -33,6 +33,7 @@ GraphController <--------> Obsidian adapters
 - [GraphController](GraphController.md) executes user and host commands.
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
+- [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
@@ -142,7 +143,8 @@ GraphController <--------> Obsidian adapters
 - [x] Plan the live collection-ownership cutover from `GraphEngine` to `GraphStore`.
 - [x] Introduce dormant runtime-mode types and state wrappers without changing production composition.
 - [x] Separate structural revision from kinematics frame sequencing in dormant domain and store types.
-- [ ] Compose compatible kinematics frames into detached render snapshots.
+- [x] Compose compatible kinematics frames into detached render snapshots.
+- [ ] Extract host-neutral physics input projections from semantic snapshots and current motion.
 
 ## Validation during the migration
 
