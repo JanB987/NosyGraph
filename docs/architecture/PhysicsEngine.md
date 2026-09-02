@@ -11,6 +11,7 @@ interface PhysicsEngine {
   setGraph(input: GraphPhysicsInput): void;
   updateSettings(settings: GraphPhysicsSettings): void;
   updateConstraints(constraints: GraphPhysicsConstraintState): void;
+  updateContainers(containers: GraphPhysicsContainerState): void;
   start(): void;
   reheat(amount?: number): void;
   freeze(): void;
@@ -27,6 +28,7 @@ interface PhysicsEngine {
 - Receives [GraphPhysicsInput](GraphPhysicsInput.md) from [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md).
 - Uses normalized global and LinkType policy from [GraphPhysicsSettings](GraphPhysicsSettings.md).
 - Applies persistent and transient movement rules from [GraphPhysicsConstraints](GraphPhysicsConstraints.md).
+- Applies membership, boundary, and embedded-gravity rules from [GraphPhysicsContainers](GraphPhysicsContainers.md).
 - Returns [GraphKinematicsFrame](GraphKinematicsFrame.md) inputs for publication by [GraphKinematicsStore](GraphKinematicsStore.md).
 - Supplies independently sequenced motion for [GraphRenderer](GraphRenderer.md) without advancing structural graph revisions.
 - Honors [GraphContainer](GraphGroupAndContainer.md) isolation without knowing group or note semantics.

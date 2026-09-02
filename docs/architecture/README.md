@@ -62,6 +62,7 @@ GraphController <--------> Obsidian adapters
 - [GraphPhysicsInput](GraphPhysicsInput.md) contains only versioned nodes and edges required by physics.
 - [GraphPhysicsSettings](GraphPhysicsSettings.md) normalizes global simulation values and distinct force/direction LinkType policies.
 - [GraphPhysicsConstraints](GraphPhysicsConstraints.md) separates persisted pins from transient locks, targets, and freezes.
+- [GraphPhysicsContainers](GraphPhysicsContainers.md) models host-neutral spatial membership, bounds, nesting, and embedded gravity.
 - [GraphNote](GraphNote.md) represents a Markdown note independently of its visualization.
 - [GraphBadge](GraphBadge.md) describes an available node expansion.
 - [GraphExpansion](GraphExpansion.md) records ownership of nodes and edges added through a badge.
@@ -155,7 +156,8 @@ GraphController <--------> Obsidian adapters
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.
 - [x] Separate persistent pin intent from transient physics constraints in dormant types.
 - [x] Project persistent pins and transient constraints into one detached physics constraint state.
-- [ ] Model container membership and bounds as host-neutral physics constraints.
+- [x] Model container membership and bounds as host-neutral physics constraints.
+- [ ] Validate and detach container physics projections against graph snapshots.
 
 ## Validation during the migration
 

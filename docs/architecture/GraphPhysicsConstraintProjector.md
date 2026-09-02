@@ -39,4 +39,4 @@ Ignoring a missing-node transient constraint is safe for a read projection. The 
 
 ## Next extraction
 
-Model container membership, bounds, ancestry, and anchor relationships as a detached physics-constraint projection.
+[GraphPhysicsContainers](GraphPhysicsContainers.md) now models container membership, bounds, ancestry, and anchor relationships. Its validated projector remains the next extraction.
