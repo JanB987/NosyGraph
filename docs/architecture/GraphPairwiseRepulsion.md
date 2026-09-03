@@ -30,4 +30,4 @@ Two less-obvious legacy behaviors are intentional:
 
 ## Next extraction
 
-Extract the pure boundary-based link-spring calculation, then compose both calculations in a stateless force accumulator.
+[GraphLinkSpring](GraphLinkSpring.md) now supplies the pure boundary-based spring. The next extraction composes both calculations in a stateless force accumulator.

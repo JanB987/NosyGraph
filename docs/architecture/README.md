@@ -189,7 +189,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose legacy and experiment frames behind one explicit parity service.
 - [x] Expose the safe zero-step parity check through `GraphEngine`.
 - [x] Extract a pure pairwise-repulsion calculation from the characterized solver behavior.
-- [ ] Extract a pure boundary-based link-spring calculation.
+- [x] Extract a pure boundary-based link-spring calculation.
+- [ ] Compose node repulsion and link springs in a stateless force accumulator.
 
 ## Validation during the migration
 
