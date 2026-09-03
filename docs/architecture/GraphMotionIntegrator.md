@@ -28,4 +28,4 @@ Transient pin-reposition locks precede persistent pins so the temporary target c
 
 ## Next extraction
 
-Extract container-boundary confinement and apply it after free-node integration.
+[GraphContainerConfinement](GraphContainerConfinement.md) now applies parent bounds after integration while preserving the embedded raw-layout no-op. The next extraction composes the pure stages into an engine step.
