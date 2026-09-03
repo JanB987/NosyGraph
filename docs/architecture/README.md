@@ -194,7 +194,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose node repulsion and link springs in a stateless force accumulator.
 - [x] Extract pure world-center and embedded-container gravity calculations.
 - [x] Add eligible center gravity to the stateless force accumulator.
-- [ ] Extract constraint-aware damping and position integration.
+- [x] Extract constraint-aware damping and position integration.
+- [ ] Extract parent and embedded container-boundary confinement.
 
 ## Validation during the migration
 

@@ -30,4 +30,4 @@ Optional policy callbacks can further restrict recipients or replace the default
 
 ## Next extraction
 
-Extract damping, constraint enforcement, and position integration.
+[GraphMotionIntegrator](GraphMotionIntegrator.md) now handles constraint priority, damping, and position integration. The next extraction adds container-boundary confinement.
