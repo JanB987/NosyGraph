@@ -28,4 +28,4 @@ For centers closer than `0.001`, the calculation uses the legacy stable FNV-1a a
 
 ## Next extraction
 
-Compose pairwise repulsion and link springs in a stateless force accumulator with explicit eligibility callbacks.
+[GraphForceAccumulator](GraphForceAccumulator.md) composes link springs and node repulsion with explicit eligibility policies. The next extraction adds center and embedded-container gravity.
