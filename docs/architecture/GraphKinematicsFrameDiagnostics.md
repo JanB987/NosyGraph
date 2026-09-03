@@ -18,9 +18,9 @@ Versions and counts compare exactly. Aggregate floating-point values use the cal
 
 - Consumes detached [GraphKinematicsFrame](GraphKinematicsFrame.md) values.
 - Complements input-level [GraphPhysicsShadowDiagnostics](GraphPhysicsShadowDiagnostics.md).
-- Will accept copied frames from the legacy solver and the new [GraphPhysicsEngine](GraphPhysicsEngine.md).
+- Accepts copied legacy frames from [LegacyGraphKinematicsAdapter](LegacyGraphKinematicsAdapter.md) and future frames from the new [GraphPhysicsEngine](GraphPhysicsEngine.md).
 - Aggregate agreement is smoke evidence, not proof of per-node parity; focused per-node characterization remains necessary before cutover.
 
 ## Next extraction
 
-Expose a detached legacy kinematics frame capture stamped with the same structural revision used by physics shadow input.
+Wire [LegacyGraphKinematicsAdapter](LegacyGraphKinematicsAdapter.md) to an explicit `GraphEngine` capture stamped with the same structural revision used by physics shadow input.
