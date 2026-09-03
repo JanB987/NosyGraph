@@ -193,7 +193,8 @@ GraphController <--------> Obsidian adapters
 - [x] Exclude non-force overlay edges at the physics projection boundary.
 - [x] Compose node repulsion and link springs in a stateless force accumulator.
 - [x] Extract pure world-center and embedded-container gravity calculations.
-- [ ] Add eligible center gravity to the stateless force accumulator.
+- [x] Add eligible center gravity to the stateless force accumulator.
+- [ ] Extract constraint-aware damping and position integration.
 
 ## Validation during the migration
 

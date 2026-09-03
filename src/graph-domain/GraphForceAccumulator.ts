@@ -1,4 +1,5 @@
 import type { EdgeId, NodeInstanceId } from "./graph-identifiers";
+import { calculateGraphCenterGravity } from "./GraphCenterGravity";
 import { calculateGraphLinkSpring } from "./GraphLinkSpring";
 import type { GraphVector } from "./GraphNodeInstance";
 import { calculateGraphPairwiseRepulsion } from "./GraphPairwiseRepulsion";
@@ -17,6 +18,8 @@ export interface GraphForceAccumulationResult {
     skippedSeparatedEdgeIds: readonly EdgeId[];
     skippedDirectionEdgeIds: readonly EdgeId[];
     blockedVelocityApplicationCount: number;
+    worldGravityApplicationCount: number;
+    embeddedGravityApplicationCount: number;
   };
 }
 
@@ -33,6 +36,8 @@ export class GraphForceAccumulator {
     const skippedDirectionEdgeIds: EdgeId[] = [];
     let skippedSeparatedNodePairCount = 0;
     let blockedVelocityApplicationCount = 0;
+    let worldGravityApplicationCount = 0;
+    let embeddedGravityApplicationCount = 0;
 
     if (input.constraints.simulationFrozen) {
       return result(true);
@@ -50,15 +55,16 @@ export class GraphForceAccumulator {
     const mayInteract = (firstNodeId: NodeInstanceId, secondNodeId: NodeInstanceId) =>
       policy.nodesMayInteract?.(firstNodeId, secondNodeId)
       ?? shareContainerBoundary(firstNodeId, secondNodeId, memberships);
-    const add = (nodeId: NodeInstanceId, delta: Readonly<GraphVector>) => {
+    const add = (nodeId: NodeInstanceId, delta: Readonly<GraphVector>): boolean => {
       if (!canReceive(nodeId)) {
         blockedVelocityApplicationCount += 1;
-        return;
+        return false;
       }
       const current = velocityDeltas.get(nodeId);
-      if (!current) return;
+      if (!current) return false;
       current.x += delta.x;
       current.y += delta.y;
+      return true;
     };
 
     for (let firstIndex = 0; firstIndex < input.graph.nodes.length; firstIndex += 1) {
@@ -102,6 +108,26 @@ export class GraphForceAccumulator {
       add(second.id, force.secondVelocityDelta);
     }
 
+    const gravityBlockedNodeIds = new Set<NodeInstanceId>([
+      ...input.constraints.persistentPins.map((pin) => pin.nodeId),
+      ...input.constraints.transientNodeConstraints.map((constraint) => constraint.nodeId)
+    ]);
+    for (const node of input.graph.nodes) {
+      const gravity = calculateGraphCenterGravity(
+        node,
+        input.containers,
+        input.settings
+      );
+      if (gravity.kind === "none") continue;
+      if (gravityBlockedNodeIds.has(node.id)) {
+        blockedVelocityApplicationCount += 1;
+        continue;
+      }
+      if (!add(node.id, gravity.velocityDelta)) continue;
+      if (gravity.kind === "world") worldGravityApplicationCount += 1;
+      else embeddedGravityApplicationCount += 1;
+    }
+
     return result(false);
 
     function result(simulationFrozen: boolean): GraphForceAccumulationResult {
@@ -112,7 +138,9 @@ export class GraphForceAccumulator {
           skippedSeparatedNodePairCount,
           skippedSeparatedEdgeIds,
           skippedDirectionEdgeIds,
-          blockedVelocityApplicationCount
+          blockedVelocityApplicationCount,
+          worldGravityApplicationCount,
+          embeddedGravityApplicationCount
         }
       };
     }

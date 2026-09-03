@@ -84,7 +84,7 @@ describe("GraphForceAccumulator", () => {
 
     expect(result.velocityDeltas.get("A")).toEqual({ x: 0, y: 0 });
     expect(result.velocityDeltas.get("B")?.x).toBeCloseTo(7.8);
-    expect(result.diagnostics.blockedVelocityApplicationCount).toBe(2);
+    expect(result.diagnostics.blockedVelocityApplicationCount).toBe(4);
   });
 
   it("returns zero deltas while the simulation is frozen", () => {
@@ -107,5 +107,62 @@ describe("GraphForceAccumulator", () => {
 
     expect(result.velocityDeltas.get("A")?.x).toBeCloseTo(-7.8);
     expect(result.velocityDeltas.get("B")).toEqual({ x: 0, y: 0 });
+  });
+
+  it("adds world and embedded gravity to eligible nodes", () => {
+    const value = input();
+    value.settings.centerStrength = 0.1;
+    value.graph.nodes[0]!.position = { x: 10, y: 20 };
+    value.graph.nodes[1]!.contextId = "embedded:lens";
+    value.graph.nodes[1]!.position = { x: 40, y: 50 };
+    value.containers = {
+      containers: [{
+        id: "lens", kind: "embedded", originNodeId: "A", memberNodeIds: ["B"],
+        bounds: { left: 0, top: 0, right: 100, bottom: 100 },
+        parentContainerIds: [], gravityStrength: 0.2
+      }]
+    };
+
+    const result = new GraphForceAccumulator().accumulate(value, {
+      nodesMayInteract: () => false
+    });
+
+    expect(result.velocityDeltas.get("A")).toEqual({ x: -1, y: -2 });
+    expect(result.velocityDeltas.get("B")?.x).toBeCloseTo(1.95);
+    expect(result.velocityDeltas.get("B")?.y).toBe(0);
+    expect(result.diagnostics).toMatchObject({
+      worldGravityApplicationCount: 1,
+      embeddedGravityApplicationCount: 1
+    });
+  });
+
+  it("does not center persistent pins or transiently constrained nodes", () => {
+    const value = input();
+    value.settings.repulsionStrength = 0;
+    value.settings.centerStrength = 0.1;
+    value.graph.edges = [];
+    value.constraints.persistentPins = [{
+      nodeId: "A", position: { x: 0, y: 0 }
+    }];
+    value.constraints.transientNodeConstraints = [{
+      kind: "position-lock",
+      nodeId: "B",
+      reason: "focal",
+      position: { x: 140, y: 0 }
+    }];
+
+    const result = new GraphForceAccumulator().accumulate(value, {
+      nodesMayInteract: () => false
+    });
+
+    expect(Array.from(result.velocityDeltas.values())).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 0 }
+    ]);
+    expect(result.diagnostics).toMatchObject({
+      blockedVelocityApplicationCount: 2,
+      worldGravityApplicationCount: 0,
+      embeddedGravityApplicationCount: 0
+    });
   });
 });

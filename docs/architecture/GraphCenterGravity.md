@@ -25,4 +25,4 @@ This function does not decide whether a lock, drag, direction target, or freeze 
 
 ## Next extraction
 
-Add center gravity to force accumulation, then extract damping, constraint enforcement, and position integration.
+[GraphForceAccumulator](GraphForceAccumulator.md) now adds eligible center gravity. The next extraction handles damping, constraint enforcement, and position integration.
