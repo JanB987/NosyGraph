@@ -174,7 +174,8 @@ GraphController <--------> Obsidian adapters
 - [x] Adapt legacy parent and embedded containers into validated physics container candidates.
 - [x] Compose legacy physics reads behind one host-neutral facade before production wiring.
 - [x] Add a dormant `GraphEngine` method that captures the facade's plain read state.
-- [ ] Compose a live read-only physics runtime input for shadow diagnostics without stepping it.
+- [x] Compose a live read-only physics runtime input for shadow diagnostics without stepping it.
+- [ ] Wire the shadow input service to `GraphEngine` without calling it from the animation loop.
 
 ## Validation during the migration
 
