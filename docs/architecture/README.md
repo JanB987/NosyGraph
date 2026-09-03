@@ -179,7 +179,8 @@ GraphController <--------> Obsidian adapters
 - [x] Define a compact physics shadow diagnostic summary and comparison boundary.
 - [x] Add an opt-in observer for explicit physics shadow captures.
 - [x] Expose compact observation through `GraphEngine` without automatic logging.
-- [ ] Define a compact kinematics-frame summary for solver parity evidence.
+- [x] Define a compact kinematics-frame summary for solver parity evidence.
+- [ ] Expose a detached legacy kinematics frame with matching structural revision.
 
 ## Validation during the migration
 

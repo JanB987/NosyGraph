@@ -35,4 +35,5 @@ The structural revision stamp also lets a future snapshot composer detect that a
 - Produced in the future by [PhysicsEngine](PhysicsEngine.md).
 - Uses position and velocity types from [GraphNodeInstance](GraphNodeInstance.md).
 - Will be combined with semantic snapshots for [GraphRenderer](GraphRenderer.md).
+- Summarized for bounded parity evidence by [GraphKinematicsFrameDiagnostics](GraphKinematicsFrameDiagnostics.md).
 - Implements the sequencing decision in [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md).
