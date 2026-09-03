@@ -28,4 +28,4 @@ Optional policy callbacks can further restrict recipients or replace the default
 
 ## Next extraction
 
-Extract pure center and embedded-container gravity accumulation before implementing damping and integration.
+[GraphCenterGravity](GraphCenterGravity.md) now defines pure world and embedded gravity. The next extraction adds it to accumulation before implementing damping and integration.
