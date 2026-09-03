@@ -30,6 +30,12 @@ import {
   GraphPhysicsShadowSampleService,
   type GraphPhysicsShadowSample
 } from "./graph-application/GraphPhysicsShadowSampleService";
+import { GraphPhysicsExperimentRunner } from "./graph-application/GraphPhysicsExperimentRunner";
+import {
+  GraphPhysicsParityService,
+  type GraphPhysicsParityResult
+} from "./graph-application/GraphPhysicsParityService";
+import type { GraphKinematicsComparisonOptions } from "./graph-application/GraphKinematicsFrameComparator";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import {
   LegacyGraphKinematicsAdapter,
@@ -463,6 +469,7 @@ export class GraphEngine {
   private readonly architectureQueries: GraphQueries;
   private readonly architecturePhysicsShadow: GraphPhysicsShadowInputService;
   private readonly architecturePhysicsSample: GraphPhysicsShadowSampleService;
+  private readonly architecturePhysicsParity: GraphPhysicsParityService;
 
   private menuButton!: HTMLButtonElement;
   private fitButton!: HTMLButtonElement;
@@ -760,6 +767,15 @@ export class GraphEngine {
         this.captureArchitecturePhysicsInput(sequence) },
       { captureLegacyKinematicsFrame: (sequence) =>
         this.captureLegacyKinematicsFrame(sequence) }
+    );
+    const physicsExperiments = new GraphPhysicsExperimentRunner({
+      captureArchitecturePhysicsInput: (sequence) =>
+        this.captureArchitecturePhysicsInput(sequence)
+    });
+    this.architecturePhysicsParity = new GraphPhysicsParityService(
+      { captureLegacyKinematicsFrame: (sequence) =>
+        this.captureLegacyKinematicsFrame(sequence) },
+      physicsExperiments
     );
     const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
       getSource: (noteId) => {
@@ -12893,6 +12909,14 @@ export class GraphEngine {
   /** Captures compact input and motion evidence with an exact revision check. */
   captureArchitecturePhysicsSample(sequence = 0): GraphPhysicsShadowSample {
     return this.architecturePhysicsSample.capture(sequence);
+  }
+
+  /** Compares current motion with a zero-step detached engine; never advances either side. */
+  compareArchitecturePhysicsParity(
+    sequence = 0,
+    options: GraphKinematicsComparisonOptions = {}
+  ): GraphPhysicsParityResult {
+    return this.architecturePhysicsParity.compare(sequence, options);
   }
 
   /**

@@ -20,6 +20,8 @@ An explicit non-negative step is supported for controlled fixtures. Meaningful l
 - Returns experiment input/frame summaries and legacy adapter diagnostics.
 - Does not publish, render, mutate, retain engines, or log.
 
-## Next extraction
+## Production wiring
 
-Expose only the safe zero-step parity check through `GraphEngine`. Keep stepped experiments at the application boundary until synchronized sampling exists.
+`GraphEngine.compareArchitecturePhysicsParity()` exposes only the safe zero-step check. Callers may configure frame tolerances and report bounds, but the method does not accept `deltaTime`. It is never called automatically.
+
+Stepped experiments remain at the application boundary until synchronized sampling exists. The next extraction starts decomposing the characterized force calculation behind the replacement engine contract.
