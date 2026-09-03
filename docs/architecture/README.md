@@ -196,7 +196,8 @@ GraphController <--------> Obsidian adapters
 - [x] Add eligible center gravity to the stateless force accumulator.
 - [x] Extract constraint-aware damping and position integration.
 - [x] Extract parent and embedded container-boundary confinement.
-- [ ] Compose pure force, integration, and confinement stages in a parity engine.
+- [x] Compose pure force, integration, and confinement stages in a parity engine.
+- [ ] Extract node-container repulsion and origin reaction.
 
 ## Validation during the migration
 

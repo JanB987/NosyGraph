@@ -32,4 +32,4 @@ Embedded container bounds deliberately do not clamp raw node coordinates. The li
 
 ## Next extraction
 
-Compose force accumulation, integration, and confinement into a parity-oriented engine step before adding container repulsion.
+[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) composes force accumulation, integration, and confinement. The next extraction adds container repulsion while the engine remains experimental.

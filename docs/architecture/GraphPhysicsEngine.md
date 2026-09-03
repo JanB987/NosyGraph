@@ -40,6 +40,10 @@ The test implementation:
 
 It intentionally applies no forces, settings, pins, or containers. Those behaviors belong in a future legacy-parity implementation and its characterization tests.
 
+## Staged implementation
+
+[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) composes the pure legacy-compatible force, integration, and confinement stages extracted so far. It remains experimental and incomplete; container repulsion and anchor behavior are still missing.
+
 ## Connections
 
 - Consumes [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md) output.
