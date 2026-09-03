@@ -22,7 +22,7 @@ For centers closer than `0.001`, the calculation uses the legacy stable FNV-1a a
 
 - Consumes normalized force policies from [GraphPhysicsSettings](GraphPhysicsSettings.md).
 - Consumes resolved radii and identity from [GraphPhysicsInput](GraphPhysicsInput.md).
-- Overlay, direction, missing-endpoint, and separated-container decisions remain orchestration concerns outside this function.
+- [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) removes overlay and missing-endpoint edges. Direction and separated-container decisions remain force-accumulator concerns outside this function.
 - Complements [GraphPairwiseRepulsion](GraphPairwiseRepulsion.md).
 - Implements the spring section recorded in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 

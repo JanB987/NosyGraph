@@ -35,6 +35,14 @@ function snapshot(): GraphSnapshot {
         linkTypeId: "parts",
         contextId: "graph:root",
         origin: "discovered"
+      },
+      {
+        id: "edge:overlay",
+        fromNodeId: nodeA,
+        toNodeId: nodeB,
+        linkTypeId: "parts",
+        contextId: "graph:root",
+        origin: "overlay"
       }
     ],
     badges: [{
@@ -105,7 +113,10 @@ describe("GraphPhysicsInputProjector", () => {
         contextId: "graph:root"
       }]
     });
-    expect(result.diagnostics.ignoredEdgeIds).toEqual(["edge:dangling"]);
+    expect(result.diagnostics.ignoredEdgeIds).toEqual([
+      "edge:dangling",
+      "edge:overlay"
+    ]);
     expect(result.input.nodes[0]).not.toHaveProperty("noteId");
     expect(result.input.nodes[0]).not.toHaveProperty("selected");
     expect(result.input).not.toHaveProperty("notes");

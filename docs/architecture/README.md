@@ -190,6 +190,7 @@ GraphController <--------> Obsidian adapters
 - [x] Expose the safe zero-step parity check through `GraphEngine`.
 - [x] Extract a pure pairwise-repulsion calculation from the characterized solver behavior.
 - [x] Extract a pure boundary-based link-spring calculation.
+- [x] Exclude non-force overlay edges at the physics projection boundary.
 - [ ] Compose node repulsion and link springs in a stateless force accumulator.
 
 ## Validation during the migration

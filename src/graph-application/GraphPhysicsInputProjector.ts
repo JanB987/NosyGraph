@@ -29,7 +29,11 @@ export class GraphPhysicsInputProjector {
     }));
 
     const edges = snapshot.edges.flatMap((edge) => {
-      if (!nodeIds.has(edge.fromNodeId) || !nodeIds.has(edge.toNodeId)) {
+      if (
+        edge.origin === "overlay"
+        || !nodeIds.has(edge.fromNodeId)
+        || !nodeIds.has(edge.toNodeId)
+      ) {
         ignoredEdgeIds.push(edge.id);
         return [];
       }

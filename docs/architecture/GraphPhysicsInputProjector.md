@@ -26,10 +26,10 @@ class GraphPhysicsInputProjector {
 - Copy position and velocity objects so physics cannot mutate the source snapshot.
 - Preserve node and edge context IDs for later isolation decisions.
 - Retain `linkTypeId` for later force-settings lookup.
-- Include an edge only when both endpoint node instances exist.
-- Report excluded dangling edges as `ignoredEdgeIds` diagnostics.
+- Include an edge only when both endpoint node instances exist and its origin is not `overlay`.
+- Report excluded dangling and non-force overlay edges as `ignoredEdgeIds` diagnostics.
 
-Filtering a dangling edge is a defensive read-boundary rule. Store-mode initialization must still reject structurally invalid graphs rather than relying on this filter.
+Filtering a dangling edge is a defensive read-boundary rule. Store-mode initialization must still reject structurally invalid graphs rather than relying on this filter. Overlay removal preserves the live solver rule before projection intentionally discards edge origin.
 
 ## Connections
 
