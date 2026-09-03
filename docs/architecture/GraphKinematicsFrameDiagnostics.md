@@ -23,4 +23,4 @@ Versions and counts compare exactly. Aggregate floating-point values use the cal
 
 ## Next extraction
 
-Compose the explicit [LegacyGraphKinematicsAdapter](LegacyGraphKinematicsAdapter.md) frame with physics shadow input as one version-checked diagnostic sample.
+[GraphPhysicsShadowSampleService](GraphPhysicsShadowSampleService.md) composes the explicit legacy frame with physics shadow input as one version-checked diagnostic sample.
