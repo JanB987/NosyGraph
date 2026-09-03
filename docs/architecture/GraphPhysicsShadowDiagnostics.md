@@ -21,8 +21,8 @@ The summary retains counts and version numbers, not node IDs, positions, note me
 - Summarizes the normalized output of [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md).
 - Preserves issue categories established by [LegacyGraphPhysicsReadAdapter](LegacyGraphPhysicsReadAdapter.md).
 - Does not compare positions or solver output; later frame parity belongs beside [GraphKinematicsFrame](GraphKinematicsFrame.md).
-- Does not log. A production observer decides whether and where a mismatch should be reported.
+- Does not log. [GraphPhysicsShadowObserver](GraphPhysicsShadowObserver.md) forwards compact values to an injected sink.
 
 ## Next extraction
 
-Add an opt-in observer around explicit `GraphEngine` shadow captures. Keep the animation loop and active solver unchanged.
+Expose the opt-in observer through an explicit `GraphEngine` method. Keep the animation loop and active solver unchanged.

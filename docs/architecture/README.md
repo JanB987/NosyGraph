@@ -177,7 +177,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose a live read-only physics runtime input for shadow diagnostics without stepping it.
 - [x] Wire the shadow input service to `GraphEngine` without calling it from the animation loop.
 - [x] Define a compact physics shadow diagnostic summary and comparison boundary.
-- [ ] Add an opt-in observer for explicit physics shadow captures.
+- [x] Add an opt-in observer for explicit physics shadow captures.
+- [ ] Expose compact observation through `GraphEngine` without automatic logging.
 
 ## Validation during the migration
 
