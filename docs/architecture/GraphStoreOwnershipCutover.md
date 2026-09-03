@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-[LegacyGraphPhysicsReadAdapter](LegacyGraphPhysicsReadAdapter.md) now composes all dormant legacy physics reads into the new boundaries without production wiring. The next implementation increment adds a plain-state capture method to `GraphEngine`; it will not replace the active loop. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+`GraphEngine` now exposes copied plain state to [LegacyGraphPhysicsReadAdapter](LegacyGraphPhysicsReadAdapter.md), but the active simulation remains unchanged. The next implementation increment composes that live read into physics-runtime input for diagnostics without stepping a second engine. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

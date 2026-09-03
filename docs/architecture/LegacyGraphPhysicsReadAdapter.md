@@ -6,7 +6,7 @@
 
 Current implementation: [`src/graph-application/LegacyGraphPhysicsReadAdapter.ts`](../../src/graph-application/LegacyGraphPhysicsReadAdapter.ts)
 
-It remains host-neutral and dormant. Its source is copied plain data, never a live `GraphEngine` reference.
+It remains host-neutral and dormant. Its source is copied plain data, never a live `GraphEngine` reference. `GraphEngine.getLegacyPhysicsReadState()` now provides that detached source without redirecting the active simulation.
 
 ## Flow
 
@@ -30,6 +30,14 @@ Adapter-level malformed-entry diagnostics remain separate from snapshot-level pr
 - Feeds [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md).
 - Does not start [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md) or mutate legacy state.
 
-## Next extraction
+## Production capture
 
-Expose a thin dormant method on `GraphEngine` that captures `LegacyGraphPhysicsReadState` from its private fields. Validate that capture through the facade without changing the active loop.
+`GraphEngine.getLegacyPhysicsReadState()` copies:
+
+- Global and active LinkType physics configuration.
+- Runtime LinkType overrides.
+- Focal locks, pin repositioning, current drag targets, and direction targets.
+- Hotkey, topology, Alt-drag, lens-owner, and dragged-descendant freezes.
+- Parent and embedded container membership, bounds, origins, and embedded gravity.
+
+The next extraction composes this captured state with the existing semantic snapshot in non-mutating shadow mode.

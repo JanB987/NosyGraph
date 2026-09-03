@@ -173,7 +173,8 @@ GraphController <--------> Obsidian adapters
 - [x] Adapt legacy transient lock, drag, direction, and freeze state into constraint input.
 - [x] Adapt legacy parent and embedded containers into validated physics container candidates.
 - [x] Compose legacy physics reads behind one host-neutral facade before production wiring.
-- [ ] Add a dormant `GraphEngine` method that captures the facade's plain read state.
+- [x] Add a dormant `GraphEngine` method that captures the facade's plain read state.
+- [ ] Compose a live read-only physics runtime input for shadow diagnostics without stepping it.
 
 ## Validation during the migration
 

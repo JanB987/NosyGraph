@@ -20,6 +20,7 @@ import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeComman
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
 import { LegacyGraphExpansionBadgeAdapter } from "./graph-application/LegacyGraphExpansionBadgeAdapter";
 import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
+import type { LegacyGraphPhysicsReadState } from "./graph-application/LegacyGraphPhysicsReadAdapter";
 import { ObsidianGraphExpansionNoteAdapter } from "./graph-application/ObsidianGraphExpansionNoteAdapter";
 import {
   LegacyGraphSnapshotAdapter,
@@ -13001,6 +13002,90 @@ export class GraphEngine {
     });
 
     return { nodes, badges, edges, expansions, lenses };
+  }
+
+  /** Copies live physics inputs for dormant architecture comparison and composition. */
+  getLegacyPhysicsReadState(): LegacyGraphPhysicsReadState {
+    const positionFor = (node: GraphNode) => ({
+      x: Number.isFinite(node.lockX) ? Number(node.lockX) : node.x,
+      y: Number.isFinite(node.lockY) ? Number(node.lockY) : node.y
+    });
+    const dragNodeIds = new Set(this.draggedNodeOriginPositions.keys());
+    if (this.draggedNode) dragNodeIds.add(this.draggedNode.id);
+    const focalLocks = this.nodes
+      .filter((node) => node.isLocked === true)
+      .filter((node) => !node.isPinned && !this.repositioningPinnedNodeIds.has(node.id))
+      .map((node) => ({ nodeId: node.id, position: positionFor(node) }));
+    const pinRepositionLocks = Array.from(this.repositioningPinnedNodeIds)
+      .flatMap((nodeId) => {
+        const node = this.nodeMap.get(nodeId);
+        return node ? [{ nodeId, position: { x: node.x, y: node.y } }] : [];
+      });
+    const dragTargets = Array.from(dragNodeIds).flatMap((nodeId) => {
+      const node = this.nodeMap.get(nodeId);
+      return node ? [{ nodeId, position: { x: node.x, y: node.y } }] : [];
+    });
+    const parentContainers = Array.from(this.parentContainers.values()).map((container) => ({
+      key: container.key,
+      kind: "parent" as const,
+      originNodeId: container.origin,
+      memberNodeIds: Array.from(container.memberIds),
+      left: container.left,
+      top: container.top,
+      right: container.right,
+      bottom: container.bottom
+    }));
+    const embeddedContainers = Array.from(this.embeddedGraphContainers.values()).map((container) => ({
+      key: container.key,
+      kind: "embedded" as const,
+      originNodeId: container.origin,
+      memberNodeIds: Array.from(container.memberIds),
+      left: container.left,
+      top: container.top,
+      right: container.right,
+      bottom: container.bottom,
+      linkForce: container.linkForce
+    }));
+
+    return {
+      settings: {
+        simulation: {
+          repulsionStrength: this.repulsionStrength,
+          centerStrength: this.centerStrength,
+          nearRestVelocityThreshold: this.nearRestVelocityThreshold,
+          restVelocityThreshold: this.restVelocityThreshold
+        },
+        activeLinkTypes: this.activeNodeBadgeLinkTypes.map((linkType) => ({
+          property: linkType.property,
+          linkType: linkType.linkType,
+          linkDistance: linkType.linkDistance,
+          linkForce: linkType.linkForce,
+          linkDirection: linkType.linkDirection,
+          linkXAxis: linkType.linkXAxis,
+          linkYAxis: linkType.linkYAxis
+        })),
+        runtimeOverrides: Object.fromEntries(
+          Array.from(this.linkTypePhysics, ([id, config]) => [id, { ...config }])
+        )
+      },
+      constraints: {
+        simulationFrozen: this.simulationFrozenByHotkey,
+        focalLocks,
+        pinRepositionLocks,
+        dragTargets,
+        directionTargets: Array.from(
+          this.directionLockedNodeTargets,
+          ([nodeId, position]) => ({ nodeId, position: { ...position } })
+        ),
+        velocityFreezes: {
+          "topology-update": Array.from(this.topologyUpdateFrozenNodeIds),
+          "alt-drag": Array.from(this.altDragFrozenNodeIds),
+          "lens-owner": Array.from(this.embeddedGraphContainers.values(), (item) => item.origin),
+          "dragged-lens-descendant": Array.from(this.getDraggedLensDescendantNodeIds())
+        }
+      },
+      containers: [...parentContainers, ...embeddedContainers]
+    };
   }
 
   private getPrimaryNodeOwner(nodeId: string): { sourceNodeId: string; linkType: string } | null {
