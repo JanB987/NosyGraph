@@ -42,6 +42,7 @@ GraphController <--------> Obsidian adapters
 - [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md) protects engine stepping and kinematics-frame publication.
 - [LegacyGraphPhysicsSettingsAdapter](LegacyGraphPhysicsSettingsAdapter.md) translates legacy global and LinkType settings without host imports.
 - [LegacyGraphPhysicsConstraintAdapter](LegacyGraphPhysicsConstraintAdapter.md) translates overloaded legacy locks, targets, and freeze sets into explicit variants.
+- [LegacyGraphPhysicsContainerAdapter](LegacyGraphPhysicsContainerAdapter.md) translates parent/embedded records and derives stable container nesting.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
@@ -169,7 +170,8 @@ GraphController <--------> Obsidian adapters
 - [x] Coordinate physics input, stepping, and protected kinematics-frame publication.
 - [x] Adapt legacy global and LinkType physics configuration into host-neutral settings input.
 - [x] Adapt legacy transient lock, drag, direction, and freeze state into constraint input.
-- [ ] Adapt legacy parent and embedded containers into validated physics container candidates.
+- [x] Adapt legacy parent and embedded containers into validated physics container candidates.
+- [ ] Compose legacy physics reads behind one host-neutral facade before production wiring.
 
 ## Validation during the migration
 

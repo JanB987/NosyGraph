@@ -32,3 +32,5 @@ Explicit `parentContainerIds` replace legacy graph-path ancestry at the physics 
 ## Validated projection
 
 [GraphPhysicsContainerProjector](GraphPhysicsContainerProjector.md) now validates origins, members, bounds, gravity, and ancestry against a snapshot and reports rejected references.
+
+[LegacyGraphPhysicsContainerAdapter](LegacyGraphPhysicsContainerAdapter.md) prepares those candidates from copied legacy records without carrying graph-path ancestry into physics.

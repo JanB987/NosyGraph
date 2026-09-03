@@ -7,6 +7,7 @@ import {
 import type { GraphSnapshot } from "../graph-domain/GraphSnapshot";
 
 export type GraphPhysicsContainerRejectionReason =
+  | "invalid-id"
   | "duplicate-id"
   | "missing-origin"
   | "invalid-bounds"
@@ -116,6 +117,7 @@ export class GraphPhysicsContainerProjector {
     acceptedIds: ReadonlySet<ContainerId>,
     nodeIds: ReadonlySet<NodeInstanceId>
   ): GraphPhysicsContainerRejectionReason | undefined {
+    if (!String(container.id ?? "").trim()) return "invalid-id";
     if (acceptedIds.has(container.id)) return "duplicate-id";
     if (!nodeIds.has(container.originNodeId)) return "missing-origin";
     const { left, top, right, bottom } = container.bounds;

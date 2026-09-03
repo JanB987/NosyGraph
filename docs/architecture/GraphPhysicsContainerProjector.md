@@ -10,7 +10,7 @@ It is dormant and does not read or mutate live legacy container maps.
 
 ## Validation rules
 
-- Container IDs must be unique among accepted candidates.
+- Container IDs must be nonblank and unique among accepted candidates.
 - The origin node must exist in the snapshot.
 - All bounds must be finite and ordered left-to-right and top-to-bottom.
 - Embedded gravity must be finite and is clamped to the legacy `0..1` range.
@@ -33,6 +33,7 @@ This keeps compatibility projections resilient while allowing store-mode initial
 - Produces detached [GraphPhysicsContainers](GraphPhysicsContainers.md).
 - Complements [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) and [GraphPhysicsConstraintProjector](GraphPhysicsConstraintProjector.md).
 - Will supply [PhysicsEngine](PhysicsEngine.md) without exposing lens DOM or legacy container objects.
+- Receives translated candidates from [LegacyGraphPhysicsContainerAdapter](LegacyGraphPhysicsContainerAdapter.md).
 
 ## Next extraction
 
