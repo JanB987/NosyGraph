@@ -186,7 +186,8 @@ GraphController <--------> Obsidian adapters
 - [x] Expose explicit version-checked sample capture through `GraphEngine`.
 - [x] Add a detached replacement-engine frame runner for parity experiments.
 - [x] Define a bounded per-node kinematics comparator for parity experiments.
-- [ ] Compose legacy and experiment frames behind one explicit parity service.
+- [x] Compose legacy and experiment frames behind one explicit parity service.
+- [ ] Expose the safe zero-step parity check through `GraphEngine`.
 
 ## Validation during the migration
 

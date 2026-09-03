@@ -26,4 +26,4 @@ Metadata mismatches contribute to `differenceCount` but are represented by the e
 
 ## Next extraction
 
-Compose legacy capture, isolated experiment, and this comparator behind one explicit parity service.
+[GraphPhysicsParityService](GraphPhysicsParityService.md) composes legacy capture, isolated experiment, and this comparator. Its live-safe default is a zero-duration step.
