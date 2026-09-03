@@ -39,4 +39,4 @@ Each call reads fresh state. Diagnostics retain both malformed legacy-entry coun
 - A structural revision incremented when the existing topology signature changes.
 - Fresh copied physics state through `getLegacyPhysicsReadState()`.
 
-The service is not called from the animation loop. The next extraction defines a compact diagnostic summary so future shadow observations can be compared without logging whole graph snapshots.
+The service is not called from the animation loop. [GraphPhysicsShadowDiagnostics](GraphPhysicsShadowDiagnostics.md) reduces explicit captures to compact summaries without logging whole graph snapshots.
