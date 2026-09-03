@@ -23,4 +23,4 @@ Versions and counts compare exactly. Aggregate floating-point values use the cal
 
 ## Next extraction
 
-Wire [LegacyGraphKinematicsAdapter](LegacyGraphKinematicsAdapter.md) to an explicit `GraphEngine` capture stamped with the same structural revision used by physics shadow input.
+Compose the explicit [LegacyGraphKinematicsAdapter](LegacyGraphKinematicsAdapter.md) frame with physics shadow input as one version-checked diagnostic sample.

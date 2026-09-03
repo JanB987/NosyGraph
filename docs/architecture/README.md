@@ -181,7 +181,8 @@ GraphController <--------> Obsidian adapters
 - [x] Expose compact observation through `GraphEngine` without automatic logging.
 - [x] Define a compact kinematics-frame summary for solver parity evidence.
 - [x] Adapt legacy node motion into a detached kinematics frame.
-- [ ] Expose the detached legacy kinematics frame with matching structural revision.
+- [x] Expose the detached legacy kinematics frame with matching structural revision.
+- [ ] Compose input and frame evidence into one version-checked shadow sample.
 
 ## Validation during the migration
 

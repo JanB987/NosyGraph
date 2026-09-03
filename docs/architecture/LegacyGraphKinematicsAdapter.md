@@ -21,6 +21,8 @@ Current implementation: [`src/graph-application/LegacyGraphKinematicsAdapter.ts`
 - Supplies future legacy-side evidence to [GraphKinematicsFrameDiagnostics](GraphKinematicsFrameDiagnostics.md).
 - Does not publish to [GraphKinematicsStore](GraphKinematicsStore.md) or step [GraphPhysicsEngine](GraphPhysicsEngine.md).
 
-## Next extraction
+## Production capture
 
-Add an explicit `GraphEngine` capture method using the engine's shared structural revision and caller-supplied frame sequence.
+`GraphEngine.captureLegacyKinematicsFrame()` copies every current node's identity, position, and velocity. It uses the engine's shared topology revision and a caller-supplied sequence. The method does not publish to a store or affect the animation loop.
+
+The next extraction composes input and legacy-frame captures into one version-checked diagnostic sample.

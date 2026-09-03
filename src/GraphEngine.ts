@@ -27,6 +27,10 @@ import {
 } from "./graph-application/GraphPhysicsShadowObserver";
 import type { GraphPhysicsShadowSummary } from "./graph-application/GraphPhysicsShadowDiagnostics";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
+import {
+  LegacyGraphKinematicsAdapter,
+  type LegacyGraphKinematicsReadResult
+} from "./graph-application/LegacyGraphKinematicsAdapter";
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
 import { LegacyGraphExpansionBadgeAdapter } from "./graph-application/LegacyGraphExpansionBadgeAdapter";
 import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
@@ -12860,6 +12864,19 @@ export class GraphEngine {
       this.captureArchitecturePhysicsInput(frameSequence),
       expected
     );
+  }
+
+  /** Copies current legacy motion for explicit parity diagnostics only. */
+  captureLegacyKinematicsFrame(sequence = 0): LegacyGraphKinematicsReadResult {
+    return new LegacyGraphKinematicsAdapter({
+      sequence,
+      structuralRevision: this.legacyStructuralRevision,
+      nodes: this.nodes.map((node) => ({
+        nodeId: node.id,
+        position: { x: node.x, y: node.y },
+        velocity: { x: node.vx, y: node.vy }
+      }))
+    }).getFrame();
   }
 
   /**
