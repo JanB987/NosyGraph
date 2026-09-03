@@ -6,7 +6,7 @@
 
 Current implementation: [`src/graph-application/GraphPhysicsEngine.ts`](../../src/graph-application/GraphPhysicsEngine.ts)
 
-Neither is wired into the live plugin. The deterministic class is not intended to replace the characterized legacy force algorithm.
+Neither is wired into the live animation loop. [GraphPhysicsExperimentRunner](GraphPhysicsExperimentRunner.md) can create the deterministic class for one isolated explicit experiment. It is not intended to replace the characterized legacy force algorithm.
 
 ## Contract
 
