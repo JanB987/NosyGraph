@@ -185,7 +185,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose input and frame evidence into one version-checked shadow sample.
 - [x] Expose explicit version-checked sample capture through `GraphEngine`.
 - [x] Add a detached replacement-engine frame runner for parity experiments.
-- [ ] Define a bounded per-node kinematics comparator for parity experiments.
+- [x] Define a bounded per-node kinematics comparator for parity experiments.
+- [ ] Compose legacy and experiment frames behind one explicit parity service.
 
 ## Validation during the migration
 

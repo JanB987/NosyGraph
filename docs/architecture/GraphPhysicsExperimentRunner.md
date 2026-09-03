@@ -25,4 +25,4 @@ The default engine is `DeterministicGraphPhysicsEngine`, which tests orchestrati
 
 ## Next extraction
 
-Define a per-node frame comparator so an experiment frame can be compared with a copied legacy frame without affecting production state.
+[GraphKinematicsFrameComparator](GraphKinematicsFrameComparator.md) compares experiment output with a copied legacy frame. The next extraction composes both behind one explicit parity service.
