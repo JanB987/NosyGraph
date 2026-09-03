@@ -23,6 +23,8 @@ The sample is `ready` only when both captures have the same structural revision.
 - Delegates summaries to [GraphPhysicsShadowDiagnostics](GraphPhysicsShadowDiagnostics.md) and [GraphKinematicsFrameDiagnostics](GraphKinematicsFrameDiagnostics.md).
 - Does not retain full captures, run physics, publish frames, or log.
 
-## Next extraction
+## Production wiring
 
-Expose explicit sample capture through `GraphEngine`, then add a replacement-engine frame runner outside the production animation loop.
+`GraphEngine.captureArchitecturePhysicsSample()` explicitly captures one sample. The service delegates back to the engine's two detached capture methods, so both sides use the caller's sequence and the engine's topology revision. Nothing calls it from the animation loop.
+
+The next extraction adds a replacement-engine frame runner outside the production animation loop.

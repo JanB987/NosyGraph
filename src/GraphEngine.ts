@@ -26,6 +26,10 @@ import {
   type GraphPhysicsShadowObservationSink
 } from "./graph-application/GraphPhysicsShadowObserver";
 import type { GraphPhysicsShadowSummary } from "./graph-application/GraphPhysicsShadowDiagnostics";
+import {
+  GraphPhysicsShadowSampleService,
+  type GraphPhysicsShadowSample
+} from "./graph-application/GraphPhysicsShadowSampleService";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import {
   LegacyGraphKinematicsAdapter,
@@ -458,6 +462,7 @@ export class GraphEngine {
   private ctx!: CanvasRenderingContext2D;
   private readonly architectureQueries: GraphQueries;
   private readonly architecturePhysicsShadow: GraphPhysicsShadowInputService;
+  private readonly architecturePhysicsSample: GraphPhysicsShadowSampleService;
 
   private menuButton!: HTMLButtonElement;
   private fitButton!: HTMLButtonElement;
@@ -749,6 +754,12 @@ export class GraphEngine {
     this.architecturePhysicsShadow = new GraphPhysicsShadowInputService(
       legacyRuntime,
       { getLegacyPhysicsReadState: () => this.getLegacyPhysicsReadState() }
+    );
+    this.architecturePhysicsSample = new GraphPhysicsShadowSampleService(
+      { captureArchitecturePhysicsInput: (sequence) =>
+        this.captureArchitecturePhysicsInput(sequence) },
+      { captureLegacyKinematicsFrame: (sequence) =>
+        this.captureLegacyKinematicsFrame(sequence) }
     );
     const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
       getSource: (noteId) => {
@@ -12877,6 +12888,11 @@ export class GraphEngine {
         velocity: { x: node.vx, y: node.vy }
       }))
     }).getFrame();
+  }
+
+  /** Captures compact input and motion evidence with an exact revision check. */
+  captureArchitecturePhysicsSample(sequence = 0): GraphPhysicsShadowSample {
+    return this.architecturePhysicsSample.capture(sequence);
   }
 
   /**
