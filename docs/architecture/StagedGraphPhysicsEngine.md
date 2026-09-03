@@ -33,4 +33,4 @@ Not yet implemented: node-container repulsion, container-container repulsion, or
 
 ## Next extraction
 
-Add pure node-container repulsion, including deterministic overlap direction and optional reaction on an eligible origin node.
+[GraphNodeContainerRepulsion](GraphNodeContainerRepulsion.md) now provides pure geometry and deltas. The next extraction adds its membership and origin-eligibility orchestration to the force accumulator.

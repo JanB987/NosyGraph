@@ -197,7 +197,8 @@ GraphController <--------> Obsidian adapters
 - [x] Extract constraint-aware damping and position integration.
 - [x] Extract parent and embedded container-boundary confinement.
 - [x] Compose pure force, integration, and confinement stages in a parity engine.
-- [ ] Extract node-container repulsion and origin reaction.
+- [x] Extract node-container repulsion and origin reaction math.
+- [ ] Add node-container repulsion eligibility to the force accumulator.
 
 ## Validation during the migration
 
