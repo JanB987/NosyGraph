@@ -6,7 +6,7 @@
 
 Current implementation: [`src/graph-application/LegacyGraphRuntimeState.ts`](../../src/graph-application/LegacyGraphRuntimeState.ts)
 
-It is dormant and is not yet constructed by `GraphEngine` or `GraphView`.
+`GraphEngine` now constructs it for the read-only [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md). It still has no mutation authority and is not the production state owner.
 
 ## Responsibilities
 
@@ -15,7 +15,7 @@ It is dormant and is not yet constructed by `GraphEngine` or `GraphView`.
 - Report a structural revision supplied by an injected revision source.
 - Reject every `GraphChangeSet` with `runtime-read-only`.
 
-The two dependencies are injected because the legacy engine does not yet have one structural state owner or one structural revision counter. In future composition, [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) can provide snapshots while a narrow legacy revision adapter provides the counter.
+The two dependencies are injected because the legacy engine does not yet have one structural state owner. Production composition supplies [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) plus a narrow counter advanced by the existing topology-signature check.
 
 ## Important boundary
 

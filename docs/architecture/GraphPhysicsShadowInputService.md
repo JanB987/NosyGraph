@@ -6,7 +6,7 @@
 
 Current implementation: [`src/graph-application/GraphPhysicsShadowInputService.ts`](../../src/graph-application/GraphPhysicsShadowInputService.ts)
 
-It is a shadow boundary: it owns no simulation, does not call [GraphPhysicsEngine](GraphPhysicsEngine.md), and cannot publish a [GraphKinematicsFrame](GraphKinematicsFrame.md).
+It is a shadow boundary: it owns no simulation, does not call [GraphPhysicsEngine](GraphPhysicsEngine.md), and cannot publish a [GraphKinematicsFrame](GraphKinematicsFrame.md). `GraphEngine` constructs one instance and exposes it only through the explicit `captureArchitecturePhysicsInput()` diagnostic method.
 
 ## Inputs and output
 
@@ -31,6 +31,12 @@ Each call reads fresh state. Diagnostics retain both malformed legacy-entry coun
 - Delegates normalization and projection to [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md).
 - Intentionally has no connection to [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md).
 
-## Next extraction
+## Production wiring
 
-Wire one dormant instance in `GraphEngine` and expose its capture for inspection. Do not call it from the animation loop yet.
+`GraphEngine` supplies:
+
+- Its detached `LegacyGraphSnapshotAdapter` through [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md).
+- A structural revision incremented when the existing topology signature changes.
+- Fresh copied physics state through `getLegacyPhysicsReadState()`.
+
+The service is not called from the animation loop. The next extraction defines a compact diagnostic summary so future shadow observations can be compared without logging whole graph snapshots.

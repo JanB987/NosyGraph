@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-`GraphEngine` now exposes copied plain state to [LegacyGraphPhysicsReadAdapter](LegacyGraphPhysicsReadAdapter.md), but the active simulation remains unchanged. The next implementation increment composes that live read into physics-runtime input for diagnostics without stepping a second engine. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+`GraphEngine` now exposes copied plain state and explicitly composes it through [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md), but the animation loop and active simulation remain unchanged. The next implementation increment defines compact diagnostics for later shadow comparison. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

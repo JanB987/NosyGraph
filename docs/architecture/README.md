@@ -175,7 +175,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose legacy physics reads behind one host-neutral facade before production wiring.
 - [x] Add a dormant `GraphEngine` method that captures the facade's plain read state.
 - [x] Compose a live read-only physics runtime input for shadow diagnostics without stepping it.
-- [ ] Wire the shadow input service to `GraphEngine` without calling it from the animation loop.
+- [x] Wire the shadow input service to `GraphEngine` without calling it from the animation loop.
+- [ ] Define a compact physics shadow diagnostic summary and comparison boundary.
 
 ## Validation during the migration
 

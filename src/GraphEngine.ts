@@ -16,11 +16,16 @@ import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeTog
 import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
 import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
+import {
+  GraphPhysicsShadowInputService,
+  type GraphPhysicsShadowInputCapture
+} from "./graph-application/GraphPhysicsShadowInputService";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
 import { LegacyGraphExpansionBadgeAdapter } from "./graph-application/LegacyGraphExpansionBadgeAdapter";
 import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
 import type { LegacyGraphPhysicsReadState } from "./graph-application/LegacyGraphPhysicsReadAdapter";
+import { LegacyGraphRuntimeState } from "./graph-application/LegacyGraphRuntimeState";
 import { ObsidianGraphExpansionNoteAdapter } from "./graph-application/ObsidianGraphExpansionNoteAdapter";
 import {
   LegacyGraphSnapshotAdapter,
@@ -442,6 +447,7 @@ export class GraphEngine {
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
   private readonly architectureQueries: GraphQueries;
+  private readonly architecturePhysicsShadow: GraphPhysicsShadowInputService;
 
   private menuButton!: HTMLButtonElement;
   private fitButton!: HTMLButtonElement;
@@ -526,6 +532,7 @@ export class GraphEngine {
   private lastNodeLimit = Number.POSITIVE_INFINITY;
   private lastDisableLinkTypeDiscovery = false;
   private lastTopologySignature = "";
+  private legacyStructuralRevision = 0;
   private topologyUpdateFrozenNodeIds = new Set<string>();
   private lastKnownNodePositions = new Map<string, { x: number; y: number }>();
   private activeLinkTypeSignature = "";
@@ -725,6 +732,14 @@ export class GraphEngine {
       }
     );
     this.architectureQueries = new GraphQueries(snapshotAdapter);
+    const legacyRuntime = new LegacyGraphRuntimeState(
+      snapshotAdapter,
+      { getStructuralRevision: () => this.legacyStructuralRevision }
+    );
+    this.architecturePhysicsShadow = new GraphPhysicsShadowInputService(
+      legacyRuntime,
+      { getLegacyPhysicsReadState: () => this.getLegacyPhysicsReadState() }
+    );
     const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
       getSource: (noteId) => {
         const file = this.app.vault.getAbstractFileByPath(noteId);
@@ -1673,6 +1688,7 @@ export class GraphEngine {
     const topologyChanged = topologySignature !== this.lastTopologySignature;
     this.lastTopologySignature = topologySignature;
     if (topologyChanged) {
+      this.legacyStructuralRevision += 1;
       this.freezeExistingNodesForTopologyUpdate(previousNodeIds);
       this.startSimulation();
     } else {
@@ -12821,6 +12837,11 @@ export class GraphEngine {
    */
   getArchitectureQueries(): GraphQueries {
     return this.architectureQueries;
+  }
+
+  /** Builds normalized shadow input for explicit diagnostics; it never steps physics. */
+  captureArchitecturePhysicsInput(frameSequence = 0): GraphPhysicsShadowInputCapture {
+    return this.architecturePhysicsShadow.capture(frameSequence);
   }
 
   /**
