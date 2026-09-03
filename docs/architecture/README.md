@@ -188,7 +188,8 @@ GraphController <--------> Obsidian adapters
 - [x] Define a bounded per-node kinematics comparator for parity experiments.
 - [x] Compose legacy and experiment frames behind one explicit parity service.
 - [x] Expose the safe zero-step parity check through `GraphEngine`.
-- [ ] Extract a pure pairwise-repulsion calculation from the characterized solver behavior.
+- [x] Extract a pure pairwise-repulsion calculation from the characterized solver behavior.
+- [ ] Extract a pure boundary-based link-spring calculation.
 
 ## Validation during the migration
 
