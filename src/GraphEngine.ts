@@ -13149,7 +13149,8 @@ export class GraphEngine {
           repulsionStrength: this.repulsionStrength,
           centerStrength: this.centerStrength,
           nearRestVelocityThreshold: this.nearRestVelocityThreshold,
-          restVelocityThreshold: this.restVelocityThreshold
+          restVelocityThreshold: this.restVelocityThreshold,
+          nodeRadius: this.nodeRadius
         },
         activeLinkTypes: this.activeNodeBadgeLinkTypes.map((linkType) => ({
           property: linkType.property,

@@ -45,6 +45,8 @@ export interface GraphPhysicsSettingsInput {
   restVelocityThreshold?: number;
   defaultLinkDistance?: number;
   defaultLinkStrength?: number;
+  nodeContainerInfluenceDistance?: number;
+  containerContainerInfluenceDistance?: number;
   linkPolicies?: ReadonlyMap<LinkTypeId, GraphLinkPhysicsPolicySources>;
 }
 
@@ -58,6 +60,8 @@ export interface GraphPhysicsSettings {
   settleFrameCount: number;
   activeFrameIntervalMs: number;
   nearSettleFrameIntervalMs: number;
+  nodeContainerInfluenceDistance: number;
+  containerContainerInfluenceDistance: number;
   defaultLinkPolicy: GraphForceLinkPolicy;
   linkPolicies: ReadonlyMap<LinkTypeId, GraphLinkPhysicsPolicy>;
 }
@@ -72,6 +76,8 @@ export const DEFAULT_GRAPH_ACTIVE_FRAME_INTERVAL_MS = 16;
 export const DEFAULT_GRAPH_NEAR_SETTLE_FRAME_INTERVAL_MS = 50;
 export const DEFAULT_GRAPH_LINK_DISTANCE = 120;
 export const DEFAULT_GRAPH_LINK_STRENGTH = 0.01;
+export const DEFAULT_NODE_CONTAINER_INFLUENCE_DISTANCE = 120;
+export const DEFAULT_CONTAINER_CONTAINER_INFLUENCE_DISTANCE = 36;
 
 /** Normalizes global settings and resolves every LinkType policy deterministically. */
 export function normalizeGraphPhysicsSettings(
@@ -115,6 +121,14 @@ export function normalizeGraphPhysicsSettings(
     settleFrameCount: DEFAULT_GRAPH_SETTLE_FRAME_COUNT,
     activeFrameIntervalMs: DEFAULT_GRAPH_ACTIVE_FRAME_INTERVAL_MS,
     nearSettleFrameIntervalMs: DEFAULT_GRAPH_NEAR_SETTLE_FRAME_INTERVAL_MS,
+    nodeContainerInfluenceDistance: Math.max(0, finiteOr(
+      input.nodeContainerInfluenceDistance,
+      DEFAULT_NODE_CONTAINER_INFLUENCE_DISTANCE
+    )),
+    containerContainerInfluenceDistance: Math.max(0, finiteOr(
+      input.containerContainerInfluenceDistance,
+      DEFAULT_CONTAINER_CONTAINER_INFLUENCE_DISTANCE
+    )),
     defaultLinkPolicy,
     linkPolicies
   };

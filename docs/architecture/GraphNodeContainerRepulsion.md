@@ -13,7 +13,7 @@ Current implementation: [`src/graph-domain/GraphNodeContainerRepulsion.ts`](../.
 
 Inside or overlapping the boundary, magnitude is clamped to `0.5..8`. Outside, force fades to zero over the influence distance and is capped at `8`. Coincident centers use the same deterministic angle as [GraphLinkSpring](GraphLinkSpring.md).
 
-The function returns equal and opposite node and origin deltas. Eligibility—membership, separation, locks, drags, and whether an origin may react—remains an accumulator concern.
+The function returns equal and opposite node and origin deltas. [GraphPhysicsSettings](GraphPhysicsSettings.md) carries the influence distance derived from legacy base node radius. Eligibility—membership, separation, locks, drags, and whether an origin may react—remains an accumulator concern.
 
 ## Connections
 

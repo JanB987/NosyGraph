@@ -20,6 +20,8 @@ interface GraphPhysicsSettings {
   settleFrameCount: number;
   activeFrameIntervalMs: number;
   nearSettleFrameIntervalMs: number;
+  nodeContainerInfluenceDistance: number;
+  containerContainerInfluenceDistance: number;
   defaultLinkPolicy: GraphForceLinkPolicy;
   linkPolicies: ReadonlyMap<LinkTypeId, GraphLinkPhysicsPolicy>;
 }
@@ -27,7 +29,7 @@ interface GraphPhysicsSettings {
 
 Hard-coded legacy values such as damping and frame cadence are explicit in the output. This makes them testable without pretending that they are currently user-configurable.
 
-`nodeRadius` and `nodeConnectionSizeMultiplier` are absent because [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) receives an already-resolved effective radius for every node. `textFadeThreshold` is absent because it belongs to rendering.
+`nodeRadius` and `nodeConnectionSizeMultiplier` are absent because [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) receives an already-resolved effective radius for every node. Two derived container influence distances remain explicit, however, because the legacy solver calculates them from base `nodeRadius` rather than effective node radii. `textFadeThreshold` is absent because it belongs to rendering.
 
 ## LinkType policies
 
@@ -74,6 +76,7 @@ Force distance is clamped to `20..800` and strength to `0.001..0.3`. Direction v
 - Rest thresholds are non-negative, and near-rest is never lower than rest.
 - The input LinkType map is copied into a resolved output map.
 - Invalid numeric values fall through to the next precedence layer or default.
+- Node-container influence defaults to `120`; container-container influence defaults to `36`. The legacy adapter derives them as `max(120, nodeRadius * 16)` and `max(36, nodeRadius * 4)`.
 
 ## Connections
 

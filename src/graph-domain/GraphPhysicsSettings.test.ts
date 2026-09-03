@@ -15,6 +15,8 @@ describe("normalizeGraphPhysicsSettings", () => {
       settleFrameCount: 24,
       activeFrameIntervalMs: 16,
       nearSettleFrameIntervalMs: 50,
+      nodeContainerInfluenceDistance: 120,
+      containerContainerInfluenceDistance: 36,
       defaultLinkPolicy: {
         mode: "force",
         preferredDistance: 120,
@@ -22,6 +24,15 @@ describe("normalizeGraphPhysicsSettings", () => {
       },
       linkPolicies: new Map()
     });
+  });
+
+  it("normalizes explicit derived container influence distances", () => {
+    const settings = normalizeGraphPhysicsSettings({
+      nodeContainerInfluenceDistance: 160,
+      containerContainerInfluenceDistance: -5
+    });
+    expect(settings.nodeContainerInfluenceDistance).toBe(160);
+    expect(settings.containerContainerInfluenceDistance).toBe(0);
   });
 
   it("preserves finite force values and applies effective threshold rules", () => {

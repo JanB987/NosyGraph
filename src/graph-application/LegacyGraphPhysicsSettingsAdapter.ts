@@ -9,6 +9,7 @@ export interface LegacyGraphSimulationSettingsRead {
   centerStrength?: number;
   nearRestVelocityThreshold?: number;
   restVelocityThreshold?: number;
+  nodeRadius?: number;
 }
 
 export interface LegacyGraphLinkTypePhysicsRead {
@@ -35,6 +36,7 @@ export class LegacyGraphPhysicsSettingsAdapter {
   constructor(private readonly source: LegacyGraphPhysicsSettingsReadState) {}
 
   getSettingsInput(): GraphPhysicsSettingsInput {
+    const { nodeRadius, ...simulation } = this.source.simulation;
     const linkPolicies = new Map<LinkTypeId, GraphLinkPhysicsPolicySources>();
     const normalizedOverrides = new Map(
       Object.entries(this.source.runtimeOverrides)
@@ -69,7 +71,13 @@ export class LegacyGraphPhysicsSettingsAdapter {
     }
 
     return {
-      ...this.source.simulation,
+      ...simulation,
+      ...(Number.isFinite(nodeRadius)
+        ? {
+            nodeContainerInfluenceDistance: Math.max(120, Number(nodeRadius) * 16),
+            containerContainerInfluenceDistance: Math.max(36, Number(nodeRadius) * 4)
+          }
+        : {}),
       linkPolicies
     };
   }

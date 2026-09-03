@@ -19,6 +19,8 @@ function capture(frozen = false): GraphPhysicsShadowInputCapture {
         nearRestVelocityThreshold: 0.08, restVelocityThreshold: 0.015,
         settleFrameCount: 24, activeFrameIntervalMs: 16,
         nearSettleFrameIntervalMs: 50,
+        nodeContainerInfluenceDistance: 120,
+        containerContainerInfluenceDistance: 36,
         defaultLinkPolicy: { mode: "force", preferredDistance: 120, strength: 0.01 },
         linkPolicies: new Map()
       },

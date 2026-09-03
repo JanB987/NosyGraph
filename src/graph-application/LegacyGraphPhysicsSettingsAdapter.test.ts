@@ -5,7 +5,7 @@ import { LegacyGraphPhysicsSettingsAdapter } from "./LegacyGraphPhysicsSettingsA
 describe("LegacyGraphPhysicsSettingsAdapter", () => {
   it("maps globals and preserves active-definition precedence", () => {
     const input = new LegacyGraphPhysicsSettingsAdapter({
-      simulation: { repulsionStrength: 2000, centerStrength: 0.01 },
+      simulation: { repulsionStrength: 2000, centerStrength: 0.01, nodeRadius: 10 },
       activeLinkTypes: [{
         property: " Parts ", linkType: "Force Based",
         linkDistance: 150, linkForce: 0.02
@@ -17,6 +17,8 @@ describe("LegacyGraphPhysicsSettingsAdapter", () => {
     const settings = normalizeGraphPhysicsSettings(input);
 
     expect(settings.repulsionStrength).toBe(2000);
+    expect(settings.nodeContainerInfluenceDistance).toBe(160);
+    expect(settings.containerContainerInfluenceDistance).toBe(40);
     expect(settings.linkPolicies.get("parts")).toEqual({
       mode: "force", preferredDistance: 150, strength: 0.02
     });
