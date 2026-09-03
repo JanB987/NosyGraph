@@ -28,6 +28,8 @@ The caller owns the expected baseline. This prevents normal topology changes fro
 - The injected sink decides whether to store, display, or log an observation.
 - Has no dependency on [GraphPhysicsEngine](GraphPhysicsEngine.md) or [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md).
 
-## Next extraction
+## Production wiring
 
-Expose explicit compact observation through `GraphEngine`, with no animation-loop call and no default console logging.
+`GraphEngine.observeArchitecturePhysicsInput()` constructs the observer only when called and requires the caller to supply a sink. An optional expected summary enables field-level comparison. Nothing calls this method from the animation loop and there is no default console sink.
+
+The next extraction defines a deterministic frame-summary boundary for comparing solver output separately from input composition.

@@ -183,4 +183,4 @@ This makes rollback explicit and avoids a reverse synchronization path.
 
 ## First implementation increment
 
-`GraphEngine` now exposes copied plain state and explicitly composes it through [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md), but the animation loop and active simulation remain unchanged. The next implementation increment defines compact diagnostics for later shadow comparison. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.
+`GraphEngine` now exposes copied plain state, composes it through [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md), and can emit explicit compact observations through [GraphPhysicsShadowObserver](GraphPhysicsShadowObserver.md). The animation loop and active simulation remain unchanged, and there is no default logging. The next implementation increment defines compact frame evidence for later solver comparison. The manual badge matrix remains an independent activation gate and must still be completed before replacing live legacy mutation.

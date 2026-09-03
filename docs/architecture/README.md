@@ -178,7 +178,8 @@ GraphController <--------> Obsidian adapters
 - [x] Wire the shadow input service to `GraphEngine` without calling it from the animation loop.
 - [x] Define a compact physics shadow diagnostic summary and comparison boundary.
 - [x] Add an opt-in observer for explicit physics shadow captures.
-- [ ] Expose compact observation through `GraphEngine` without automatic logging.
+- [x] Expose compact observation through `GraphEngine` without automatic logging.
+- [ ] Define a compact kinematics-frame summary for solver parity evidence.
 
 ## Validation during the migration
 

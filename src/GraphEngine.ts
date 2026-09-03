@@ -20,6 +20,12 @@ import {
   GraphPhysicsShadowInputService,
   type GraphPhysicsShadowInputCapture
 } from "./graph-application/GraphPhysicsShadowInputService";
+import {
+  GraphPhysicsShadowObserver,
+  type GraphPhysicsShadowObservation,
+  type GraphPhysicsShadowObservationSink
+} from "./graph-application/GraphPhysicsShadowObserver";
+import type { GraphPhysicsShadowSummary } from "./graph-application/GraphPhysicsShadowDiagnostics";
 import { LegacyBadgeCommandAdapter } from "./graph-application/LegacyBadgeCommandAdapter";
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
 import { LegacyGraphExpansionBadgeAdapter } from "./graph-application/LegacyGraphExpansionBadgeAdapter";
@@ -12842,6 +12848,18 @@ export class GraphEngine {
   /** Builds normalized shadow input for explicit diagnostics; it never steps physics. */
   captureArchitecturePhysicsInput(frameSequence = 0): GraphPhysicsShadowInputCapture {
     return this.architecturePhysicsShadow.capture(frameSequence);
+  }
+
+  /** Explicitly emits one compact shadow observation; there is no automatic sink. */
+  observeArchitecturePhysicsInput(
+    sink: GraphPhysicsShadowObservationSink,
+    frameSequence = 0,
+    expected?: GraphPhysicsShadowSummary
+  ): GraphPhysicsShadowObservation {
+    return new GraphPhysicsShadowObserver(sink).observe(
+      this.captureArchitecturePhysicsInput(frameSequence),
+      expected
+    );
   }
 
   /**
