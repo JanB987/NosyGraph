@@ -14,6 +14,7 @@ Current implementation: [`src/graph-domain/GraphForceAccumulator.ts`](../../src/
 - Skip direction-policy edges; their fixed positions are separate behavior.
 - Apply [GraphCenterGravity](GraphCenterGravity.md) after pair and spring forces.
 - Apply [GraphNodeContainerRepulsion](GraphNodeContainerRepulsion.md) to external eligible nodes and react on independently eligible origins.
+- Apply [GraphContainerRepulsion](GraphContainerRepulsion.md) between eligible container pairs and transfer reactions to unlocked origins.
 - Isolate nodes across container boundaries unless they share a container.
 - Exclude drag, direction-target, and velocity-freeze recipients from force application.
 - Preserve legacy behavior by allowing position-lock and persistent-pin bodies to accumulate forces that integration later discards.
@@ -24,6 +25,8 @@ Optional policy callbacks can further restrict recipients or replace the default
 
 Node-container eligibility preserves a subtle asymmetry: a lens owner may receive the external-node force because legacy integration later freezes it, while an origin that owns a lens cannot receive the reaction. Locks, pins, drags, direction targets, Alt/topology freezes, and dragged lens descendants block both roles.
 
+Container-pair origin transfer has a broader legacy eligibility rule: only a persistent pin, transient position lock, missing origin, or optional caller policy blocks it. Other transient constraints accumulate the reaction and discard it later during integration.
+
 ## Connections
 
 - Consumes complete [GraphPhysicsRuntimeInputComposer](GraphPhysicsRuntimeInputComposer.md) output.
@@ -33,4 +36,4 @@ Node-container eligibility preserves a subtle asymmetry: a lens owner may receiv
 
 ## Next extraction
 
-[GraphMotionIntegrator](GraphMotionIntegrator.md) and [GraphContainerConfinement](GraphContainerConfinement.md) handle later stages. The next force extraction adds container-to-container repulsion.
+[GraphMotionIntegrator](GraphMotionIntegrator.md) and [GraphContainerConfinement](GraphContainerConfinement.md) handle later stages. The next extraction addresses container anchoring and member translation.

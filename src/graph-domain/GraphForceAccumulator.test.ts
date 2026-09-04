@@ -229,4 +229,55 @@ describe("GraphForceAccumulator", () => {
     expect(result.velocityDeltas.get("B")?.x).toBeCloseTo(7.8);
     expect(result.diagnostics.activeNodeContainerForceCount).toBe(0);
   });
+
+  it("applies container-pair force to both unlocked origins", () => {
+    const value = input();
+    value.graph.edges = [];
+    value.containers = { containers: [
+      {
+        id: "one", kind: "parent", originNodeId: "A", memberNodeIds: ["A"],
+        bounds: { left: -30, top: -30, right: 30, bottom: 30 },
+        parentContainerIds: []
+      },
+      {
+        id: "two", kind: "parent", originNodeId: "B", memberNodeIds: ["B"],
+        bounds: { left: -20, top: -30, right: 40, bottom: 30 },
+        parentContainerIds: []
+      }
+    ] };
+
+    const result = new GraphForceAccumulator().accumulate(value);
+    expect(result.velocityDeltas.get("A")?.x).toBe(-100);
+    expect(result.velocityDeltas.get("B")?.x).toBe(100);
+    expect(result.diagnostics).toMatchObject({
+      activeContainerPairForceCount: 1,
+      containerOriginReactionCount: 2
+    });
+  });
+
+  it("blocks only locked origins from container-pair reaction", () => {
+    const value = input();
+    value.graph.edges = [];
+    value.containers = { containers: [
+      {
+        id: "one", kind: "parent", originNodeId: "A", memberNodeIds: ["A"],
+        bounds: { left: -30, top: -30, right: 30, bottom: 30 },
+        parentContainerIds: []
+      },
+      {
+        id: "two", kind: "parent", originNodeId: "B", memberNodeIds: ["B"],
+        bounds: { left: -20, top: -30, right: 40, bottom: 30 },
+        parentContainerIds: []
+      }
+    ] };
+    value.constraints.transientNodeConstraints = [
+      { kind: "position-lock", nodeId: "A", reason: "focal", position: { x: 0, y: 0 } },
+      { kind: "velocity-freeze", nodeId: "B", reason: "lens-owner" }
+    ];
+
+    const result = new GraphForceAccumulator().accumulate(value);
+    expect(result.velocityDeltas.get("A")).toEqual({ x: 0, y: 0 });
+    expect(result.velocityDeltas.get("B")?.x).toBe(100);
+    expect(result.diagnostics.containerOriginReactionCount).toBe(1);
+  });
 });

@@ -1,5 +1,9 @@
 import type { EdgeId, NodeInstanceId } from "./graph-identifiers";
 import { calculateGraphCenterGravity } from "./GraphCenterGravity";
+import {
+  calculateGraphContainerRepulsion,
+  shouldGraphContainersRepel
+} from "./GraphContainerRepulsion";
 import { calculateGraphLinkSpring } from "./GraphLinkSpring";
 import {
   calculateGraphNodeContainerRepulsion,
@@ -27,6 +31,9 @@ export interface GraphForceAccumulationResult {
     activeNodeContainerForceCount: number;
     originReactionCount: number;
     skippedContainerCandidateCount: number;
+    activeContainerPairForceCount: number;
+    containerOriginReactionCount: number;
+    skippedContainerPairCount: number;
   };
 }
 
@@ -48,6 +55,9 @@ export class GraphForceAccumulator {
     let activeNodeContainerForceCount = 0;
     let originReactionCount = 0;
     let skippedContainerCandidateCount = 0;
+    let activeContainerPairForceCount = 0;
+    let containerOriginReactionCount = 0;
+    let skippedContainerPairCount = 0;
 
     if (input.constraints.simulationFrozen) {
       return result(true);
@@ -158,6 +168,56 @@ export class GraphForceAccumulator {
       }
     }
 
+    const lockedOriginIds = new Set<NodeInstanceId>([
+      ...input.constraints.persistentPins.map((pin) => pin.nodeId),
+      ...input.constraints.transientNodeConstraints
+        .filter((constraint) => constraint.kind === "position-lock")
+        .map((constraint) => constraint.nodeId)
+    ]);
+    const containers = input.containers.containers;
+    for (let firstIndex = 0; firstIndex < containers.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < containers.length; secondIndex += 1) {
+        const first = containers[firstIndex]!;
+        const second = containers[secondIndex]!;
+        if (!shouldGraphContainersRepel(first, second)) {
+          skippedContainerPairCount += 1;
+          continue;
+        }
+        const firstOrigin = nodeById.get(first.originNodeId);
+        const secondOrigin = nodeById.get(second.originNodeId);
+        const force = calculateGraphContainerRepulsion(
+          {
+            container: first,
+            circle: resolveGraphContainerPhysicsCircle(first, firstOrigin)
+          },
+          {
+            container: second,
+            circle: resolveGraphContainerPhysicsCircle(second, secondOrigin)
+          },
+          input.settings.repulsionStrength,
+          input.settings.containerContainerInfluenceDistance
+        );
+        if (!force.active) continue;
+        activeContainerPairForceCount += 1;
+        if (
+          firstOrigin
+          && !lockedOriginIds.has(firstOrigin.id)
+          && policy.canReceiveForce?.(firstOrigin.id) !== false
+        ) {
+          addRaw(firstOrigin.id, force.firstOriginVelocityDelta);
+          containerOriginReactionCount += 1;
+        }
+        if (
+          secondOrigin
+          && !lockedOriginIds.has(secondOrigin.id)
+          && policy.canReceiveForce?.(secondOrigin.id) !== false
+        ) {
+          addRaw(secondOrigin.id, force.secondOriginVelocityDelta);
+          containerOriginReactionCount += 1;
+        }
+      }
+    }
+
     const gravityBlockedNodeIds = new Set<NodeInstanceId>([
       ...input.constraints.persistentPins.map((pin) => pin.nodeId),
       ...input.constraints.transientNodeConstraints.map((constraint) => constraint.nodeId)
@@ -193,7 +253,10 @@ export class GraphForceAccumulator {
           embeddedGravityApplicationCount,
           activeNodeContainerForceCount,
           originReactionCount,
-          skippedContainerCandidateCount
+          skippedContainerCandidateCount,
+          activeContainerPairForceCount,
+          containerOriginReactionCount,
+          skippedContainerPairCount
         }
       };
     }

@@ -17,4 +17,4 @@ Containers do not repel when they are identical, one contains the other's origin
 
 ## Next extraction
 
-Apply eligible container-pair reactions to origin nodes in the force accumulator.
+[GraphForceAccumulator](GraphForceAccumulator.md) now applies eligible pair reactions to origin nodes. The next extraction addresses post-integration container anchoring and member translation.
