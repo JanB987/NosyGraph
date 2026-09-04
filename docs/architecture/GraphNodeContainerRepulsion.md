@@ -24,4 +24,4 @@ The function returns equal and opposite node and origin deltas. [GraphPhysicsSet
 
 ## Next extraction
 
-Add node-container iteration and origin eligibility to the force accumulator.
+[GraphForceAccumulator](GraphForceAccumulator.md) now applies node-container force with separate external-node and origin eligibility. The next extraction adds container-to-container repulsion.

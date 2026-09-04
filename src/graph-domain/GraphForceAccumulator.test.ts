@@ -165,4 +165,68 @@ describe("GraphForceAccumulator", () => {
       embeddedGravityApplicationCount: 0
     });
   });
+
+  it("adds node-container force and an eligible origin reaction", () => {
+    const value = input();
+    value.containers = { containers: [{
+      id: "parent", kind: "parent", originNodeId: "A", memberNodeIds: [],
+      bounds: { left: -40, top: -40, right: 40, bottom: 40 },
+      parentContainerIds: []
+    }] };
+
+    const result = new GraphForceAccumulator().accumulate(value);
+
+    expect(result.velocityDeltas.get("A")?.x).toBeCloseTo(-15.8);
+    expect(result.velocityDeltas.get("B")?.x).toBeCloseTo(15.8);
+    expect(result.diagnostics).toMatchObject({
+      activeNodeContainerForceCount: 1,
+      originReactionCount: 1
+    });
+  });
+
+  it("skips container members and blocks reactions on lens owners", () => {
+    const member = input();
+    member.containers = { containers: [{
+      id: "parent", kind: "parent", originNodeId: "A", memberNodeIds: ["B"],
+      bounds: { left: -40, top: -40, right: 40, bottom: 40 },
+      parentContainerIds: []
+    }] };
+    expect(new GraphForceAccumulator().accumulate(member).diagnostics)
+      .toMatchObject({ activeNodeContainerForceCount: 0, originReactionCount: 0 });
+
+    const lensOwner = input();
+    lensOwner.containers = { containers: [{
+      id: "parent", kind: "parent", originNodeId: "A", memberNodeIds: [],
+      bounds: { left: -40, top: -40, right: 40, bottom: 40 },
+      parentContainerIds: []
+    }] };
+    lensOwner.constraints.transientNodeConstraints = [{
+      kind: "velocity-freeze", nodeId: "A", reason: "lens-owner"
+    }];
+    const result = new GraphForceAccumulator().accumulate(lensOwner);
+    expect(result.velocityDeltas.get("A")).toEqual({ x: 0, y: 0 });
+    expect(result.velocityDeltas.get("B")?.x).toBeCloseTo(15.8);
+    expect(result.diagnostics).toMatchObject({
+      activeNodeContainerForceCount: 1,
+      originReactionCount: 0
+    });
+  });
+
+  it("excludes locked external nodes from container force", () => {
+    const value = input();
+    value.containers = { containers: [{
+      id: "parent", kind: "parent", originNodeId: "A", memberNodeIds: [],
+      bounds: { left: -40, top: -40, right: 40, bottom: 40 },
+      parentContainerIds: []
+    }] };
+    value.constraints.transientNodeConstraints = [{
+      kind: "position-lock", nodeId: "B", reason: "focal",
+      position: { x: 140, y: 0 }
+    }];
+
+    const result = new GraphForceAccumulator().accumulate(value);
+    expect(result.velocityDeltas.get("A")?.x).toBeCloseTo(-7.8);
+    expect(result.velocityDeltas.get("B")?.x).toBeCloseTo(7.8);
+    expect(result.diagnostics.activeNodeContainerForceCount).toBe(0);
+  });
 });

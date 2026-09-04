@@ -199,7 +199,8 @@ GraphController <--------> Obsidian adapters
 - [x] Compose pure force, integration, and confinement stages in a parity engine.
 - [x] Extract node-container repulsion and origin reaction math.
 - [x] Model container influence distances derived from legacy base node radius.
-- [ ] Add node-container repulsion eligibility to the force accumulator.
+- [x] Add node-container repulsion eligibility to the force accumulator.
+- [ ] Extract container-to-container repulsion and origin transfer.
 
 ## Validation during the migration
 

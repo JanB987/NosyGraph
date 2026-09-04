@@ -1,6 +1,10 @@
 import type { EdgeId, NodeInstanceId } from "./graph-identifiers";
 import { calculateGraphCenterGravity } from "./GraphCenterGravity";
 import { calculateGraphLinkSpring } from "./GraphLinkSpring";
+import {
+  calculateGraphNodeContainerRepulsion,
+  resolveGraphContainerPhysicsCircle
+} from "./GraphNodeContainerRepulsion";
 import type { GraphVector } from "./GraphNodeInstance";
 import { calculateGraphPairwiseRepulsion } from "./GraphPairwiseRepulsion";
 import type { GraphPhysicsRuntimeInput } from "./GraphPhysicsRuntimeInput";
@@ -20,6 +24,9 @@ export interface GraphForceAccumulationResult {
     blockedVelocityApplicationCount: number;
     worldGravityApplicationCount: number;
     embeddedGravityApplicationCount: number;
+    activeNodeContainerForceCount: number;
+    originReactionCount: number;
+    skippedContainerCandidateCount: number;
   };
 }
 
@@ -38,6 +45,9 @@ export class GraphForceAccumulator {
     let blockedVelocityApplicationCount = 0;
     let worldGravityApplicationCount = 0;
     let embeddedGravityApplicationCount = 0;
+    let activeNodeContainerForceCount = 0;
+    let originReactionCount = 0;
+    let skippedContainerCandidateCount = 0;
 
     if (input.constraints.simulationFrozen) {
       return result(true);
@@ -55,16 +65,19 @@ export class GraphForceAccumulator {
     const mayInteract = (firstNodeId: NodeInstanceId, secondNodeId: NodeInstanceId) =>
       policy.nodesMayInteract?.(firstNodeId, secondNodeId)
       ?? shareContainerBoundary(firstNodeId, secondNodeId, memberships);
-    const add = (nodeId: NodeInstanceId, delta: Readonly<GraphVector>): boolean => {
-      if (!canReceive(nodeId)) {
-        blockedVelocityApplicationCount += 1;
-        return false;
-      }
+    const addRaw = (nodeId: NodeInstanceId, delta: Readonly<GraphVector>): boolean => {
       const current = velocityDeltas.get(nodeId);
       if (!current) return false;
       current.x += delta.x;
       current.y += delta.y;
       return true;
+    };
+    const add = (nodeId: NodeInstanceId, delta: Readonly<GraphVector>): boolean => {
+      if (!canReceive(nodeId)) {
+        blockedVelocityApplicationCount += 1;
+        return false;
+      }
+      return addRaw(nodeId, delta);
     };
 
     for (let firstIndex = 0; firstIndex < input.graph.nodes.length; firstIndex += 1) {
@@ -108,6 +121,43 @@ export class GraphForceAccumulator {
       add(second.id, force.secondVelocityDelta);
     }
 
+    const containerEligibility = indexContainerForceEligibility(input);
+    for (const container of input.containers.containers) {
+      const origin = nodeById.get(container.originNodeId);
+      const circle = resolveGraphContainerPhysicsCircle(container, origin);
+      for (const node of input.graph.nodes) {
+        if (
+          node.id === container.originNodeId
+          || container.memberNodeIds.includes(node.id)
+          || (origin && !mayInteract(origin.id, node.id))
+          || containerEligibility.nodeBlocked.has(node.id)
+          || policy.canReceiveForce?.(node.id) === false
+        ) {
+          skippedContainerCandidateCount += 1;
+          continue;
+        }
+        const force = calculateGraphNodeContainerRepulsion(
+          node,
+          container.id,
+          circle,
+          input.settings.repulsionStrength,
+          input.settings.nodeContainerInfluenceDistance
+        );
+        if (!force.active) continue;
+        addRaw(node.id, force.nodeVelocityDelta);
+        activeNodeContainerForceCount += 1;
+
+        if (
+          !origin
+          || origin.id === node.id
+          || containerEligibility.originBlocked.has(origin.id)
+          || policy.canReceiveForce?.(origin.id) === false
+        ) continue;
+        addRaw(origin.id, force.originVelocityDelta);
+        originReactionCount += 1;
+      }
+    }
+
     const gravityBlockedNodeIds = new Set<NodeInstanceId>([
       ...input.constraints.persistentPins.map((pin) => pin.nodeId),
       ...input.constraints.transientNodeConstraints.map((constraint) => constraint.nodeId)
@@ -140,11 +190,38 @@ export class GraphForceAccumulator {
           skippedDirectionEdgeIds,
           blockedVelocityApplicationCount,
           worldGravityApplicationCount,
-          embeddedGravityApplicationCount
+          embeddedGravityApplicationCount,
+          activeNodeContainerForceCount,
+          originReactionCount,
+          skippedContainerCandidateCount
         }
       };
     }
   }
+}
+
+function indexContainerForceEligibility(input: GraphPhysicsRuntimeInput): {
+  nodeBlocked: ReadonlySet<NodeInstanceId>;
+  originBlocked: ReadonlySet<NodeInstanceId>;
+} {
+  const locked = new Set<NodeInstanceId>([
+    ...input.constraints.persistentPins.map((pin) => pin.nodeId),
+    ...input.constraints.transientNodeConstraints
+      .filter((constraint) => constraint.kind === "position-lock")
+      .map((constraint) => constraint.nodeId)
+  ]);
+  const nodeBlocked = new Set(locked);
+  const originBlocked = new Set(locked);
+  for (const constraint of input.constraints.transientNodeConstraints) {
+    if (constraint.kind === "position-lock") continue;
+    if (constraint.kind === "velocity-freeze" && constraint.reason === "lens-owner") {
+      originBlocked.add(constraint.nodeId);
+      continue;
+    }
+    nodeBlocked.add(constraint.nodeId);
+    originBlocked.add(constraint.nodeId);
+  }
+  return { nodeBlocked, originBlocked };
 }
 
 function containerMemberships(
