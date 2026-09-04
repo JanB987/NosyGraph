@@ -121,11 +121,11 @@ export function normalizeGraphPhysicsSettings(
     settleFrameCount: DEFAULT_GRAPH_SETTLE_FRAME_COUNT,
     activeFrameIntervalMs: DEFAULT_GRAPH_ACTIVE_FRAME_INTERVAL_MS,
     nearSettleFrameIntervalMs: DEFAULT_GRAPH_NEAR_SETTLE_FRAME_INTERVAL_MS,
-    nodeContainerInfluenceDistance: Math.max(0, finiteOr(
+    nodeContainerInfluenceDistance: Math.max(DEFAULT_NODE_CONTAINER_INFLUENCE_DISTANCE, finiteOr(
       input.nodeContainerInfluenceDistance,
       DEFAULT_NODE_CONTAINER_INFLUENCE_DISTANCE
     )),
-    containerContainerInfluenceDistance: Math.max(0, finiteOr(
+    containerContainerInfluenceDistance: Math.max(DEFAULT_CONTAINER_CONTAINER_INFLUENCE_DISTANCE, finiteOr(
       input.containerContainerInfluenceDistance,
       DEFAULT_CONTAINER_CONTAINER_INFLUENCE_DISTANCE
     )),

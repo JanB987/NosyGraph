@@ -32,7 +32,7 @@ describe("normalizeGraphPhysicsSettings", () => {
       containerContainerInfluenceDistance: -5
     });
     expect(settings.nodeContainerInfluenceDistance).toBe(160);
-    expect(settings.containerContainerInfluenceDistance).toBe(0);
+    expect(settings.containerContainerInfluenceDistance).toBe(36);
   });
 
   it("preserves finite force values and applies effective threshold rules", () => {

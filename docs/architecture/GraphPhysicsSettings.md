@@ -76,7 +76,7 @@ Force distance is clamped to `20..800` and strength to `0.001..0.3`. Direction v
 - Rest thresholds are non-negative, and near-rest is never lower than rest.
 - The input LinkType map is copied into a resolved output map.
 - Invalid numeric values fall through to the next precedence layer or default.
-- Node-container influence defaults to `120`; container-container influence defaults to `36`. The legacy adapter derives them as `max(120, nodeRadius * 16)` and `max(36, nodeRadius * 4)`.
+- Node-container influence has a floor of `120`; container-container influence has a floor of `36`. The legacy adapter derives them as `max(120, nodeRadius * 16)` and `max(36, nodeRadius * 4)`.
 
 ## Connections
 

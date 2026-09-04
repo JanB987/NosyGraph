@@ -200,7 +200,8 @@ GraphController <--------> Obsidian adapters
 - [x] Extract node-container repulsion and origin reaction math.
 - [x] Model container influence distances derived from legacy base node radius.
 - [x] Add node-container repulsion eligibility to the force accumulator.
-- [ ] Extract container-to-container repulsion and origin transfer.
+- [x] Extract container-to-container repulsion and origin-transfer math.
+- [ ] Apply eligible container-pair reactions in the force accumulator.
 
 ## Validation during the migration
 
