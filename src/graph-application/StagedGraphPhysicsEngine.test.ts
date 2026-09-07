@@ -213,7 +213,7 @@ describe("StagedGraphPhysicsEngine", () => {
     expect(() => engine.step(1)).toThrow("minimumViewportSize");
   });
 
-  it("detaches seeds and inspection results and replaces state on setInput", () => {
+  it("detaches state and preserves compatible motion/anchor state across setInput", () => {
     const value = containerInput();
     const engine = new StagedGraphPhysicsEngine();
     engine.setInput(value);
@@ -233,12 +233,103 @@ describe("StagedGraphPhysicsEngine", () => {
     expect(engine.getLastStepDiagnostics()?.finalConfinement.missingSampleNodeIds).toEqual([]);
     expect(engine.step(1).positions.get("B")?.x).toBe(84);
     expect(engine.getAnchoringState()?.fixedCoordinates.get("B")?.x).toBe(84);
-    engine.setInput(containerInput());
+    const updated = containerInput();
+    updated.graph.structuralRevision = 5;
+    updated.graph.nodes = updated.graph.nodes.map((node) => ({
+      ...node, position: { x: node.position.x + 1000, y: node.position.y + 1000 }
+    }));
+    engine.setInput(updated);
     expect(engine.getLastStepDiagnostics()).toBeUndefined();
-    expect(engine.step(1).positions.get("B")?.x).toBe(74);
+    expect(engine.step(1).positions.get("B")?.x).toBe(94);
     engine.setInput(input());
     expect(engine.getAnchoringState()?.anchors.size).toBe(0);
-    expect(engine.getAnchoringState()?.fixedCoordinates.size).toBe(0);
+    expect(engine.getAnchoringState()?.fixedCoordinates.size).toBe(1);
+  });
+
+  it("reconciles added, removed, and changed containers across structural updates", () => {
+    const engine = new StagedGraphPhysicsEngine();
+    const first = containerInput();
+    engine.setInput(first);
+    engine.start();
+    engine.step(1);
+    const changed = containerInput();
+    changed.graph.structuralRevision = 5;
+    changed.graph.nodes = [
+      changed.graph.nodes[0],
+      { ...changed.graph.nodes[1], id: "C", position: { x: 80, y: 0 } }
+    ];
+    changed.containers = {
+      containers: [
+        { ...changed.containers.containers[0], originNodeId: "C", memberNodeIds: ["C"] },
+        { ...changed.containers.containers[0], id: "new", originNodeId: "A", memberNodeIds: ["C"] }
+      ]
+    };
+    changed.anchoring = {
+      ...changed.anchoring!,
+      anchors: new Map([
+        ["parent", {
+          ...changed.anchoring!.anchors.get("parent")!,
+          bounds: { left: 500, right: 600, top: -40, bottom: 40 }
+        }],
+        ["new", {
+          ...changed.anchoring!.anchors.get("parent")!,
+          bounds: { left: 700, right: 800, top: -40, bottom: 40 }
+        }]
+      ]),
+      fixedCoordinates: new Map([["C", { x: 80, y: 0 }]])
+    };
+    engine.setInput(changed);
+    expect(engine.getAnchoringReconciliation()).toMatchObject({
+      resetContainers: [{ containerId: "parent", reason: "origin-changed" }],
+      addedContainerIds: ["new"],
+      removedContainerIds: [],
+      removedFixedCoordinateNodeIds: ["B"],
+      addedFixedCoordinateNodeIds: ["C"]
+    });
+    expect(engine.getAnchoringState()?.anchors.get("parent")?.bounds.left).toBe(500);
+    expect(engine.getAnchoringState()?.anchors.get("new")?.bounds.left).toBe(700);
+    expect(engine.getAnchoringState()?.fixedCoordinates.has("B")).toBe(false);
+    expect(engine.getAnchoringState()?.fixedCoordinates.get("C")).toEqual({ x: 80, y: 0 });
+    expect(engine.step(1).structuralRevision).toBe(5);
+  });
+
+  it("preserves a compatible container when only membership, bounds, or structural revision changes", () => {
+    const engine = new StagedGraphPhysicsEngine();
+    const first = containerInput();
+    engine.setInput(first);
+    engine.start();
+    engine.step(1);
+    const before = engine.getAnchoringState()!.anchors.get("parent")!;
+    const updated = containerInput();
+    updated.graph.structuralRevision = 6;
+    updated.containers.containers[0].memberNodeIds = [];
+    updated.containers.containers[0].bounds = { left: -900, right: -800, top: 0, bottom: 1 };
+    updated.anchoring = undefined;
+    engine.setInput(updated);
+    const after = engine.getAnchoringState()!.anchors.get("parent")!;
+    expect(after).toEqual(before);
+    expect(engine.getAnchoringReconciliation()?.preservedContainerIds).toEqual(["parent"]);
+    expect(engine.step(1).structuralRevision).toBe(6);
+  });
+
+  it("keeps existing state when an update omits anchoring, but rejects a new unseeded container", () => {
+    const engine = new StagedGraphPhysicsEngine();
+    const first = containerInput();
+    engine.setInput(first);
+    engine.start();
+    engine.step(1);
+    const updated = containerInput();
+    updated.graph.structuralRevision = 8;
+    updated.anchoring = undefined;
+    updated.containers = {
+      containers: [
+        updated.containers.containers[0],
+        { ...updated.containers.containers[0], id: "new" }
+      ]
+    };
+    engine.setInput(updated);
+    expect(engine.getAnchoringReconciliation()?.missingSeedContainerIds).toEqual(["new"]);
+    expect(() => engine.step(1)).toThrow("Missing anchoring state for container: new");
   });
 
   it("honors frozen input and returns detached position commands", () => {

@@ -1,7 +1,12 @@
 import type { NodeInstanceId } from "../graph-domain/graph-identifiers";
 import { GraphContainerConfinement } from "../graph-domain/GraphContainerConfinement";
 import { GraphContainerAnchoring, type GraphContainerAnchoringResult } from "../graph-domain/GraphContainerAnchoring";
-import { copyGraphPhysicsAnchoringState, type GraphPhysicsAnchoringState } from "../graph-domain/GraphPhysicsAnchoringState";
+import {
+  copyGraphPhysicsAnchoringState,
+  reconcileGraphPhysicsAnchoringState,
+  type GraphPhysicsAnchoringReconciliation,
+  type GraphPhysicsAnchoringState
+} from "../graph-domain/GraphPhysicsAnchoringState";
 import { copyGraphPhysicsContainerState, type GraphPhysicsContainerState } from "../graph-domain/GraphPhysicsContainers";
 import { copyGraphPhysicsConstraintState } from "../graph-domain/GraphPhysicsConstraints";
 import { GraphForceAccumulator, type GraphForceAccumulationResult } from "../graph-domain/GraphForceAccumulator";
@@ -29,6 +34,7 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
   private lastStepDiagnostics: StagedGraphPhysicsStepDiagnostics | undefined;
   private containers: GraphPhysicsContainerState = { containers: [] };
   private anchoringState: GraphPhysicsAnchoringState | undefined;
+  private anchoringReconciliation: GraphPhysicsAnchoringReconciliation["diagnostics"] | undefined;
 
   constructor(
     private readonly forces = new GraphForceAccumulator(),
@@ -38,6 +44,17 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
   ) {}
 
   setInput(input: GraphPhysicsRuntimeInput): void {
+    const nextContainers = copyGraphPhysicsContainerState(input.containers);
+    const nextAnchoringSeed = input.anchoring
+      ? copyGraphPhysicsAnchoringState(input.anchoring)
+      : undefined;
+    const reconciliation = reconcileGraphPhysicsAnchoringState(
+      this.anchoringState,
+      this.input?.containers,
+      nextAnchoringSeed,
+      nextContainers,
+      new Set(input.graph.nodes.map((node) => node.id))
+    );
     this.input = {
       graph: { ...input.graph,
         nodes: input.graph.nodes.map((node) => ({
@@ -49,24 +66,21 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
         linkPolicies: new Map(Array.from(input.settings.linkPolicies, ([id, policy]) => [id, { ...policy }]))
       },
       constraints: copyGraphPhysicsConstraintState(input.constraints),
-      containers: copyGraphPhysicsContainerState(input.containers)
+      containers: nextContainers
     };
-    this.anchoringState = input.anchoring
-      ? copyGraphPhysicsAnchoringState(input.anchoring)
-      : input.containers.containers.length === 0
-        ? { anchors: new Map(), fixedCoordinates: new Map(), minimumViewportSize: 44 }
-        : undefined;
-    this.containers = copyGraphPhysicsContainerState(input.containers);
+    this.anchoringState = reconciliation.state;
+    this.anchoringReconciliation = reconciliation.diagnostics;
+    this.containers = copyGraphPhysicsContainerState(nextContainers);
     // The seed's runtime bounds also drive the first force and confinement pass.
     for (const container of this.containers.containers) {
       const anchor = this.anchoringState?.anchors.get(container.id);
       if (anchor) container.bounds = { ...anchor.bounds };
     }
-    this.frame = {
-      structuralRevision: input.graph.structuralRevision,
-      positions: new Map(input.graph.nodes.map((node) => [node.id, { ...node.position }])),
-      velocities: new Map(input.graph.nodes.map((node) => [node.id, { ...node.velocity }]))
-    };
+    this.frame = reconcileFrame(
+      this.input ? this.frame : undefined,
+      input.graph.structuralRevision,
+      input.graph.nodes
+    );
     this.lastStepDiagnostics = undefined;
     if (input.constraints.simulationFrozen) this.status = "frozen";
   }
@@ -175,6 +189,20 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
     return this.anchoringState && copyGraphPhysicsAnchoringState(this.anchoringState);
   }
 
+  getAnchoringReconciliation(): GraphPhysicsAnchoringReconciliation["diagnostics"] | undefined {
+    if (!this.anchoringReconciliation) return undefined;
+    return {
+      preservedContainerIds: [...this.anchoringReconciliation.preservedContainerIds],
+      resetContainers: this.anchoringReconciliation.resetContainers.map((item) => ({ ...item })),
+      addedContainerIds: [...this.anchoringReconciliation.addedContainerIds],
+      removedContainerIds: [...this.anchoringReconciliation.removedContainerIds],
+      preservedFixedCoordinateNodeIds: [...this.anchoringReconciliation.preservedFixedCoordinateNodeIds],
+      addedFixedCoordinateNodeIds: [...this.anchoringReconciliation.addedFixedCoordinateNodeIds],
+      removedFixedCoordinateNodeIds: [...this.anchoringReconciliation.removedFixedCoordinateNodeIds],
+      missingSeedContainerIds: [...this.anchoringReconciliation.missingSeedContainerIds]
+    };
+  }
+
   private requireAnchoringState(): GraphPhysicsAnchoringState {
     const state = this.anchoringState;
     if (!state) throw new Error("Staged container stepping requires an explicit anchoring seed.");
@@ -196,4 +224,24 @@ function copyFrame(frame: GraphKinematicsFrameInput): GraphKinematicsFrameInput 
     positions: new Map(Array.from(frame.positions, ([id, point]) => [id, { ...point }])),
     velocities: new Map(Array.from(frame.velocities, ([id, vector]) => [id, { ...vector }]))
   };
+}
+
+function reconcileFrame(
+  previous: GraphKinematicsFrameInput | undefined,
+  structuralRevision: number,
+  nodes: GraphPhysicsRuntimeInput["graph"]["nodes"]
+): GraphKinematicsFrameInput {
+  const positions = new Map(
+    nodes.map((node) => [
+      node.id,
+      { ...(previous?.positions.get(node.id) ?? node.position) }
+    ])
+  );
+  const velocities = new Map(
+    nodes.map((node) => [
+      node.id,
+      { ...(previous?.velocities.get(node.id) ?? node.velocity) }
+    ])
+  );
+  return { structuralRevision, positions, velocities };
 }

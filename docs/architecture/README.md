@@ -206,7 +206,9 @@ GraphController <--------> Obsidian adapters
 - [x] Extract post-integration [container anchoring and member translation](GraphContainerAnchoring.md).
 - [x] Compose anchoring, evolving bounds/history and fixed coordinates, and a second confinement pass into the staged engine.
 - [x] Add an explicit [anchoring seed/state boundary](GraphPhysicsAnchoringState.md) and verify multi-step staged state persistence.
-- [ ] Broaden input/lifecycle reconciliation and legacy anchor-state capture (A4).
+- [x] Reconcile anchoring state across structural revisions, container additions/removals, compatible updates, and changed container identity/origin.
+- [x] Prune fixed coordinates for removed graph nodes while preserving surviving node state.
+- [ ] Capture legacy anchor state and broaden host-event/lifecycle reconciliation.
 
 ## Validation during the migration
 
