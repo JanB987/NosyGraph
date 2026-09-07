@@ -98,3 +98,52 @@ The normal badge slice is ready for live-ownership planning when:
 3. Applicable expand and collapse operations produce no shadow warnings.
 4. Reloaded legacy state remains usable.
 5. Every failure has either been fixed or documented as an intentional semantic difference.
+
+
+## B1 execution record
+
+Run date: 2026-09-07  
+Repository commit: `4c3534e`  
+Automated command: `npm.cmd test -- --run` against the badge, expansion, collapse, snapshot, legacy-adapter, and store test files.  
+Automated result: **17 test files passed, 85 tests passed**.
+
+The automated result proves host-neutral transition and ownership behavior. It does not prove rendered pixels, pointer hit testing, Obsidian view persistence, or a live shadow warning-free console run. Those columns remain pending until a live Obsidian UI pass is available.
+
+| ID | Semantic and transition evidence | Shadow comparison evidence | Embedded context | Visible behavior | Persisted replay | B1 status |
+|---|---|---|---|---|---|---|
+| B01 | Pass — normal expand/collapse planning and legacy execution tests | Pass — shadow calculation preserves the live result without mutation | Outer fixture | Blocked — no UI control | Blocked — no live reload | Partial |
+| B02 | Pass — ordered multi-target change set and ownership | Pending — no dedicated multi-target shadow fixture | Outer fixture | Blocked | Blocked | Partial |
+| B03 | Pass — empty target plans create an empty expansion | Pending — no dedicated empty-target shadow fixture | Outer fixture | Blocked | Not applicable | Partial |
+| B04 | Pass — unresolved links remain explicit missing notes | Pending — shadow failure isolation is covered, but not this missing-note fixture | Outer fixture | Blocked | Blocked | Partial |
+| B05 | Pass — visible node and semantic edge are reused without replacing origin | Pending — no dedicated reuse shadow fixture | Outer fixture | Blocked | Blocked | Partial |
+| B06 | Pass — duplicate-node identity is stable | Pending — no dedicated duplicate shadow fixture | Outer fixture | Blocked | Blocked | Partial |
+| B07 | Pass — collapse rehomes a node still owned by another expansion | Pending — no dedicated shared-owner shadow fixture | Outer fixture | Blocked | Blocked | Partial |
+| B08 | Pass — nested ownership is recorded and descendant collapse removes the subtree | Pending — no dedicated nested shadow replay fixture | Outer fixture | Blocked | Blocked | Partial |
+| B09 | Pass — independently discovered/visible edge identity is preserved on collapse | Pass — comparator tests distinguish semantic edge origin from physics fields | Outer fixture | Blocked | Blocked | Partial |
+| B10 | Pass — newly materialized nodes receive configured child badges | Pending — no dedicated child-badge shadow fixture | Outer fixture | Blocked | Blocked | Partial |
+| B11 | Partial — detached snapshots retain note properties; no rendered size/icon assertion | Pass — comparator reports note metadata differences independently | Outer fixture | Blocked | Blocked | Partial |
+| B12 | Pass — context-scoped badge/node identities and embedded materialization are tested | Pending — no end-to-end embedded shadow toggle | Embedded fixture | Blocked — no UI control | Blocked — no live reload | Partial |
+| B13 | Pass — executor refuses to invert an already-applied plan; full click sequence is not replayed | Pending — no repeated-click shadow fixture | Outer fixture | Blocked | Blocked | Partial |
+| B14 | Pending — no persistence adapter/reopen test was run | Pending — no persisted shadow replay | Outer and embedded | Blocked | Blocked — requires close/reopen in Obsidian | Blocked |
+
+## Automated evidence used
+
+- [GraphBadgeTogglePlan tests](../../src/graph-application/GraphBadgeTogglePlan.test.ts)
+- [GraphBadgeToggleService tests](../../src/graph-application/GraphBadgeToggleService.test.ts)
+- [GraphBadgeToggleShadowService tests](../../src/graph-application/GraphBadgeToggleShadowService.test.ts)
+- [GraphBadgeToggleShadowComparator tests](../../src/graph-application/GraphBadgeToggleShadowComparator.test.ts)
+- [GraphExpansionTargetMaterializer tests](../../src/graph-application/GraphExpansionTargetMaterializer.test.ts)
+- [GraphExpansionChangeSet tests](../../src/graph-application/GraphExpansionChangeSet.test.ts)
+- [GraphCollapseChangeSet tests](../../src/graph-application/GraphCollapseChangeSet.test.ts)
+- [Legacy badge executor tests](../../src/graph-application/LegacyGraphBadgeToggleExecutor.test.ts)
+- [Legacy snapshot adapter tests](../../src/graph-application/LegacyGraphSnapshotAdapter.test.ts)
+- [GraphStore tests](../../src/graph-application/GraphStore.test.ts)
+
+## B1 completion state
+
+B1 is **partially complete**. All executable host-neutral regression coverage listed above passes. The following evidence is still required before B1 can be closed:
+
+1. Run B01–B14 in the visible Obsidian graph, including outer and embedded contexts.
+2. Capture console output showing whether each applicable shadow comparison is warning-free.
+3. Close and reopen the graph for B14 and record the persisted replay result.
+4. Replace the blocked/pending cells with dated observations and evidence paths.
