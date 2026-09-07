@@ -19,6 +19,8 @@ Explicit `parentContainerIds` replace legacy graph-path ancestry at the physics 
 
 ## Copy function
 
+[GraphContainerAnchoring](GraphContainerAnchoring.md) separates evolving bounds, direction, origin history, anchor velocity, and collision pressure into a runtime map. Membership/configuration stays here; anchoring returns updated bounds as a detached compatibility projection. Staged-engine integration is still pending.
+
 `copyGraphPhysicsContainerState()` detaches container records, member arrays, bounds, and ancestry arrays.
 
 ## Connections

@@ -202,7 +202,10 @@ GraphController <--------> Obsidian adapters
 - [x] Add node-container repulsion eligibility to the force accumulator.
 - [x] Extract container-to-container repulsion and origin-transfer math.
 - [x] Apply eligible container-pair reactions in the force accumulator.
-- [ ] Extract post-integration container anchoring and member translation.
+- [x] Define detached container anchoring runtime state separately from membership/configuration.
+- [x] Extract post-integration [container anchoring and member translation](GraphContainerAnchoring.md).
+- [ ] Compose anchoring, evolving bounds/history and fixed coordinates, and a second confinement pass into the staged engine.
+- [ ] Verify multi-step staged-engine state persistence and input/lifecycle reconciliation.
 
 ## Validation during the migration
 

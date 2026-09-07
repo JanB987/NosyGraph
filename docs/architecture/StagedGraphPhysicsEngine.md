@@ -20,9 +20,9 @@ Every positive finite `deltaTime` performs one legacy tick; its magnitude is int
 
 ## Current parity scope
 
-Implemented: ordinary node repulsion, force-link springs, world and embedded gravity, constraint priority, damping, integration, and parent confinement.
+Implemented: ordinary node repulsion, force-link springs, world and embedded gravity, node-container and container-container repulsion with eligible origin reactions, constraint priority, damping, integration, and parent confinement.
 
-Not yet implemented: node-container repulsion, container-container repulsion, origin-anchor transfer, dynamic container synchronization, or settling cadence. This engine must not replace the live solver.
+Not yet composed: post-integration container anchoring/member translation and evolving container state. Dynamic container synchronization and settling cadence also remain. This engine must not replace the live solver.
 
 ## Connections
 
@@ -33,4 +33,4 @@ Not yet implemented: node-container repulsion, container-container repulsion, or
 
 ## Next extraction
 
-[GraphNodeContainerRepulsion](GraphNodeContainerRepulsion.md) now provides pure geometry and deltas. The next extraction adds its membership and origin-eligibility orchestration to the force accumulator.
+[GraphContainerAnchoring](GraphContainerAnchoring.md) now provides pure anchoring, member/fixed-coordinate translation, runtime bounds/history, and diagnostics. The next increment must initialize and retain that state, compose anchoring after confinement, and confine again with updated bounds. Repeated pure calls are tested; staged-engine integration is pending.

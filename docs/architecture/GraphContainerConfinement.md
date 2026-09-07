@@ -32,4 +32,4 @@ Embedded container bounds deliberately do not clamp raw node coordinates. The li
 
 ## Next extraction
 
-[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) composes force accumulation, integration, and confinement. The next extraction adds container repulsion while the engine remains experimental.
+[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) composes force accumulation, integration, and confinement. [GraphContainerAnchoring](GraphContainerAnchoring.md) now separately extracts anchoring/member translation. The next increment composes anchoring followed by confinement again with updated bounds.
