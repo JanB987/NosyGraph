@@ -147,3 +147,20 @@ B1 is **partially complete**. All executable host-neutral regression coverage li
 2. Capture console output showing whether each applicable shadow comparison is warning-free.
 3. Close and reopen the graph for B14 and record the persisted replay result.
 4. Replace the blocked/pending cells with dated observations and evidence paths.
+
+
+## B2 discrepancy resolution
+
+The B1 automated run produced no failing transition assertions and no recorded production shadow difference. The comparator’s negative tests continue to synthesize semantic mismatches and verify that they are reported, so no comparison rule was weakened.
+
+| Finding | Resolution | Status |
+|---|---|---|
+| Node coordinates, velocity, and radius can change during a badge operation because physics runs around the toggle. | Keep these fields outside the badge semantic comparator. Ownership, context, origin, and all graph entities remain compared. | Agreed behavior; documented in [GraphBadgeToggleShadowComparator](GraphBadgeToggleShadowComparator.md). |
+| A legacy action may be unchanged because the requested state is already active, or because the live operation was not applied. | Return not-comparable: legacy-not-applied; do not treat an unchanged action as a match. | Preserved and covered by GraphBadgeToggleShadowComparator.test.ts. |
+| Shadow calculation can fail independently of the live operation. | Return not-comparable: shadow-threw while allowing the legacy action to complete. Do not suppress or reinterpret the failure. | Preserved and covered by GraphBadgeToggleShadowService.test.ts. |
+| The calculated change set may be rejected by the expected store. | Return not-comparable: expected-state-rejected; retain the rejection reason for diagnosis. | Preserved by the comparator and transition tests. |
+| Note frontmatter properties, configured size, and icon affect semantic state even though rendered pixels are not available to the host-neutral layer. | Compare all of these note fields. B11 remains visually pending; no field was removed to make it pass. | Agreed behavior; metadata mismatch test passes. |
+| Parent-semantic badges, modifier-key chain expansion, lens creation, and persistence writes are outside the normal link-toggle shadow boundary. | Keep them explicitly out of the B01–B14 comparator scope and track them as host/UI work. Do not report them as passing normal-toggle parity. | Documented scope boundary; B14 remains blocked pending a live reopen test. |
+| Embedded context identity is part of node, badge, edge, and expansion semantics. | Continue comparing context IDs and stable embedded identities. There is no fallback that collapses embedded state into the outer graph. | Agreed behavior; embedded identity tests pass. |
+
+No implementation change was required for B2. The open cells in the B1 table are still pending or blocked evidence, not accepted mismatches: they require a live Obsidian run to determine visible behavior, console output, and persisted replay.
