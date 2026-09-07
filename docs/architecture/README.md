@@ -210,6 +210,7 @@ GraphController <--------> Obsidian adapters
 - [x] Prune fixed coordinates for removed graph nodes while preserving surviving node state.
 - [x] Extract [dynamic container synchronization and recalculation](GraphPhysicsContainerSynchronizer.md).
 - [x] Extract [settling cadence and simulation status policy](GraphSettlingPolicy.md).
+- [x] Audit [legacy solver parity gaps](LegacySolverParityAudit.md) across constraints, dragging, pins, freezes, directional links, lenses, and force eligibility.
 - [ ] Capture legacy anchor state and broaden host-event/lifecycle reconciliation.
 
 ## Validation during the migration
