@@ -209,6 +209,7 @@ GraphController <--------> Obsidian adapters
 - [x] Reconcile anchoring state across structural revisions, container additions/removals, compatible updates, and changed container identity/origin.
 - [x] Prune fixed coordinates for removed graph nodes while preserving surviving node state.
 - [x] Extract [dynamic container synchronization and recalculation](GraphPhysicsContainerSynchronizer.md).
+- [x] Extract [settling cadence and simulation status policy](GraphSettlingPolicy.md).
 - [ ] Capture legacy anchor state and broaden host-event/lifecycle reconciliation.
 
 ## Validation during the migration

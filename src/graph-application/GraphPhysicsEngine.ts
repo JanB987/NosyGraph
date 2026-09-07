@@ -3,7 +3,7 @@ import type { GraphKinematicsFrameInput } from "../graph-domain/GraphKinematicsF
 import type { GraphPoint, GraphVector } from "../graph-domain/GraphNodeInstance";
 import type { GraphPhysicsRuntimeInput } from "../graph-domain/GraphPhysicsRuntimeInput";
 
-export type GraphPhysicsEngineStatus = "stopped" | "running" | "frozen";
+export type GraphPhysicsEngineStatus = "stopped" | "running" | "settled" | "frozen";
 
 /** Host-neutral port implemented by any graph physics runtime. */
 export interface GraphPhysicsEngine {

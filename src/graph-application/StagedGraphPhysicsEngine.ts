@@ -14,6 +14,10 @@ import type { GraphKinematicsFrameInput } from "../graph-domain/GraphKinematicsF
 import { GraphMotionIntegrator, type GraphMotionIntegrationResult } from "../graph-domain/GraphMotionIntegrator";
 import type { GraphPoint } from "../graph-domain/GraphNodeInstance";
 import type { GraphPhysicsRuntimeInput } from "../graph-domain/GraphPhysicsRuntimeInput";
+import {
+  GraphSettlingPolicy,
+  type GraphSettlingObservation
+} from "../graph-domain/GraphSettlingPolicy";
 import type { GraphPhysicsEngine, GraphPhysicsEngineStatus } from "./GraphPhysicsEngine";
 
 export interface StagedGraphPhysicsStepDiagnostics {
@@ -22,6 +26,7 @@ export interface StagedGraphPhysicsStepDiagnostics {
   confinement: ReturnType<GraphContainerConfinement["constrain"]>["diagnostics"];
   anchoring: GraphContainerAnchoringResult["diagnostics"];
   finalConfinement: ReturnType<GraphContainerConfinement["constrain"]>["diagnostics"];
+  settling: GraphSettlingObservation;
 }
 
 /** Experimental engine composed from extracted pure legacy-compatible stages. */
@@ -35,15 +40,18 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
   private containers: GraphPhysicsContainerState = { containers: [] };
   private anchoringState: GraphPhysicsAnchoringState | undefined;
   private anchoringReconciliation: GraphPhysicsAnchoringReconciliation["diagnostics"] | undefined;
+  private interactionActive = false;
 
   constructor(
     private readonly forces = new GraphForceAccumulator(),
     private readonly integrator = new GraphMotionIntegrator(),
     private readonly confinement = new GraphContainerConfinement(),
-    private readonly anchoring = new GraphContainerAnchoring()
+    private readonly anchoring = new GraphContainerAnchoring(),
+    private readonly settling = new GraphSettlingPolicy()
   ) {}
 
   setInput(input: GraphPhysicsRuntimeInput): void {
+    this.settling.setSettings(input.settings);
     const nextContainers = copyGraphPhysicsContainerState(input.containers);
     const nextAnchoringSeed = input.anchoring
       ? copyGraphPhysicsAnchoringState(input.anchoring)
@@ -82,17 +90,38 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
       input.graph.nodes
     );
     this.lastStepDiagnostics = undefined;
+    this.interactionActive = false;
     if (input.constraints.simulationFrozen) this.status = "frozen";
   }
 
   getStatus(): GraphPhysicsEngineStatus { return this.status; }
-  start(): void { if (this.status !== "frozen") this.status = "running"; }
-  reheat(amount = 0.15): void {
-    if (Number.isFinite(amount) && amount > 0) this.start();
+  start(): void {
+    if (this.status === "frozen") return;
+    this.settling.start();
+    this.status = "running";
   }
-  freeze(): void { this.status = "frozen"; }
-  resume(): void { this.status = "running"; }
-  stop(): void { this.status = "stopped"; }
+  reheat(amount = 0.15): void {
+    this.settling.reheat(amount);
+    if (this.settling.getStatus() === "running") this.status = "running";
+  }
+  freeze(): void { this.settling.freeze(); this.status = "frozen"; }
+  resume(): void {
+    this.settling.resume();
+    if (this.settling.getStatus() === "running") this.status = "running";
+  }
+  stop(): void { this.settling.stop(); this.status = "stopped"; }
+
+  setInteractionActive(active: boolean): void {
+    this.interactionActive = active;
+  }
+
+  getTargetFrameIntervalMs(): number {
+    return this.settling.getTargetFrameInterval(this.interactionActive);
+  }
+
+  getSettlingState() {
+    return this.settling.getState();
+  }
 
   step(deltaTime: number): GraphKinematicsFrameInput {
     if (!this.input || this.status !== "running" || !Number.isFinite(deltaTime) || deltaTime <= 0) {
@@ -119,6 +148,8 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
     this.anchoringState = copyGraphPhysicsAnchoringState({
       ...state, anchors: anchoring.anchors, fixedCoordinates: anchoring.fixedCoordinates
     });
+    const settling = this.settling.observe(integration.maxVelocity, this.interactionActive);
+    if (!settling.continueSimulation) this.status = "settled";
     this.lastStepDiagnostics = {
       forces: forces.diagnostics,
       integration: {
@@ -127,7 +158,8 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
       },
       confinement: confinement.diagnostics,
       anchoring: anchoring.diagnostics,
-      finalConfinement: finalConfinement.diagnostics
+      finalConfinement: finalConfinement.diagnostics,
+      settling
     };
     return copyFrame(this.frame);
   }
@@ -164,6 +196,9 @@ export class StagedGraphPhysicsEngine implements GraphPhysicsEngine {
       finalConfinement: {
         ...this.lastStepDiagnostics.finalConfinement,
         missingSampleNodeIds: [...this.lastStepDiagnostics.finalConfinement.missingSampleNodeIds]
+      },
+      settling: {
+        ...this.lastStepDiagnostics.settling
       }
     };
   }

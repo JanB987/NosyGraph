@@ -332,6 +332,101 @@ describe("StagedGraphPhysicsEngine", () => {
     expect(() => engine.step(1)).toThrow("Missing anchoring state for container: new");
   });
 
+  it("settles after 24 consecutive low-velocity steps and stops stepping", () => {
+    const value = input();
+    value.graph.edges = [];
+    value.settings = { ...normalizeGraphPhysicsSettings({ repulsionStrength: 0 }), damping: 1 };
+    value.graph.nodes = value.graph.nodes.map((node) => ({
+      ...node, velocity: { x: 0, y: 0 }
+    }));
+    const engine = new StagedGraphPhysicsEngine();
+    engine.setInput(value);
+    engine.start();
+    expect(engine.getStatus()).toBe("running");
+    expect(engine.getTargetFrameIntervalMs()).toBe(16);
+    for (let index = 0; index < 23; index += 1) {
+      expect(engine.step(1).positions.get("A")).toEqual({ x: 0, y: 0 });
+      expect(engine.getStatus()).toBe("running");
+    }
+    expect(engine.step(1).positions.get("A")).toEqual({ x: 0, y: 0 });
+    expect(engine.getStatus()).toBe("settled");
+    expect(engine.getLastStepDiagnostics()?.settling).toMatchObject({
+      phase: "settled", status: "settled", continueSimulation: false,
+      settledFrameCount: 24, targetFrameIntervalMs: 50
+    });
+    const diagnostics = engine.getLastStepDiagnostics();
+    engine.step(1);
+    expect(engine.getLastStepDiagnostics()).toEqual(diagnostics);
+  });
+
+  it("uses near-settle cadence while still running and returns to active cadence when reheated", () => {
+    const value = input();
+    value.graph.edges = [];
+    value.settings = { ...normalizeGraphPhysicsSettings({ repulsionStrength: 0 }), damping: 1 };
+    value.graph.nodes = value.graph.nodes.map((node) => ({
+      ...node, velocity: { x: 0.01, y: 0 }
+    }));
+    const engine = new StagedGraphPhysicsEngine();
+    engine.setInput(value);
+    engine.start();
+    engine.step(1);
+    expect(engine.getTargetFrameIntervalMs()).toBe(50);
+    engine.reheat(0.2);
+    expect(engine.getStatus()).toBe("running");
+    expect(engine.getSettlingState()).toMatchObject({
+      settledFrameCount: 1, lastMaxVelocity: 0.01
+    });
+    engine.setInteractionActive(true);
+    expect(engine.getTargetFrameIntervalMs()).toBe(16);
+    engine.step(1);
+    expect(engine.getLastStepDiagnostics()?.settling).toMatchObject({
+      phase: "active", settledFrameCount: 0, targetFrameIntervalMs: 16
+    });
+  });
+
+  it("preserves the settled counter while frozen and resumes it afterward", () => {
+    const value = input();
+    value.graph.edges = [];
+    value.settings = { ...normalizeGraphPhysicsSettings({ repulsionStrength: 0 }), damping: 1 };
+    value.graph.nodes = value.graph.nodes.map((node) => ({
+      ...node, velocity: { x: 0, y: 0 }
+    }));
+    const engine = new StagedGraphPhysicsEngine();
+    engine.setInput(value);
+    engine.start();
+    engine.step(1);
+    engine.freeze();
+    const before = engine.getSettlingState();
+    expect(engine.step(1)).toEqual(engine.step(1));
+    expect(engine.getSettlingState()).toEqual({
+      ...before, status: "frozen"
+    });
+    engine.resume();
+    expect(engine.getStatus()).toBe("running");
+    engine.step(1);
+    expect(engine.getSettlingState().settledFrameCount).toBe(2);
+  });
+
+  it("reheats a settled engine and resets settling hysteresis", () => {
+    const value = input();
+    value.graph.edges = [];
+    value.settings = { ...normalizeGraphPhysicsSettings({ repulsionStrength: 0 }), damping: 1 };
+    value.graph.nodes = value.graph.nodes.map((node) => ({
+      ...node, velocity: { x: 0, y: 0 }
+    }));
+    const engine = new StagedGraphPhysicsEngine();
+    engine.setInput(value);
+    engine.start();
+    for (let index = 0; index < 24; index += 1) engine.step(1);
+    expect(engine.getStatus()).toBe("settled");
+    engine.reheat(0.15);
+    expect(engine.getStatus()).toBe("running");
+    expect(engine.getSettlingState()).toMatchObject({
+      settledFrameCount: 0, lastMaxVelocity: Infinity
+    });
+    expect(engine.getTargetFrameIntervalMs()).toBe(16);
+  });
+
   it("honors frozen input and returns detached position commands", () => {
     const value = input();
     value.constraints.simulationFrozen = true;
