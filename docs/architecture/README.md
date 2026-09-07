@@ -204,8 +204,9 @@ GraphController <--------> Obsidian adapters
 - [x] Apply eligible container-pair reactions in the force accumulator.
 - [x] Define detached container anchoring runtime state separately from membership/configuration.
 - [x] Extract post-integration [container anchoring and member translation](GraphContainerAnchoring.md).
-- [ ] Compose anchoring, evolving bounds/history and fixed coordinates, and a second confinement pass into the staged engine.
-- [ ] Verify multi-step staged-engine state persistence and input/lifecycle reconciliation.
+- [x] Compose anchoring, evolving bounds/history and fixed coordinates, and a second confinement pass into the staged engine.
+- [x] Add an explicit [anchoring seed/state boundary](GraphPhysicsAnchoringState.md) and verify multi-step staged state persistence.
+- [ ] Broaden input/lifecycle reconciliation and legacy anchor-state capture (A4).
 
 ## Validation during the migration
 

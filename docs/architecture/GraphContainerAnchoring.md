@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-Pure extraction of `GraphEngine.anchorContainersToParents()` and its attachment calculations. A2 adds this boundary only; neither the staged nor live solver calls it yet.
+Pure extraction of `GraphEngine.anchorContainersToParents()` and its attachment calculations. A2 extracted this boundary; A3 now composes it into the experimental staged engine. The live solver remains unchanged.
 
 Implementation: [`GraphContainerAnchoring.ts`](../../src/graph-domain/GraphContainerAnchoring.ts). Tests: [`GraphContainerAnchoring.test.ts`](../../src/graph-domain/GraphContainerAnchoring.test.ts).
 
@@ -12,7 +12,7 @@ Container identity, kind, origin, membership, ancestry, and gravity stay in [Gra
 
 Runtime bounds are authoritative for anchoring. Returned container records receive copies of updated bounds for existing force/confinement consumers. They are detached projections, not a second mutable owner.
 
-Node motion uses [GraphKinematicsFrame](GraphKinematicsFrame.md). A separate per-node `GraphAnchoringFixedCoordinates` map holds effective fixed X/Y axes. Each axis may independently be missing, null, or nonfinite. This map does not alter persisted pin intent or arbitrary drag/direction targets. A3 must explicitly reconcile returned effective coordinates with subsequent constraint input.
+Node motion uses [GraphKinematicsFrame](GraphKinematicsFrame.md). A separate per-node `GraphAnchoringFixedCoordinates` map holds effective fixed X/Y axes. Each axis may independently be missing, null, or nonfinite. The staged engine retains these coordinates without changing independent pin, lock, direction, or drag targets; see [GraphPhysicsAnchoringState](GraphPhysicsAnchoringState.md).
 
 ## Contract
 
@@ -39,4 +39,4 @@ The legacy zero-direction calculation can produce nonfinite bounds. A focused te
 
 Tests cover geometry, minimum dimensions, dead zones, history fallback, fixed axes, embedded behavior, missing references, sequential/shared/self-membership, repeated pure calls, and detachment.
 
-A3 must compose forces -> [GraphMotionIntegrator](GraphMotionIntegrator.md) -> [GraphContainerConfinement](GraphContainerConfinement.md) -> anchoring -> confinement again. [StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) must retain bounds/history and effective fixed coordinates across steps. Legacy adapters do not yet capture anchor state. Initialization, constraint reconciliation, revision changes, and lifecycle handling remain integration work. Repeated pure-call tests do not establish staged-engine or live parity.
+A3 now composes forces -> [GraphMotionIntegrator](GraphMotionIntegrator.md) -> [GraphContainerConfinement](GraphContainerConfinement.md) -> anchoring -> confinement again in [StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md). [GraphPhysicsAnchoringState](GraphPhysicsAnchoringState.md) supplies the explicit seed and retains updated bounds/history and effective fixed coordinates between steps. Staged multi-step tests now cover this composition. Legacy capture, dynamic synchronization, broader lifecycle reconciliation, and live parity remain pending.

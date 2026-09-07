@@ -28,4 +28,4 @@ Transient pin-reposition locks precede persistent pins so the temporary target c
 
 ## Next extraction
 
-[GraphContainerConfinement](GraphContainerConfinement.md) applies parent bounds after integration. [GraphContainerAnchoring](GraphContainerAnchoring.md) now separately extracts subsequent anchoring/member translation. The next increment composes anchoring and a second confinement pass into the experimental engine.
+[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) now composes integration, [confinement](GraphContainerConfinement.md), [anchoring](GraphContainerAnchoring.md), and confinement again. Anchoring retains effective fixed coordinates separately from integration's pin/lock/drag/direction targets.
