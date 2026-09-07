@@ -212,6 +212,7 @@ GraphController <--------> Obsidian adapters
 - [x] Extract [settling cadence and simulation status policy](GraphSettlingPolicy.md).
 - [x] Audit [legacy solver parity gaps](LegacySolverParityAudit.md) across constraints, dragging, pins, freezes, directional links, lenses, and force eligibility.
 - [x] Establish [non-zero-step parity](GraphPhysicsNonZeroParity.md) over one and multiple synchronized steps with documented tolerances.
+- [ ] Complete [interactive physics verification](InteractivePhysicsVerification.md) in Obsidian; the UI pass is pending a callable Computer Use session.
 - [ ] Capture legacy anchor state and broaden host-event/lifecycle reconciliation.
 
 ## Validation during the migration
