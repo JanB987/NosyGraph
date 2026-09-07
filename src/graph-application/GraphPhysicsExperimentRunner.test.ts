@@ -58,6 +58,22 @@ describe("GraphPhysicsExperimentRunner", () => {
     expect(result.frameSummary).toMatchObject({ matchedNodeCount: 1, meanSpeed: Math.sqrt(5) });
   });
 
+  it("runs a multi-step trace from one captured starting state", () => {
+    const source = {
+      captureArchitecturePhysicsInput: vi.fn(() => capture())
+    };
+    const result = new GraphPhysicsExperimentRunner(source).runSteps(5, 1, 3);
+
+    expect(source.captureArchitecturePhysicsInput).toHaveBeenCalledTimes(1);
+    expect(result.frames.map((frame) => frame.sequence)).toEqual([5, 6, 7]);
+    expect(result.frames.map((frame) => frame.positions.get("A"))).toEqual([
+      { x: 12, y: 19 },
+      { x: 14, y: 18 },
+      { x: 16, y: 17 }
+    ]);
+    expect(result.frameSummaries).toHaveLength(3);
+  });
+
   it("uses a fresh engine for every experiment", () => {
     let engineCount = 0;
     const runner = new GraphPhysicsExperimentRunner(

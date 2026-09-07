@@ -19,7 +19,13 @@ export interface GraphPhysicsExperimentResult {
   frameSummary: GraphKinematicsFrameSummary;
 }
 
-/** Runs one isolated replacement-engine step against detached live input. */
+export interface GraphPhysicsExperimentTraceResult {
+  input: GraphPhysicsShadowSummary;
+  frames: readonly GraphKinematicsFrame[];
+  frameSummaries: readonly GraphKinematicsFrameSummary[];
+}
+
+/** Runs one replacement-engine step against a detached input capture. */
 export class GraphPhysicsExperimentRunner {
   constructor(
     private readonly inputSource: GraphPhysicsShadowCaptureSource,
@@ -44,4 +50,43 @@ export class GraphPhysicsExperimentRunner {
       frameSummary: this.frameDiagnostics.summarize(frame)
     };
   }
+
+  /**
+   * Runs several positive steps from one captured starting state.
+   * The engine is retained for the trace and discarded afterward.
+   */
+  runSteps(
+    frameSequence: number,
+    deltaTime: number,
+    stepCount: number
+  ): GraphPhysicsExperimentTraceResult {
+    const capture = this.inputSource.captureArchitecturePhysicsInput(frameSequence);
+    const engine = this.engineFactory();
+    engine.setInput(capture.input);
+    engine.start();
+
+    const frames: GraphKinematicsFrame[] = [];
+    const frameSummaries: GraphKinematicsFrameSummary[] = [];
+    const count = normalizeStepCount(stepCount);
+    for (let index = 0; index < count; index += 1) {
+      const frameInput = engine.step(deltaTime);
+      const frame: GraphKinematicsFrame = {
+        sequence: frameSequence + index,
+        ...frameInput
+      };
+      frames.push(frame);
+      frameSummaries.push(this.frameDiagnostics.summarize(frame));
+    }
+    engine.stop();
+
+    return {
+      input: this.inputDiagnostics.summarize(capture),
+      frames,
+      frameSummaries
+    };
+  }
+}
+
+function normalizeStepCount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }

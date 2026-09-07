@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`GraphKinematicsFrameComparator` compares two detached [GraphKinematicsFrame](GraphKinematicsFrame.md) values by stable node identity.
+GraphKinematicsFrameComparator compares two detached [GraphKinematicsFrame](GraphKinematicsFrame.md) values by stable node identity.
 
-Current implementation: [`src/graph-application/GraphKinematicsFrameComparator.ts`](../../src/graph-application/GraphKinematicsFrameComparator.ts)
+Current implementation: [src/graph-application/GraphKinematicsFrameComparator.ts](../../src/graph-application/GraphKinematicsFrameComparator.ts)
 
 ## Comparison rules
 
@@ -13,17 +13,15 @@ Current implementation: [`src/graph-application/GraphKinematicsFrameComparator.t
 - Position and velocity use separate non-negative Euclidean-distance tolerances.
 - Non-finite distances are differences.
 - Node identities are sorted for deterministic reports.
-- `differenceCount` remains complete while `reportedDifferences` is bounded by `maxReportedDifferences`.
+- differenceCount remains complete while reportedDifferences is bounded by maxReportedDifferences.
+- maxPositionDistance and maxVelocityDistance retain the largest observed errors for trace-level investigation.
 
-Metadata mismatches contribute to `differenceCount` but are represented by the explicit boolean fields rather than fake node differences.
+Metadata mismatches contribute to differenceCount but are represented by the explicit boolean fields rather than fake node differences.
 
 ## Connections
 
 - Compares copied legacy frames from [LegacyGraphKinematicsAdapter](LegacyGraphKinematicsAdapter.md).
 - Compares isolated replacement frames from [GraphPhysicsExperimentRunner](GraphPhysicsExperimentRunner.md).
 - Complements aggregate [GraphKinematicsFrameDiagnostics](GraphKinematicsFrameDiagnostics.md).
+- [GraphKinematicsTraceComparator](GraphKinematicsTraceComparator.md) composes this comparison across multiple synchronized steps.
 - Does not run physics, mutate frames, publish results, or log.
-
-## Next extraction
-
-[GraphPhysicsParityService](GraphPhysicsParityService.md) composes legacy capture, isolated experiment, and this comparator. Its live-safe default is a zero-duration step.

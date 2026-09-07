@@ -28,6 +28,8 @@ export interface GraphKinematicsFrameComparisonResult {
   truncated: boolean;
   positionTolerance: number;
   velocityTolerance: number;
+  maxPositionDistance: number;
+  maxVelocityDistance: number;
 }
 
 /** Compares detached frames by stable node identity with bounded detail output. */
@@ -52,6 +54,8 @@ export class GraphKinematicsFrameComparator {
     const reportedDifferences: GraphKinematicsNodeDifference[] = [];
     let differenceCount = Number(!sequenceMatches) + Number(!structuralRevisionMatches);
     let comparedNodeCount = 0;
+    let maxPositionDistance = 0;
+    let maxVelocityDistance = 0;
 
     const record = (difference: GraphKinematicsNodeDifference) => {
       differenceCount += 1;
@@ -78,6 +82,7 @@ export class GraphKinematicsFrameComparator {
 
       comparedNodeCount += 1;
       const positionDistance = distance(expectedPosition!, actualPosition!);
+      maxPositionDistance = Math.max(maxPositionDistance, positionDistance);
       if (!Number.isFinite(positionDistance) || positionDistance > positionTolerance) {
         record({
           nodeId,
@@ -87,7 +92,9 @@ export class GraphKinematicsFrameComparator {
           actual: { ...actualPosition! }
         });
       }
+
       const velocityDistance = distance(expectedVelocity!, actualVelocity!);
+      maxVelocityDistance = Math.max(maxVelocityDistance, velocityDistance);
       if (!Number.isFinite(velocityDistance) || velocityDistance > velocityTolerance) {
         record({
           nodeId,
@@ -108,7 +115,9 @@ export class GraphKinematicsFrameComparator {
       reportedDifferences,
       truncated: reportedDifferences.length < differenceCount,
       positionTolerance,
-      velocityTolerance
+      velocityTolerance,
+      maxPositionDistance,
+      maxVelocityDistance
     };
   }
 }

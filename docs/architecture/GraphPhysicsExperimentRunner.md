@@ -2,27 +2,20 @@
 
 ## Purpose
 
-`GraphPhysicsExperimentRunner` runs one replacement-engine step against a detached [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md) capture.
+[GraphPhysicsExperimentRunner](../../src/graph-application/GraphPhysicsExperimentRunner.ts) runs replacement-engine experiments against detached [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md) captures.
 
-Current implementation: [`src/graph-application/GraphPhysicsExperimentRunner.ts`](../../src/graph-application/GraphPhysicsExperimentRunner.ts)
+## One-step and trace runs
 
-## Isolation rules
+- run(frameSequence, deltaTime) captures input once, starts a fresh engine, performs one step, and returns one detached frame.
+- runSteps(frameSequence, deltaTime, stepCount) captures input once, retains one engine for the requested number of steps, and returns a sequenced trace.
+- Trace frame sequences start at the supplied frameSequence and increment once per step.
+- The engine is stopped and discarded after the run; no experiment state is reused.
 
-- Create a fresh [GraphPhysicsEngine](GraphPhysicsEngine.md) for every experiment.
-- Load only detached runtime input.
-- Start, step once, and stop the experiment engine.
-- Stamp the returned [GraphKinematicsFrame](GraphKinematicsFrame.md) with the caller's sequence.
-- Return the detached frame plus compact input and frame summaries.
-- Never publish to [GraphKinematicsStore](GraphKinematicsStore.md), render, mutate legacy nodes, or reuse experiment state.
-
-The default engine is `DeterministicGraphPhysicsEngine`, which tests orchestration through linear motion. It is not a force-parity implementation.
+A trace therefore tests evolution from one identical starting state. It does not recapture the live graph between steps.
 
 ## Connections
 
-- Reads via the same capture port as [GraphPhysicsShadowSampleService](GraphPhysicsShadowSampleService.md).
-- Summarizes with [GraphPhysicsShadowDiagnostics](GraphPhysicsShadowDiagnostics.md) and [GraphKinematicsFrameDiagnostics](GraphKinematicsFrameDiagnostics.md).
-- Accepts an injected engine factory for future parity implementations.
-
-## Next extraction
-
-[GraphKinematicsFrameComparator](GraphKinematicsFrameComparator.md) compares experiment output with a copied legacy frame. The next extraction composes both behind one explicit parity service.
+- The default engine remains DeterministicGraphPhysicsEngine for orchestration tests.
+- Controlled parity tests inject StagedGraphPhysicsEngine.
+- [GraphKinematicsTraceComparator](GraphKinematicsTraceComparator.md) compares trace output with synchronized expected legacy frames.
+- The runner never publishes, renders, mutates legacy nodes, or logs.
