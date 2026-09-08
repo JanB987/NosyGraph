@@ -59,6 +59,7 @@ The flow above is the guarded store-mode composition. The live Obsidian path sti
 - [GraphRuntimeActivationPolicy](GraphRuntimeActivationPolicy.md) makes store mode default only after all parity and ownership evidence is recorded.
 - [Legacy ownership audit](LegacyOwnershipAudit.md) records the live dependencies that still block D6 cleanup.
 - [Architecture audit](ArchitectureAudit.md) checks source boundaries and records which orchestration limits remain.
+- [E1 baseline](Baseline.md) records the reproducible validation and vault-readiness checkpoint.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.

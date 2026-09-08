@@ -76,6 +76,10 @@ Until those conditions hold, the legacy path remains the runtime authority and t
 
 | Legacy ownership cleanup | **Blocked; audit complete** | LegacyOwnershipAudit and LegacyOwnershipAudit tests | No legacy arrays, executors, solver paths, or shadow services are removable yet: production GraphView/GraphEngine and pending parity diagnostics still depend on them. |
 
+## E1 baseline
+
+The reproducible checkpoint is recorded in [Baseline.md](Baseline.md).
+
 ## Architecture audit
 
 | Area | Status | Current owner or entry point | Evidence and limit |
