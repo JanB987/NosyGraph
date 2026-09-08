@@ -71,3 +71,5 @@ Until those conditions hold, the legacy path remains the runtime authority and t
 | Guarded store-mode trials | **Implemented; experimental** | GraphRuntimeModeSelector | Legacy is the default; store mode requires an explicit trial flag, cannot switch while open, and rolls back by closing then creating a fresh legacy handle. Production GraphView composition remains legacy. |
 
 | Dual-mode regression and performance comparison | **Implemented; experimental** | GraphModeRegression tests and GraphModeRegression.md | Legacy and store runs compare identities, persistence, interaction results, timing samples, representative sizes, and cleanup. Controlled non-zero legacy motion remains unavailable until GraphEngine exposes a step-and-capture hook. |
+
+| Evidence-gated store default | **Implemented; experimental** | GraphRuntimeActivationPolicy and GraphRuntimeModeSelector | Store becomes the selector default only when controlled physics, manual badge, interactive, persistence, lifecycle, ownership, and automated evidence are all recorded. Current evidence intentionally keeps legacy as default. |

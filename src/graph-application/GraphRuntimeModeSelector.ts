@@ -1,4 +1,5 @@
 import type { GraphRuntimeMode, GraphRuntimeState } from "./GraphRuntimeState";
+import { CURRENT_GRAPH_RUNTIME_ACTIVATION_EVIDENCE, evaluateGraphRuntimeActivation, type GraphRuntimeActivationDecision, type GraphRuntimeActivationEvidence } from "./GraphRuntimeActivationPolicy";
 
 export interface GraphRuntimeHandle {
   readonly mode: GraphRuntimeMode;
@@ -13,9 +14,10 @@ export interface GraphRuntimeModeFactories {
 }
 
 export interface GraphRuntimeModeSelectorOptions {
-  /** Store mode is opt-in for a trial; legacy remains the default. */
+  /** Store mode is opt-in until complete activation evidence makes it default. */
   storeTrialEnabled?: boolean;
   defaultMode?: GraphRuntimeMode;
+  activationEvidence?: GraphRuntimeActivationEvidence;
   factories: GraphRuntimeModeFactories;
   onError?: (error: unknown) => void;
 }
@@ -48,16 +50,22 @@ export class GraphRuntimeModeSelector {
   private readonly defaultMode: GraphRuntimeMode;
   private readonly factories: GraphRuntimeModeFactories;
   private readonly onError: (error: unknown) => void;
+  private readonly activationDecision: GraphRuntimeActivationDecision;
   private active?: GraphRuntimeHandle;
 
   constructor(options: GraphRuntimeModeSelectorOptions) {
-    this.storeTrialEnabled = options.storeTrialEnabled === true;
-    this.defaultMode = options.defaultMode ?? "legacy";
+    this.activationDecision = evaluateGraphRuntimeActivation(options.activationEvidence ?? CURRENT_GRAPH_RUNTIME_ACTIVATION_EVIDENCE);
+    this.storeTrialEnabled = options.storeTrialEnabled === true || this.activationDecision.storeModeDefault;
+    this.defaultMode = options.defaultMode ?? (this.activationDecision.storeModeDefault ? "store" : "legacy");
     this.factories = options.factories;
     this.onError = options.onError ?? (() => {});
     if (this.defaultMode === "store" && !this.storeTrialEnabled) {
       throw new Error("Store runtime trials must be explicitly enabled.");
     }
+  }
+
+  getActivationDecision(): GraphRuntimeActivationDecision {
+    return this.activationDecision;
   }
 
   getActive(): GraphRuntimeHandle | undefined {

@@ -159,6 +159,43 @@ describe("GraphRuntimeModeSelector", () => {
     expect(closeCounts).toEqual({ legacy: 1, store: 1 });
   });
 
+
+  it("defaults to store mode only with complete parity evidence", async () => {
+    const factories = {
+      createLegacy: (path: string) => handle(
+        "legacy",
+        path,
+        new LegacyGraphRuntimeState(
+          { getSnapshot: () => snapshot() },
+          { getStructuralRevision: () => 0 }
+        ),
+        () => {}
+      ),
+      createStore: (path: string) => handle(
+        "store",
+        path,
+        new StoreGraphRuntimeState(new GraphStore(snapshot())),
+        () => {}
+      )
+    };
+    const selector = new GraphRuntimeModeSelector({
+      factories,
+      activationEvidence: {
+        automatedRegression: true,
+        controlledPhysicsParity: true,
+        manualBadgeRegression: true,
+        interactivePhysicsVerification: true,
+        persistenceParity: true,
+        lifecycleParity: true,
+        ownershipCutover: true
+      }
+    });
+
+    expect(selector.getActivationDecision()).toEqual({ storeModeDefault: true, unmetGates: [] });
+    const opened = await selector.open("Graph.md");
+    expect(opened).toMatchObject({ ok: true, handle: { mode: "store" } });
+    await selector.close();
+  });
   it("reports invalid paths and factory mode mismatches", async () => {
     const selector = new GraphRuntimeModeSelector({
       storeTrialEnabled: true,
