@@ -118,6 +118,15 @@ GraphController <--------> Obsidian adapters
 6. Separate renderer and physics.
 7. Move lenses, containers, and persistence last.
 
+## Migration status
+
+See [Migration status](MigrationStatus.md) for the canonical distinction between components that are implemented, live, experimental, or still proposed. The progress checklist below records completed extraction work; a checked item does not by itself activate that code in the production plugin.
+
+- **Implemented** — host-neutral code and automated coverage exist.
+- **Live** — the production Obsidian path selects the component.
+- **Experimental** — detached, shadow, staged, or explicitly diagnostic code that does not own production behavior.
+- **Proposed** — recorded design or follow-up awaiting implementation or an activation gate.
+
 ## Current progress
 
 - [x] Target architecture documented.
