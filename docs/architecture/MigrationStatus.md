@@ -69,3 +69,5 @@ Until those conditions hold, the legacy path remains the runtime authority and t
 | Store-mode activation gates | **Implemented; experimental** | StoreModeActivationGates and StoreGraphActivationGate tests | Supported detached operations are checked against a mutable legacy-source fixture; unsupported commands fail explicitly. Manual B01–B14 parity and interactive Obsidian evidence remain activation limits. |
 
 | Guarded store-mode trials | **Implemented; experimental** | GraphRuntimeModeSelector | Legacy is the default; store mode requires an explicit trial flag, cannot switch while open, and rolls back by closing then creating a fresh legacy handle. Production GraphView composition remains legacy. |
+
+| Dual-mode regression and performance comparison | **Implemented; experimental** | GraphModeRegression tests and GraphModeRegression.md | Legacy and store runs compare identities, persistence, interaction results, timing samples, representative sizes, and cleanup. Controlled non-zero legacy motion remains unavailable until GraphEngine exposes a step-and-capture hook. |
