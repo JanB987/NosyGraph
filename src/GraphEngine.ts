@@ -4062,7 +4062,15 @@ export class GraphEngine {
         setStyle(anchor, "pointerEvents", "auto");
         this.badgeOverlay.appendChild(anchor);
 
-        const badge = new O3NodeBadge(anchor, linkType, (type) => {
+        const badge = new O3NodeBadge(anchor, linkType, (type, modifiers) => {
+          if (modifiers) {
+            void this.graphController.executeBadgeInteraction({
+              type: "badge-interaction",
+              badgeId: expansionKey,
+              modifiers
+            });
+            return;
+          }
           void this.graphController.executeBadge({ type, badgeId: expansionKey });
         });
         badge.render();

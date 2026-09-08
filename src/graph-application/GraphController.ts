@@ -32,6 +32,35 @@ export interface GraphBadgeCommand {
   badgeId: BadgeId;
 }
 
+/** Modifier state captured at the badge event boundary. */
+export interface GraphBadgeModifierState {
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+export interface GraphBadgeInteractionCommand {
+  type: "badge-interaction";
+  badgeId: BadgeId;
+  modifiers: GraphBadgeModifierState;
+}
+
+/**
+ * Preserves the legacy modifier precedence:
+ * Alt opens link input; Ctrl/Cmd without Shift expands a chain; all other
+ * combinations toggle the badge, including Ctrl/Cmd+Shift.
+ */
+export function resolveGraphBadgeAction(
+  modifiers: GraphBadgeModifierState
+): GraphBadgeAction {
+  if (modifiers.altKey) return "open-badge-input";
+  if ((modifiers.ctrlKey || modifiers.metaKey) && !modifiers.shiftKey) {
+    return "expand-badge-chain";
+  }
+  return "toggle-badge";
+}
+
 /** Temporary output boundary implemented by the active legacy engine. */
 export interface GraphBadgeCommandPort {
   executeBadge(request: GraphBadgeRequest): void | Promise<void>;
@@ -217,6 +246,15 @@ export class GraphController {
 
   clearSelection(): GraphSelectionResult {
     return this.executeSelection({ type: "clear-selection" });
+  }
+
+  executeBadgeInteraction(
+    command: GraphBadgeInteractionCommand
+  ): Promise<GraphBadgeCommandResult> {
+    return this.executeBadge({
+      type: resolveGraphBadgeAction(command.modifiers),
+      badgeId: command.badgeId
+    });
   }
 
   async executeBadge(command: GraphBadgeCommand): Promise<GraphBadgeCommandResult> {

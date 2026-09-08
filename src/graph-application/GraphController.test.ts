@@ -51,7 +51,7 @@ describe("GraphController selection commands", () => {
 });
 
 describe("GraphController badge commands", () => {
-  function badgeSetup() {
+  function badgeSetup(semantic: "link" | "parent" = "link") {
     const snapshot: GraphSnapshot = {
       nodes: [{
         id: "A.md",
@@ -73,7 +73,7 @@ describe("GraphController badge commands", () => {
         label: "Parts",
         color: "#4488cc",
         state: "collapsed",
-        semantic: "link",
+        semantic,
         hasRelationships: true,
         duplicateNodes: false
       }],
@@ -117,6 +117,46 @@ describe("GraphController badge commands", () => {
       contextId: "graph:root",
       semantic: "link"
     });
+  });
+
+  it("preserves parent badge semantics through interaction routing", async () => {
+    const { controller, requests } = badgeSetup("parent");
+
+    expect(await controller.executeBadgeInteraction({
+      type: "badge-interaction",
+      badgeId: "A.md::parts",
+      modifiers: { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }
+    })).toEqual({ handled: true, badgeId: "A.md::parts" });
+
+    expect(requests[0]).toMatchObject({
+      action: "toggle-badge",
+      badgeId: "A.md::parts",
+      semantic: "parent"
+    });
+  });
+
+  it("resolves Alt, Ctrl/Cmd, and Shift modifier commands before dispatch", async () => {
+    const { controller, requests } = badgeSetup();
+
+    for (const modifiers of [
+      { altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
+      { altKey: false, ctrlKey: true, metaKey: false, shiftKey: false },
+      { altKey: false, ctrlKey: false, metaKey: true, shiftKey: false },
+      { altKey: false, ctrlKey: true, metaKey: false, shiftKey: true }
+    ]) {
+      await controller.executeBadgeInteraction({
+        type: "badge-interaction",
+        badgeId: "A.md::parts",
+        modifiers
+      });
+    }
+
+    expect(requests.map((request) => request.action)).toEqual([
+      "open-badge-input",
+      "expand-badge-chain",
+      "expand-badge-chain",
+      "toggle-badge"
+    ]);
   });
 
   it("does not call the port for an unknown badge", async () => {

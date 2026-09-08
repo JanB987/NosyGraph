@@ -7,13 +7,30 @@ export type O3NodeBadgeIntent =
   | "open-badge-input"
   | "expand-badge-chain";
 
+export interface O3NodeBadgeModifiers {
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+export function resolveO3NodeBadgeIntent(
+  modifiers: O3NodeBadgeModifiers
+): O3NodeBadgeIntent {
+  if (modifiers.altKey) return "open-badge-input";
+  if ((modifiers.ctrlKey || modifiers.metaKey) && !modifiers.shiftKey) {
+    return "expand-badge-chain";
+  }
+  return "toggle-badge";
+}
+
 export class O3NodeBadge {
   private badgeElement: HTMLElement | null = null;
 
   constructor(
     private nodeElement: HTMLElement,
     private linkType: O3LinkType,
-    private onIntent: (intent: O3NodeBadgeIntent) => void
+    private onIntent: (intent: O3NodeBadgeIntent, modifiers?: O3NodeBadgeModifiers) => void
   ) {}
 
   render(): void {
@@ -26,26 +43,15 @@ export class O3NodeBadge {
     this.badgeElement.addEventListener("mousedown", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (event.altKey) {
-        this.onAltClick();
-      } else if ((event.ctrlKey || event.metaKey) && !event.shiftKey) {
-        this.onCtrlClick();
-      } else {
-        this.onClick();
-      }
+      const modifiers = {
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey
+      };
+      this.onIntent(resolveO3NodeBadgeIntent(modifiers), modifiers);
     });
   }
-
-  private onClick(): void {
-    this.onIntent("toggle-badge");
-  }
-
-  private onAltClick(): void {
-    this.onIntent("open-badge-input");
-  }
-
-  private onCtrlClick(): void {
-    this.onIntent("expand-badge-chain");
-  }
 }
+
 /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Re-enable Obsidian DOM helper lint rules after this badge wrapper. */

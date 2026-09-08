@@ -144,6 +144,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Route standard node-badge intents through `GraphController` while delegating expansion behavior to the legacy engine.
 - [x] Route the older parent-overlay badge controls through the same command boundary.
 - [x] Complete controller routing for selection, normal badges, pinning, dragging, root changes, and relationship refresh through explicit host ports.
+- [x] Migrate parent-semantic badges, Alt-click input, and Ctrl/Cmd-click chain expansion through characterized controller commands.
 - [x] Extract legacy badge-target resolution into a dedicated command adapter.
 - [x] Introduce a host-neutral badge expansion request before extracting expansion calculations.
 - [x] Characterize the inputs and results of normal badge toggle expansion.
