@@ -5,7 +5,7 @@ import type { GraphLens } from "./GraphLens";
 import type { GraphNodeInstance } from "./GraphNodeInstance";
 import type { GraphNote } from "./GraphNote";
 
-/** Immutable read model consumed by queries, rendering, and future tests. */
+/** Immutable read model consumed by queries, rendering, and parity tests. */
 export interface GraphSnapshot {
   nodes: readonly GraphNodeInstance[];
   notes: readonly GraphNote[];
@@ -15,7 +15,7 @@ export interface GraphSnapshot {
   lenses: readonly GraphLens[];
 }
 
-/** Implemented by GraphStore later; easy to adapt to the current engine now. */
+/** Implemented by GraphStore and legacy host adapters during migration. */
 export interface GraphSnapshotSource {
   getSnapshot(): GraphSnapshot;
 }

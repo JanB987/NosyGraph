@@ -170,6 +170,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Introduce dormant runtime-mode types and state wrappers without changing production composition.
 - [x] Separate structural revision from kinematics frame sequencing in dormant domain and store types.
 - [x] Compose compatible kinematics frames into detached render snapshots.
+- [x] Add the experimental [GraphRenderer](GraphRenderer.md) boundary for detached drawing and hit testing.
 - [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
 - [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.

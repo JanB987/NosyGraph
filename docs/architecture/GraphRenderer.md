@@ -2,38 +2,42 @@
 
 ## Purpose
 
-`GraphRenderer` converts a read-only graph snapshot into canvas and DOM output. It also translates pointer and keyboard input into semantic intents.
+GraphRenderer converts a detached GraphRenderSnapshot into canvas output and renderer-owned DOM badge handles. It translates pointer clicks into serializable renderer intents. It never mutates notes, nodes, badges, edges, expansions, or lenses.
 
-## Proposed API
+Current implementation: [src/graph-application/GraphRenderer.ts](../../src/graph-application/GraphRenderer.ts)
 
-```ts
-class GraphRenderer {
-  mount(container: HTMLElement): void;
-  render(snapshot: GraphRenderSnapshot): void;
-  resize(width: number, height: number): void;
-  hitTestNode(point: Point): NodeInstanceId | undefined;
-  hitTestBadge(point: Point): BadgeId | undefined;
-  onIntent(listener: GraphIntentListener): Unsubscribe;
-  unmount(): void;
-}
-```
+## Status
 
-## Responsibilities
+The renderer boundary is implemented and tested as an experimental store-mode projection. The production Obsidian view still draws and hit-tests through the legacy GraphEngine until the renderer compatibility and interaction gates in [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md) pass.
 
-- Node, edge, badge, lens, and container drawing
-- Viewport transforms
-- Hit testing
-- DOM badge overlays
-- Visual hover, drag, and selection feedback
-- Emitting intents such as `NodeClickedIntent` and `BadgeClickedIntent`
+## API
+
+- mount(container) creates and owns a canvas and badge overlay.
+- render(snapshot) copies a detached snapshot, lays out hit regions, and draws available canvas output.
+- resize(width, height) updates the renderer-owned canvas.
+- hitTestNode(point) and hitTestBadge(point) return stable identities without changing state.
+- onIntent(listener) subscribes to node-clicked and badge-clicked intents.
+- unmount() removes event listeners and renderer-owned DOM handles.
+
+The snapshot includes a viewport transform. Invalid viewport and radius values are normalized at the rendering boundary; semantic records are not rewritten.
+
+## Renderer-owned handles
+
+Canvas and DOM handles never enter GraphSnapshot:
+
+- The canvas and 2D context belong to the renderer instance.
+- Badge buttons are kept in a map keyed by BadgeId.
+- Node and badge hit regions are kept in maps keyed by NodeInstanceId and BadgeId.
+- A changed snapshot removes stale handles and creates only the new visual handles.
+
+This keeps drawing, pointer hit testing, and DOM lifecycle separate from GraphStore and GraphController.
 
 ## Connections
 
-- Will read detached semantic and motion snapshots from [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md).
+- Consumes detached semantic and motion projections from [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md).
 - Emits intents to [GraphController](GraphController.md).
-- Uses independently sequenced positions from [GraphKinematicsStore](GraphKinematicsStore.md).
-- Renders [GraphLens](GraphLens.md) contexts with clipping and local transforms.
+- Uses stable identities from [GraphNodeInstance](GraphNodeInstance.md) and [GraphBadge](GraphBadge.md).
+- Is available for [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md) Stage 4.
+- Test coverage: [GraphRenderer.test.ts](../../src/graph-application/GraphRenderer.test.ts).
 
-The renderer never reads or writes notes.
-
-Its role in the ownership migration is defined by [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md). Store mode must supply renderer-owned visual handles and read-only semantic projections rather than allowing drawing helpers to mutate graph collections.
+The renderer currently does not own physics, persistence, graph expansion, selection commands, or lens mutation. Those remain application or host responsibilities.

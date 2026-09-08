@@ -134,10 +134,12 @@ Implemented as an experimental bootstrap boundary in [GraphStoreInitializer](Gra
 
 ### Stage 4 — renderer compatibility projection
 
-- Make drawing and hit testing consume a read-only projection.
-- Keep DOM/canvas handles in renderer-owned maps keyed by stable IDs.
-- Remove semantic mutations from rendering helpers.
-- Verify equivalent node, edge, badge, and lens output in store-mode tests.
+Implemented as an experimental boundary in [GraphRenderer](GraphRenderer.md):
+
+- It consumes a copied GraphRenderSnapshot rather than legacy mutable nodes.
+- It keeps canvas, DOM badge, and hit-region handles in renderer-owned maps keyed by stable identities.
+- It emits node and badge intents without changing semantic state.
+- The production view still uses GraphEngine drawing and hit testing until store-mode physics, command, persistence, and manual parity gates pass.
 
 ### Stage 5 — command activation
 
