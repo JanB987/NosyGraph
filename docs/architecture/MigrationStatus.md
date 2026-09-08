@@ -24,6 +24,7 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 |---|---|---|
 | Host-neutral graph domain records | **Implemented** | Notes, node instances, edges, badges, expansions, lenses, change sets, and explicit ownership contracts are tested independently of Obsidian. |
 | GraphStore graph collections and atomic change sets | **Implemented; experimental** | Snapshot application, stale revision rejection, expansion/collapse ownership, and shared-node rehoming are tested. Production graph collections remain in GraphEngine. |
+| Validated GraphStore initialization | **Implemented; experimental** | GraphStoreInitializer copies one host-adapted snapshot, preserves IDs, and rejects invalid references before construction. Store mode is not selected in production. |
 | Runtime state and kinematics boundaries | **Implemented; experimental** | Structural revisions and kinematics sequences are separate, and compatible frames can be composed into detached snapshots. |
 | Physics input projection and legacy read adapters | **Implemented; experimental** | Detached nodes, edges, settings, constraints, containers, and current motion can be assembled for inspection. The animation loop does not consume this input. |
 | Pure force, integration, confinement, anchoring, and settling stages | **Implemented; experimental** | Stages are unit-tested against characterized legacy behavior and composed by StagedGraphPhysicsEngine. |

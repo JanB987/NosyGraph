@@ -89,3 +89,10 @@ The live engine still owns these six collections during migration. We will conne
 ## Migration rule
 
 Move independent state categories one at a time. Coupled notes, nodes, edges, badges, and expansions switch as one consistency unit through the exclusive runtime modes defined in [GraphStore Ownership Cutover](GraphStoreOwnershipCutover.md). Once state moves into this store, delete its old duplicate owner rather than synchronizing two mutable copies.
+
+
+## Validated initialization
+
+[GraphStoreInitializer](GraphStoreInitializer.md) is the one-shot store-mode bootstrap boundary. It reads a host-adapted GraphSnapshot, deep-copies it, rejects blank or duplicate identities, validates all cross-collection references, rejects expansion cycles, and only then constructs a GraphStore.
+
+The constructor remains available for existing unit fixtures and low-level composition. Production still starts in legacy mode; initializing a store does not mirror or replace the live GraphEngine collections.

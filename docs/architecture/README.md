@@ -32,6 +32,7 @@ GraphController <--------> Obsidian adapters
 - [GraphView](GraphView.md) owns the Obsidian view lifecycle.
 - [GraphController](GraphController.md) executes user and host commands.
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
+- [GraphStoreInitializer](GraphStoreInitializer.md) bootstraps store mode from one validated host-adapted snapshot.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
@@ -137,6 +138,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Add initial query and adapter characterization tests.
 - [x] Add snapshot coverage for edge and lens details.
 - [x] Introduce `GraphStore` and make it the single owner of selection state.
+- [x] Implement validated [GraphStore initialization](GraphStoreInitializer.md) with stable identities and reference rejection.
 - [x] Introduce `GraphController` and route selection mutations through it.
 - [x] Connect `GraphBadge` to the live read-only snapshot and query API.
 - [x] Route standard node-badge intents through `GraphController` while delegating expansion behavior to the legacy engine.

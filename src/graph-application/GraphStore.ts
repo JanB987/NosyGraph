@@ -217,6 +217,70 @@ export class GraphStore implements GraphSnapshotSource {
   }
 }
 
+export type GraphStoreReferenceValidationFailure = Extract<
+  GraphChangeSetApplyResult,
+  { applied: false; reason: "missing-reference" | "expansion-cycle" }
+>;
+
+export type GraphStoreSnapshotValidationFailure =
+  | {
+      applied: false;
+      reason: "invalid-id" | "duplicate-id";
+      collection: GraphStoreCollectionName;
+      entityId: string;
+    }
+  | GraphStoreReferenceValidationFailure;
+
+export function validateGraphSnapshot(
+  snapshot: GraphSnapshot
+): GraphStoreSnapshotValidationFailure | null {
+  const collections: Array<[
+    GraphStoreCollectionName,
+    readonly { id: string }[]
+  ]> = [
+    ["notes", snapshot.notes],
+    ["nodes", snapshot.nodes],
+    ["edges", snapshot.edges],
+    ["badges", snapshot.badges],
+    ["expansions", snapshot.expansions],
+    ["lenses", snapshot.lenses]
+  ];
+
+  for (const [collection, entities] of collections) {
+    const ids = new Set<string>();
+    for (const entity of entities) {
+      const entityId = String(entity?.id ?? "");
+      if (!entityId.trim()) {
+        return {
+          applied: false,
+          reason: "invalid-id",
+          collection,
+          entityId
+        };
+      }
+      if (ids.has(entityId)) {
+        return {
+          applied: false,
+          reason: "duplicate-id",
+          collection,
+          entityId
+        };
+      }
+      ids.add(entityId);
+    }
+  }
+
+  const state: GraphStateMaps = {
+    notes: new Map(snapshot.notes.map((entity) => [entity.id, entity])),
+    nodes: new Map(snapshot.nodes.map((entity) => [entity.id, entity])),
+    edges: new Map(snapshot.edges.map((entity) => [entity.id, entity])),
+    badges: new Map(snapshot.badges.map((entity) => [entity.id, entity])),
+    expansions: new Map(snapshot.expansions.map((entity) => [entity.id, entity])),
+    lenses: new Map(snapshot.lenses.map((entity) => [entity.id, entity]))
+  };
+  return validateReferences(state) as GraphStoreSnapshotValidationFailure | null;
+}
+
 interface GraphStateMaps {
   notes: ReadonlyMap<NoteId, GraphNote>;
   nodes: ReadonlyMap<NodeInstanceId, GraphNodeInstance>;

@@ -125,10 +125,12 @@ The host-neutral [GraphKinematicsFrame](GraphKinematicsFrame.md) and dormant [Gr
 
 ### Stage 3 — store-mode initialization
 
-- Build one initial validated `GraphSnapshot` from graph configuration and Obsidian read adapters.
-- Construct `GraphStore` once from that snapshot.
-- Treat importing the initial snapshot as bootstrapping, not ongoing mirroring.
-- Reject invalid initial references before mounting the graph.
+Implemented as an experimental bootstrap boundary in [GraphStoreInitializer](GraphStoreInitializer.md):
+
+- It reads one initial GraphSnapshot from a host adapter that has already combined graph-document configuration and Obsidian reads.
+- It deep-copies the snapshot, preserves every supplied stable identity, and validates collection IDs and cross-references.
+- It rejects invalid snapshots before constructing GraphStore.
+- It does not mirror subsequent legacy mutations. Production composition remains legacy mode until the later activation gates pass.
 
 ### Stage 4 — renderer compatibility projection
 
