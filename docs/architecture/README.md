@@ -234,3 +234,14 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 ## Validation during the migration
 
 Run `npm run typecheck` for the new host-neutral architecture and `npm run build` for the complete legacy plugin bundle. The architecture typecheck is deliberately scoped: dormant Working Memory extraction files currently reference modules that are not part of this package, and the active legacy files contain pre-existing strict-type errors. Expanding the strict boundary will be a gradual part of the refactor.
+
+
+### Obsidian adapter extraction
+
+- [ObsidianNoteRepository](ObsidianAdapters.md) reads detached notes and relationship links.
+- [ObsidianRelationshipTargetReader](ObsidianAdapters.md) resolves configured relationship directions.
+- [ObsidianNoteWriter](ObsidianAdapters.md) isolates frontmatter relationship and property writes.
+- [ObsidianNavigationAdapter](ObsidianAdapters.md) owns opening, reveal, and hover requests.
+- [ObsidianGraphWatcher](ObsidianAdapters.md) normalizes host lifecycle events.
+
+- [x] Complete Obsidian adapter boundaries for note reads and writes, relationship resolution, navigation, and normalized host events.

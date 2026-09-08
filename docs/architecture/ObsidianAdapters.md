@@ -50,3 +50,16 @@ Loads and saves [GraphDocument](GraphDocument.md) configuration and runtime stat
 ## Connections
 
 [GraphView](GraphView.md) owns adapter lifecycles. [GraphController](GraphController.md) uses their host-neutral interfaces. No domain class imports Obsidian.
+
+
+## C6 implementation boundary
+
+The adapter contracts are now implemented and tested independently of the legacy view:
+
+- `ObsidianNoteRepository<TFile>` converts injected vault and metadata-cache reads into detached `GraphNote` values and canonical outgoing/incoming link IDs. Unresolved outgoing candidates remain visible as missing targets.
+- `ObsidianRelationshipTargetReader` resolves link-type property and direction configuration through the repository and preserves missing target labels.
+- `ObsidianNoteWriter<TFile>` owns relationship add/remove and case-insensitive frontmatter updates through one `processFrontMatter` gateway.
+- `ObsidianNavigationAdapter` owns note opening, file reveal, and hover preview requests, with explicit missing-target and unavailable-host results.
+- `ObsidianGraphWatcher` maps vault, metadata-cache, and workspace registrations into normalized create, change, rename, delete, and active-note-changed events and releases registrations when no subscribers remain.
+
+The implementations use injected host gateways so tests do not construct Obsidian objects. `GraphController` exposes note-write and navigation command boundaries; GraphView can adopt these ports incrementally while the legacy calls remain the live runtime owner.

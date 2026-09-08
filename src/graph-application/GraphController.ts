@@ -5,6 +5,16 @@ import {
   type GraphBadgeRequest
 } from "./GraphBadgeRequest";
 import type { GraphQueries } from "./GraphQueries";
+import type {
+  GraphFrontmatterChanges,
+  GraphNoteWriter,
+  GraphRelationshipCommand
+} from "./ObsidianNoteWriter";
+import type {
+  GraphNavigationPort,
+  GraphNavigationResult,
+  GraphHoverPreviewRequest
+} from "./ObsidianNavigationAdapter";
 import { GraphStore } from "./GraphStore";
 import {
   type GraphSceneCommand,
@@ -188,6 +198,23 @@ export interface GraphRelationshipRefreshCommandResult {
   reason?: "source-path-invalid" | "relationship-port-unavailable";
 }
 
+export type GraphNoteWriteCommand =
+  | { type: "add-relationship"; relationship: GraphRelationshipCommand }
+  | { type: "remove-relationship"; relationship: GraphRelationshipCommand }
+  | { type: "update-frontmatter"; path: string; changes: GraphFrontmatterChanges };
+
+export interface GraphNoteWriteCommandResult {
+  handled: boolean;
+  reason?: "note-write-unavailable" | "note-path-invalid" | "relationship-invalid";
+}
+
+export type GraphNavigationCommand =
+  | { type: "open-note"; path: string; newTab?: boolean }
+  | { type: "reveal-note"; path: string }
+  | { type: "hover-note"; request: GraphHoverPreviewRequest };
+
+export interface GraphNavigationCommandResult extends GraphNavigationResult {}
+
 export interface GraphControllerOptions {
   queries?: GraphQueries;
   badgePort?: GraphBadgeCommandPort;
@@ -196,6 +223,8 @@ export interface GraphControllerOptions {
   rootPort?: GraphRootCommandPort;
   relationshipPort?: GraphRelationshipRefreshCommandPort;
   scenePort?: GraphSceneCommandPort;
+  noteWriter?: GraphNoteWriter;
+  navigationPort?: GraphNavigationPort;
 }
 
 /**
@@ -321,6 +350,64 @@ export class GraphController {
     }
     await port.executeRoot(command);
     return { handled: true };
+  }
+
+  async executeNoteWrite(
+    command: GraphNoteWriteCommand
+  ): Promise<GraphNoteWriteCommandResult> {
+    const writer = this.options.noteWriter;
+    if (!writer) return { handled: false, reason: "note-write-unavailable" };
+
+    if (command.type === "update-frontmatter") {
+      const path = String(command.path ?? "").trim();
+      if (!path) return { handled: false, reason: "note-path-invalid" };
+      await writer.updateFrontmatter(path, command.changes);
+      return { handled: true };
+    }
+
+    const relationship = command.relationship;
+    const normalizedRelationship = {
+      ...relationship,
+      sourceNoteId: String(relationship.sourceNoteId ?? "").trim(),
+      targetNoteId: String(relationship.targetNoteId ?? "").trim(),
+      property: String(relationship.property ?? "").trim()
+    };
+    if (
+      !normalizedRelationship.sourceNoteId
+      || !normalizedRelationship.targetNoteId
+      || !normalizedRelationship.property
+      || normalizedRelationship.sourceNoteId === normalizedRelationship.targetNoteId
+    ) {
+      return { handled: false, reason: "relationship-invalid" };
+    }
+    if (command.type === "add-relationship") {
+      await writer.addRelationship(normalizedRelationship);
+    } else {
+      await writer.removeRelationship(normalizedRelationship);
+    }
+    return { handled: true };
+  }
+
+  async executeNavigation(
+    command: GraphNavigationCommand
+  ): Promise<GraphNavigationCommandResult> {
+    const navigation = this.options.navigationPort;
+    if (!navigation) {
+      return {
+        handled: false,
+        path: command.type === "hover-note"
+          ? String(command.request.targetPath ?? "").trim()
+          : String(command.path ?? "").trim(),
+        reason: "navigation-unavailable"
+      };
+    }
+    if (command.type === "open-note") {
+      return await navigation.openNote(command.path, command.newTab);
+    }
+    if (command.type === "reveal-note") {
+      return await navigation.revealNote(command.path);
+    }
+    return await navigation.showHoverPreview(command.request);
   }
 
   async executeScene(command: GraphSceneCommand): Promise<GraphSceneCommandResult> {

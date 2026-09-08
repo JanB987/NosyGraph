@@ -405,3 +405,92 @@ describe("GraphController scene commands", () => {
     });
   });
 });
+
+
+describe("GraphController Obsidian adapter commands", () => {
+  it("routes note writes and navigation through host-neutral ports", async () => {
+    const calls: string[] = [];
+    const controller = new GraphController(new GraphStore(), {
+      noteWriter: {
+        addRelationship: async ({ sourceNoteId, targetNoteId, property }) => {
+          calls.push(`add:${sourceNoteId}:${targetNoteId}:${property}`);
+        },
+        removeRelationship: async ({ sourceNoteId, targetNoteId, property }) => {
+          calls.push(`remove:${sourceNoteId}:${targetNoteId}:${property}`);
+        },
+        updateFrontmatter: async (path) => {
+          calls.push(`frontmatter:${path}`);
+        }
+      },
+      navigationPort: {
+        openNote: async (path, newTab) => {
+          calls.push(`open:${path}:${newTab ? "tab" : "same"}`);
+          return { handled: true, path };
+        },
+        revealNote: async (path) => {
+          calls.push(`reveal:${path}`);
+          return { handled: true, path };
+        },
+        showHoverPreview: async ({ targetPath }) => {
+          calls.push(`hover:${targetPath}`);
+          return { handled: true, path: targetPath };
+        }
+      }
+    });
+
+    expect(await controller.executeNoteWrite({
+      type: "add-relationship",
+      relationship: { sourceNoteId: "A.md", targetNoteId: "B.md", property: "parts" }
+    })).toEqual({ handled: true });
+    expect(await controller.executeNoteWrite({
+      type: "remove-relationship",
+      relationship: { sourceNoteId: "A.md", targetNoteId: "B.md", property: "parts" }
+    })).toEqual({ handled: true });
+    expect(await controller.executeNoteWrite({
+      type: "update-frontmatter",
+      path: "A.md",
+      changes: { set: { status: "open" } }
+    })).toEqual({ handled: true });
+
+    expect(await controller.executeNavigation({ type: "open-note", path: "A.md", newTab: true }))
+      .toEqual({ handled: true, path: "A.md" });
+    expect(await controller.executeNavigation({ type: "reveal-note", path: "B.md" }))
+      .toEqual({ handled: true, path: "B.md" });
+    expect(await controller.executeNavigation({
+      type: "hover-note",
+      request: { targetPath: "C.md" }
+    })).toEqual({ handled: true, path: "C.md" });
+
+    expect(calls).toEqual([
+      "add:A.md:B.md:parts",
+      "remove:A.md:B.md:parts",
+      "frontmatter:A.md",
+      "open:A.md:tab",
+      "reveal:B.md",
+      "hover:C.md"
+    ]);
+  });
+
+  it("rejects invalid writes and reports unavailable host boundaries", async () => {
+    const controller = new GraphController(new GraphStore());
+    expect(await controller.executeNoteWrite({
+      type: "update-frontmatter",
+      path: " ",
+      changes: {}
+    })).toEqual({ handled: false, reason: "note-write-unavailable" });
+
+    const withWriter = new GraphController(new GraphStore(), {
+      noteWriter: {
+        addRelationship: async () => {},
+        removeRelationship: async () => {},
+        updateFrontmatter: async () => {}
+      }
+    });
+    expect(await withWriter.executeNoteWrite({
+      type: "add-relationship",
+      relationship: { sourceNoteId: "A.md", targetNoteId: "A.md", property: "parts" }
+    })).toEqual({ handled: false, reason: "relationship-invalid" });
+    expect(await controller.executeNavigation({ type: "open-note", path: "A.md" }))
+      .toEqual({ handled: false, path: "A.md", reason: "navigation-unavailable" });
+  });
+});

@@ -19,6 +19,10 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 | Controller command routing | **Implemented; experimental** | GraphController pin, drag, root, and relationship ports | Stable command vocabulary and routing tests exist; legacy host adapters remain runtime owners for these families. |
 | Legacy graph snapshot and relationship adapters | **Implemented; live read-only source** | LegacyGraphSnapshotAdapter, LegacyGraphRelationshipTargetAdapter | Used to feed detached snapshots and shadow calculations; they do not own live collections. |
 | Shadow badge transition calculation and comparison | **Experimental** | GraphBadgeToggleShadowService and GraphBadgeToggleShadowComparator | Diagnostic only. It does not replace legacy mutation. B01–B14 live evidence remains pending. |
+| Obsidian note and relationship reads | **Implemented; experimental** | ObsidianNoteRepository and ObsidianRelationshipTargetReader | Detached note/link reads and missing-target handling are covered; GraphView and GraphEngine still contain direct legacy reads. |
+| Obsidian note writes | **Implemented; experimental** | ObsidianNoteWriter through GraphController note-write commands | Relationship and frontmatter mutation gateways are covered; live handlers remain the runtime owner. |
+| Obsidian navigation | **Implemented; experimental** | ObsidianNavigationAdapter through GraphController navigation commands | Open, reveal, and hover results are normalized; live view adoption remains pending. |
+| Obsidian host events | **Implemented; experimental** | ObsidianGraphWatcher | Event normalization and subscription cleanup are tested; GraphView lifecycle registration remains live. |
 
 ## Implemented but detached
 
