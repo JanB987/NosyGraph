@@ -85,3 +85,8 @@ The reproducible checkpoint is recorded in [Baseline.md](Baseline.md).
 | Area | Status | Current owner or entry point | Evidence and limit |
 |---|---|---|---|
 | Architecture boundary audit | **Implemented; partial live cutover** | ArchitectureAudit and ArchitectureAudit.test.ts | Domain and controller boundaries are guarded; physics is injectable; GraphView still constructs GraphEngine and production motion remains legacy-owned. See ArchitectureAudit.md. |
+
+
+## E10 artifact audit
+
+The inventory and cleanup prerequisites are recorded in [ArtifactAudit.md](ArtifactAudit.md). No generated, diagnostic, or legacy artifact was deleted during E10.
