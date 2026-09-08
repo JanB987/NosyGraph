@@ -24,6 +24,8 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 | Obsidian navigation | **Implemented; experimental** | ObsidianNavigationAdapter through GraphController navigation commands | Open, reveal, and hover results are normalized; live view adoption remains pending. |
 | Obsidian host events | **Implemented; experimental** | ObsidianGraphWatcher | Event normalization and subscription cleanup are tested; GraphView lifecycle registration remains live. |
 
+| Persistence and restoration | **Implemented; experimental** | GraphDocumentPersistence and ObsidianGraphDocumentRepository | Versioned direct snapshot restore preserves IDs, ownership, expansions, scenes, layouts, and viewports; live GraphView hydration still uses legacy state paths. |
+
 ## Implemented but detached
 
 | Area | Status | What is safe to rely on |

@@ -63,3 +63,8 @@ The adapter contracts are now implemented and tested independently of the legacy
 - `ObsidianGraphWatcher` maps vault, metadata-cache, and workspace registrations into normalized create, change, rename, delete, and active-note-changed events and releases registrations when no subscribers remain.
 
 The implementations use injected host gateways so tests do not construct Obsidian objects. `GraphController` exposes note-write and navigation command boundaries; GraphView can adopt these ports incrementally while the legacy calls remain the live runtime owner.
+
+
+### ObsidianGraphDocumentRepository
+
+C7 adds `ObsidianGraphDocumentRepository`, backed by an injected storage gateway. It saves and loads the versioned `GraphDocument` JSON and restores committed state directly through `GraphDocumentPersistence`.

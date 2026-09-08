@@ -34,6 +34,8 @@ GraphController <--------> Obsidian adapters
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
 - [GraphStoreInitializer](GraphStoreInitializer.md) bootstraps store mode from one validated host-adapted snapshot.
 - [GraphSceneStore](GraphSceneStore.md) owns detached lens, group, and container records through explicit lifecycle commands.
+- [GraphDocumentPersistence](GraphDocument.md) serializes and restores committed graph and scene state directly.
+- [ObsidianGraphDocumentRepository](ObsidianAdapters.md) connects persistence to the host storage gateway.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
@@ -245,3 +247,6 @@ Run `npm run typecheck` for the new host-neutral architecture and `npm run build
 - [ObsidianGraphWatcher](ObsidianAdapters.md) normalizes host lifecycle events.
 
 - [x] Complete Obsidian adapter boundaries for note reads and writes, relationship resolution, navigation, and normalized host events.
+
+
+- [x] Add versioned direct GraphDocument persistence and restoration for committed identities, ownership, expansions, scenes, layouts, and viewports.

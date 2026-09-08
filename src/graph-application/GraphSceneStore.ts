@@ -1,6 +1,7 @@
 import type { GraphContainer } from "../graph-domain/GraphContainer";
 import type { GraphGroup } from "../graph-domain/GraphGroup";
 import type { GraphLens } from "../graph-domain/GraphLens";
+import type { GraphSceneSnapshot } from "../graph-domain/GraphScene";
 import type { ContainerId, GroupId, LensId } from "../graph-domain/graph-identifiers";
 import {
   type GraphSceneCommand,
@@ -8,11 +9,7 @@ import {
   type GraphSceneCommandResult
 } from "./GraphSceneCommand";
 
-export interface GraphSceneSnapshot {
-  lenses: readonly GraphLens[];
-  groups: readonly GraphGroup[];
-  containers: readonly GraphContainer[];
-}
+export { type GraphSceneSnapshot } from "../graph-domain/GraphScene";
 
 export class GraphSceneStore implements GraphSceneCommandPort {
   private readonly lenses = new Map<LensId, GraphLens>();
@@ -75,6 +72,13 @@ export class GraphSceneStore implements GraphSceneCommandPort {
   }
 
   private load(snapshot: GraphSceneSnapshot): void {
+    if (
+      hasDuplicateIds(snapshot.lenses)
+      || hasDuplicateIds(snapshot.groups)
+      || hasDuplicateIds(snapshot.containers)
+    ) {
+      throw new Error("Invalid graph scene snapshot");
+    }
     const maps: SceneMaps = {
       lenses: new Map(snapshot.lenses.map((item) => [item.id, copyLens(item)])),
       groups: new Map(snapshot.groups.map((item) => [item.id, copyGroup(item)])),
@@ -96,6 +100,17 @@ type SceneMaps = {
 type ApplyResult =
   | { ok: true; changed: boolean }
   | { ok: false; reason: "invalid-id" | "duplicate-id" | "not-found" | "invalid-value" };
+
+
+function hasDuplicateIds<TEntity extends { id: string }>(entities: readonly TEntity[]): boolean {
+  const ids = new Set<string>();
+  for (const entity of entities) {
+    const id = String(entity?.id ?? "").trim();
+    if (!id || ids.has(id)) return true;
+    ids.add(id);
+  }
+  return false;
+}
 
 function applyCommand(maps: SceneMaps, command: GraphSceneCommand): ApplyResult {
   switch (command.type) {

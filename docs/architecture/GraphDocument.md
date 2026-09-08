@@ -4,18 +4,18 @@
 
 `GraphDocument` is the host-neutral representation of a graph note. It separates graph configuration from persisted runtime state.
 
-## Proposed shape
+## Shape
 
 ```ts
 interface GraphDocument {
   id: GraphDocumentId;
   path: string;
-  configuration: GraphConfiguration;
+  configuration: GraphDocumentConfiguration;
   runtime: PersistedGraphRuntime;
 }
 ```
 
-Configuration includes roots, active link types, visible link types, groups, filters, and simulation settings. Runtime includes visible node instances, positions, pins, expansions, lenses, viewport, and UI state.
+Configuration values are host-neutral and detached. Runtime includes the validated graph snapshot, scene ownership records, node positions and pins, expansions, lenses, layout ID, and viewport.
 
 ## Source-of-truth rule
 
@@ -35,3 +35,16 @@ reconcileWithNoteTruth(snapshot, noteIndex): GraphChangeSet;
 
 [GraphView](GraphView.md) loads it, [GraphController](GraphController.md) reconciles it, and the [Obsidian graph-document adapter](ObsidianAdapters.md) reads and writes it.
 
+
+
+## C7 implementation
+
+`GraphDocumentPersistence` serializes one committed detached runtime snapshot containing:
+
+- stable note, node, edge, badge, expansion, and lens identities;
+- expansion ownership arrays and child expansion relationships;
+- scene-owned lenses, groups, and containers;
+- node coordinates, pin/selection state, layout ID, and viewport;
+- host-neutral configuration values.
+
+`ObsidianGraphDocumentRepository` supplies the storage read/write gateway. Restoration validates the snapshot and scene first, then constructs `GraphStore` and `GraphSceneStore` directly. It does not replay badge toggles or rebuild ownership from UI actions.
