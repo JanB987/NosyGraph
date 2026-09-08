@@ -32,3 +32,16 @@ Repeat this audit whenever one of these changes:
 - A legacy owner or shadow adapter is removed.
 
 The executable audit must continue to pass, and the migration status must be updated in the same change.
+
+## Full-tree strict typecheck
+
+The architecture typecheck is intentionally scoped by tsconfig.architecture.json to:
+
+- src/graph-domain/**/*.ts
+- src/graph-application/**/*.ts
+
+That boundary is the completed architecture surface, including its automated tests. npm run typecheck passes there.
+
+A full npx tsc -p tsconfig.json --noEmit still fails in legacy production files. The failures include unresolved imports from the incomplete Working Memory extraction tree and existing strict-type errors in GraphView.ts, GraphEngine.ts, main.ts, and related legacy/view files. Those files remain outside the strict architecture boundary because they are the live legacy composition and are not yet type-clean enough to join it.
+
+The complete plugin bundle is still validated by npm run build, which passed during this audit. The exclusion list and reasons are executable in ARCHITECTURE_VALIDATION_SCOPE and guarded by ArchitectureAudit.test.ts; an exclusion must be removed only after its source errors and missing package dependencies are resolved.

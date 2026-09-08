@@ -8,6 +8,44 @@ export interface ArchitectureAuditEntry {
   readonly blockers: readonly string[];
 }
 
+/** Validation scope for the strict architecture typecheck boundary. */
+export interface ArchitectureValidationScope {
+  readonly typecheckConfig: string;
+  readonly typecheckIncludes: readonly string[];
+  readonly excludedProductionAreas: readonly {
+    path: string;
+    reason: string;
+  }[];
+  readonly completeBundleValidation: string;
+}
+
+export const ARCHITECTURE_VALIDATION_SCOPE = {
+  typecheckConfig: "tsconfig.architecture.json",
+  typecheckIncludes: [
+    "src/graph-domain/**/*.ts",
+    "src/graph-application/**/*.ts"
+  ],
+  excludedProductionAreas: [
+    {
+      path: "src/GraphView.ts",
+      reason: "Live legacy composition has pre-existing strict-type errors."
+    },
+    {
+      path: "src/GraphEngine.ts",
+      reason: "Live legacy solver has pre-existing strict-type errors."
+    },
+    {
+      path: "src/main.ts",
+      reason: "Host entrypoint has pre-existing strict-type errors."
+    },
+    {
+      path: "src/graph/**/*.ts and src/views/**/*.ts",
+      reason: "Working Memory extraction files reference modules outside this package."
+    }
+  ],
+  completeBundleValidation: "npm run build"
+} as const satisfies ArchitectureValidationScope;
+
 /**
  * Source-of-truth summary for the final architecture audit.
  *

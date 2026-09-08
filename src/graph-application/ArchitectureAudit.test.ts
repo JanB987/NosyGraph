@@ -1,9 +1,9 @@
 /// <reference types="node" />
 
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ARCHITECTURE_AUDIT, getArchitectureAuditBlockers } from "./ArchitectureAudit";
+import { ARCHITECTURE_AUDIT, ARCHITECTURE_VALIDATION_SCOPE, getArchitectureAuditBlockers } from "./ArchitectureAudit";
 import { GraphKinematicsStore } from "./GraphKinematicsStore";
 import { GraphPhysicsCoordinator } from "./GraphPhysicsCoordinator";
 import type { GraphPhysicsEngine } from "./GraphPhysicsEngine";
@@ -44,6 +44,19 @@ const forbidden = ["obsidian", "GraphEngine", "HTMLElement", "HTMLCanvasElement"
     expect(imports.some((line) => line.includes("HTMLElement") || line.includes("HTMLCanvasElement") || line.includes("TFile"))).toBe(false);
   });
 
+  it("keeps the scoped typecheck boundary explicit", () => {
+    const config = JSON.parse(readSource(ARCHITECTURE_VALIDATION_SCOPE.typecheckConfig)) as {
+      include?: readonly string[];
+    };
+    expect(config.include).toEqual(ARCHITECTURE_VALIDATION_SCOPE.typecheckIncludes);
+    for (const entry of ARCHITECTURE_VALIDATION_SCOPE.excludedProductionAreas) {
+      let firstPath = entry.path.split("*")[0]; if (firstPath.endsWith("/")) firstPath = firstPath.slice(0, -1);
+      expect(existsSync(sourcePath(firstPath))).toBe(true);
+      expect(entry.reason.length).toBeGreaterThan(0);
+    }
+    expect(ARCHITECTURE_VALIDATION_SCOPE.completeBundleValidation).toBe("npm run build");
+    expect(readSource("docs/architecture/ArchitectureAudit.md")).toContain("Full-tree strict typecheck");
+  });
   it("keeps the live composition claim explicit", () => {
     expect(readSource("src/GraphView.ts")).toContain("new GraphEngine(");
     expect(readSource("docs/architecture/GraphView.md")).toContain("still constructs");
