@@ -169,3 +169,164 @@ describe("GraphController badge commands", () => {
     expect(calls).toEqual([]);
   });
 });
+
+
+describe("GraphController interaction and host commands", () => {
+  const snapshot: GraphSnapshot = {
+    nodes: [{
+      id: "A.md",
+      noteId: "A.md",
+      contextId: "graph:root",
+      position: { x: 12, y: 18 },
+      velocity: { x: 0, y: 0 },
+      radius: 20,
+      pinned: false,
+      selected: false,
+      origin: { kind: "root" }
+    }],
+    notes: [],
+    badges: [],
+    edges: [],
+    expansions: [],
+    lenses: []
+  };
+
+  function interactionSetup() {
+    const calls: string[] = [];
+    const controller = new GraphController(new GraphStore(), {
+      queries: new GraphQueries({ getSnapshot: () => snapshot }),
+      pinPort: {
+        executePin: (command) => {
+          calls.push(command.type);
+        }
+      },
+      dragPort: {
+        executeDrag: (command) => {
+          calls.push(command.type);
+        }
+      },
+      rootPort: {
+        executeRoot: (command) => {
+          calls.push(command.type);
+        }
+      },
+      relationshipPort: {
+        executeRelationshipRefresh: (command) => {
+          calls.push(
+            command.sourcePath
+            + ":"
+            + (command.scope ?? "all")
+            + ":"
+            + (command.changedProperties ?? []).join(",")
+          );
+        }
+      }
+    });
+    return { controller, calls };
+  }
+
+  it("routes pinning, the complete drag lifecycle, roots, and relationship refresh", async () => {
+    const { controller, calls } = interactionSetup();
+
+    expect(await controller.executePin({
+      type: "pin-node",
+      nodeId: "A.md",
+      position: { x: 40, y: 50 },
+      persist: false
+    })).toEqual({ handled: true, nodeId: "A.md" });
+    expect(await controller.executePin({
+      type: "unpin-node",
+      nodeId: "A.md",
+      restartSimulation: false
+    })).toEqual({ handled: true, nodeId: "A.md" });
+
+    for (const command of [
+      { type: "begin-drag", nodeId: "A.md", position: { x: 1, y: 2 } },
+      { type: "move-drag", nodeId: "A.md", position: { x: 3, y: 4 } },
+      { type: "end-drag", nodeId: "A.md", position: { x: 5, y: 6 }, persist: true },
+      { type: "cancel-drag", nodeId: "A.md" }
+    ] as const) {
+      expect((await controller.executeDrag(command)).handled).toBe(true);
+    }
+
+    expect(await controller.executeRoot({ type: "add-root", nodeId: "A.md" }))
+      .toEqual({ handled: true });
+    expect(await controller.executeRoot({ type: "remove-root", nodeId: "A.md" }))
+      .toEqual({ handled: true });
+    expect(await controller.executeRoot({ type: "set-roots", nodeIds: ["A.md"] }))
+      .toEqual({ handled: true });
+
+    expect(await controller.executeRelationshipRefresh({
+      type: "refresh-relationships",
+      sourcePath: " A.md ",
+      changedProperties: ["parts", " "],
+      scope: "outer"
+    })).toEqual({ handled: true, sourcePath: "A.md" });
+
+    expect(calls).toEqual([
+      "pin-node",
+      "unpin-node",
+      "begin-drag",
+      "move-drag",
+      "end-drag",
+      "cancel-drag",
+      "add-root",
+      "remove-root",
+      "set-roots",
+      "A.md:outer:parts"
+    ]);
+  });
+
+  it("rejects unknown nodes before pinning or dragging", async () => {
+    const { controller, calls } = interactionSetup();
+
+    expect(await controller.executePin({ type: "pin-node", nodeId: "missing" }))
+      .toEqual({ handled: false, nodeId: "missing", reason: "node-not-found" });
+    expect(await controller.executeDrag({
+      type: "move-drag",
+      nodeId: "missing",
+      position: { x: 1, y: 2 }
+    })).toEqual({ handled: false, nodeId: "missing", reason: "node-not-found" });
+    expect(calls).toEqual([]);
+  });
+
+  it("reports unavailable host ports and invalid relationship paths", async () => {
+    const controller = new GraphController(new GraphStore(), {
+      queries: new GraphQueries({ getSnapshot: () => snapshot })
+    });
+
+    expect(await controller.executePin({ type: "pin-node", nodeId: "A.md" }))
+      .toEqual({ handled: false, nodeId: "A.md", reason: "pin-port-unavailable" });
+    expect(await controller.executeDrag({ type: "begin-drag", nodeId: "A.md" }))
+      .toEqual({ handled: false, nodeId: "A.md", reason: "drag-port-unavailable" });
+    expect(await controller.executeRoot({ type: "add-root", nodeId: "A.md" }))
+      .toEqual({ handled: false, reason: "root-port-unavailable" });
+    expect(await controller.executeRelationshipRefresh({
+      type: "refresh-relationships",
+      sourcePath: " "
+    })).toEqual({
+      handled: false,
+      sourcePath: "",
+      reason: "source-path-invalid"
+    });
+    expect(await controller.executeRelationshipRefresh({
+      type: "refresh-relationships",
+      sourcePath: "A.md"
+    })).toEqual({
+      handled: false,
+      sourcePath: "A.md",
+      reason: "relationship-port-unavailable"
+    });
+  });
+
+  it("rejects non-finite drag positions", async () => {
+    const { controller, calls } = interactionSetup();
+
+    expect(await controller.executeDrag({
+      type: "move-drag",
+      nodeId: "A.md",
+      position: { x: Number.NaN, y: 2 }
+    })).toEqual({ handled: false, nodeId: "A.md", reason: "invalid-position" });
+    expect(calls).toEqual([]);
+  });
+});
