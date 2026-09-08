@@ -67,3 +67,5 @@ Until those conditions hold, the legacy path remains the runtime authority and t
 | Integrated store runtime | **Implemented; experimental** | StoreGraphRuntime | Composes store, scene, kinematics, physics, renderer, controller, persistence, and optional lifecycle coordination; semantic revisions remain separate from motion-frame sequences. Production GraphView/GraphEngine composition remains live. |
 
 | Store-mode activation gates | **Implemented; experimental** | StoreModeActivationGates and StoreGraphActivationGate tests | Supported detached operations are checked against a mutable legacy-source fixture; unsupported commands fail explicitly. Manual B01–B14 parity and interactive Obsidian evidence remain activation limits. |
+
+| Guarded store-mode trials | **Implemented; experimental** | GraphRuntimeModeSelector | Legacy is the default; store mode requires an explicit trial flag, cannot switch while open, and rolls back by closing then creating a fresh legacy handle. Production GraphView composition remains legacy. |

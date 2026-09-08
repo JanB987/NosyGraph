@@ -159,7 +159,7 @@ Implemented as an experimental boundary in [GraphRenderer](GraphRenderer.md):
 
 ### Stage 7 — activation and removal
 
-- Add an explicit test-branch setting for store mode.
+- Add an explicit test-branch setting for store mode. The host-neutral [GraphRuntimeModeSelector](GraphRuntimeModeSelector.md) now enforces this guard at graph creation.
 - Run automated validation and the full manual matrix in both modes.
 - Make store mode the default only after parity.
 - Delete shadow comparison and the normal-toggle legacy executor.
@@ -182,7 +182,7 @@ Rollback does not translate live store state back into legacy arrays.
 
 1. Keep the persisted graph document compatible during the trial period.
 2. Close the store-mode graph instance.
-3. Reopen it in legacy mode from persisted configuration.
+3. Reopen it in legacy mode from persisted configuration. `GraphRuntimeModeSelector.rollbackToLegacy()` performs these steps without copying mutable state.
 4. Capture the rejected store snapshot and diagnostic reason for investigation.
 
 This makes rollback explicit and avoids a reverse synchronization path.

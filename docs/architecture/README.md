@@ -52,6 +52,7 @@ GraphController <--------> Obsidian adapters
 - [LegacyGraphPhysicsContainerAdapter](LegacyGraphPhysicsContainerAdapter.md) translates parent/embedded records and derives stable container nesting.
 - [LegacyGraphPhysicsReadAdapter](LegacyGraphPhysicsReadAdapter.md) composes all copied legacy physics reads behind one facade.
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
+- [GraphRuntimeModeSelector](GraphRuntimeModeSelector.md) selects one guarded mode at graph creation and closes before rollback to legacy.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
@@ -182,6 +183,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Add the experimental [GraphRenderer](GraphRenderer.md) boundary for detached drawing and hit testing.
 - [x] Integrate renderer, physics, commands, persistence, and lifecycle behind StoreGraphRuntime while keeping semantic revisions separate from motion-frame sequences.
 - [x] Verify store-mode activation gates, detached supported operations, and visible unsupported-command failures.
+- [x] Add guarded store-mode trial selection and close/reopen rollback to legacy mode.
 - [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
 - [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.
