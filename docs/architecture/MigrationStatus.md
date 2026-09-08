@@ -73,3 +73,5 @@ Until those conditions hold, the legacy path remains the runtime authority and t
 | Dual-mode regression and performance comparison | **Implemented; experimental** | GraphModeRegression tests and GraphModeRegression.md | Legacy and store runs compare identities, persistence, interaction results, timing samples, representative sizes, and cleanup. Controlled non-zero legacy motion remains unavailable until GraphEngine exposes a step-and-capture hook. |
 
 | Evidence-gated store default | **Implemented; experimental** | GraphRuntimeActivationPolicy and GraphRuntimeModeSelector | Store becomes the selector default only when controlled physics, manual badge, interactive, persistence, lifecycle, ownership, and automated evidence are all recorded. Current evidence intentionally keeps legacy as default. |
+
+| Legacy ownership cleanup | **Blocked; audit complete** | LegacyOwnershipAudit and LegacyOwnershipAudit tests | No legacy arrays, executors, solver paths, or shadow services are removable yet: production GraphView/GraphEngine and pending parity diagnostics still depend on them. |

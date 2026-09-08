@@ -55,6 +55,7 @@ GraphController <--------> Obsidian adapters
 - [GraphRuntimeState](GraphRuntimeState.md) is the common snapshot, revision, and structural-change boundary for one runtime mode.
 - [GraphRuntimeModeSelector](GraphRuntimeModeSelector.md) selects one guarded mode at graph creation and closes before rollback to legacy.
 - [GraphRuntimeActivationPolicy](GraphRuntimeActivationPolicy.md) makes store mode default only after all parity and ownership evidence is recorded.
+- [Legacy ownership audit](LegacyOwnershipAudit.md) records the live dependencies that still block D6 cleanup.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
@@ -188,6 +189,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Add guarded store-mode trial selection and close/reopen rollback to legacy mode.
 - [x] Run dual-mode regression and performance comparisons for persistence, representative sizes, interaction boundaries, and lifecycle cleanup.
 - [x] Add the evidence-gated default-selection policy for store mode; keep legacy default while required parity evidence is incomplete.
+- [ ] Remove obsolete legacy owners after all supported dependencies and parity gates are cleared.
 - [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
 - [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.

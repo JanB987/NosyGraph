@@ -162,8 +162,8 @@ Implemented as an experimental boundary in [GraphRenderer](GraphRenderer.md):
 - Add an explicit test-branch setting for store mode. The host-neutral [GraphRuntimeModeSelector](GraphRuntimeModeSelector.md) now enforces this guard at graph creation.
 - Run automated validation and the full manual matrix in both modes.
 - Make store mode the default only after parity. `GraphRuntimeActivationPolicy` now enforces this evidence condition at selector creation.
-- Delete shadow comparison and the normal-toggle legacy executor.
-- Remove legacy semantic arrays only when no legacy-only feature reads them.
+- Delete shadow comparison and the normal-toggle legacy executor only after the [Legacy ownership audit](LegacyOwnershipAudit.md) reports no live or evidence dependents.
+- Remove legacy semantic arrays only when no legacy-only feature reads them; the D6 audit currently reports these arrays as live-owned.
 
 ## Activation gates
 
