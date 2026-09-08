@@ -64,7 +64,7 @@ Collapse operates on expansion ownership already present in graph state. Reading
 
 ## Current migration state
 
-The service is fully host-neutral and tested. [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) composes it with [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md), and live normal link-badge toggles now use this path. Other badge actions still delegate through [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md).
+The service is fully host-neutral and tested. [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) composes it with [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md). Live normal link-badge planning now reads through [ObsidianRelationshipTargetReader](ObsidianAdapters.md); the legacy executor still performs the compatibility mutation. Other badge actions still delegate through [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md).
 
 ## Must not own
 

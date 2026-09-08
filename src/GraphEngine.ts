@@ -11,6 +11,8 @@ import { O3NodeBadge } from "./O3NodeBadge";
 import { setStyle } from "./domStyle";
 import { GraphController } from "./graph-application/GraphController";
 import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
+import { GraphBadgeExpansionCoordinator } from "./graph-application/GraphBadgeExpansionCoordinator";
+import { GraphLegacyExpansionService } from "./graph-application/GraphLegacyExpansionService";
 import { GraphBadgeToggleShadowComparator } from "./graph-application/GraphBadgeToggleShadowComparator";
 import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeToggleShadowService";
 import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
@@ -43,7 +45,12 @@ import {
 } from "./graph-application/LegacyGraphKinematicsAdapter";
 import { LegacyGraphBadgeToggleExecutor } from "./graph-application/LegacyGraphBadgeToggleExecutor";
 import { LegacyGraphExpansionBadgeAdapter } from "./graph-application/LegacyGraphExpansionBadgeAdapter";
-import { LegacyGraphRelationshipTargetAdapter } from "./graph-application/LegacyGraphRelationshipTargetAdapter";
+import { ObsidianNoteRepository } from "./graph-application/ObsidianNoteRepository";
+import { ObsidianRelationshipTargetReader } from "./graph-application/ObsidianRelationshipTargetReader";
+import {
+  ObsidianGraphLinkResolver,
+  type ObsidianGraphLinkTarget
+} from "./graph-application/ObsidianGraphLinkResolver";
 import type { LegacyGraphPhysicsReadState } from "./graph-application/LegacyGraphPhysicsReadAdapter";
 import { LegacyGraphRuntimeState } from "./graph-application/LegacyGraphRuntimeState";
 import { ObsidianGraphExpansionNoteAdapter } from "./graph-application/ObsidianGraphExpansionNoteAdapter";
@@ -108,17 +115,7 @@ interface Edge {
   origin?: string;
 }
 
-interface FrontmatterLinkEntry {
-  key?: string;
-  link?: string;
-}
-
-interface GraphLinkTarget {
-  path: string;
-  label: string;
-  file: TFile | null;
-  missing: boolean;
-}
+type GraphLinkTarget = ObsidianGraphLinkTarget;
 
 interface BadgeDropTarget {
   nodeId: string;
@@ -517,9 +514,9 @@ export class GraphEngine {
   private activeLinkTypeVisualByProperty = new Map<string, LinkTypeVisualConfig>();
   private activeLinkTypeExpansionPropertiesByProperty = new Map<string, string[]>();
   private activeLinkTypeWritePropertyByProperty = new Map<string, string>();
-  private incomingLinksByProperty = new Map<string, Map<string, Set<string>>>();
-  private incomingLinksBySource = new Map<string, Map<string, Set<string>>>();
-  private incomingLinkIndexReady = false;
+  private readonly linkResolver: ObsidianGraphLinkResolver;
+  private readonly badgeExpansionCoordinator: GraphBadgeExpansionCoordinator<GraphNode, TFile>;
+  private readonly legacyExpansionService: GraphLegacyExpansionService<GraphNode, TFile>;
   private recentGraphLinkMutationTargets = new Map<string, Map<string, number>>();
   private readonly recentGraphLinkMutationTargetTtlMs = 10000;
   private parentContainers = new Map<string, ParentContainerState>();
@@ -704,6 +701,62 @@ export class GraphEngine {
   ) {
     this.container = parent;
     this.graphPropertyKeys = normalizeGraphPropertyKeys(menuOptions.graphPropertyKeys);
+    this.badgeExpansionCoordinator = new GraphBadgeExpansionCoordinator<GraphNode, TFile>({
+      getSourcePath: (file) => file.path,
+      getNode: (nodeId) => this.nodeMap.get(nodeId),
+      expandEmbedded: (node, linkType) => this.toggleEmbeddedNodeExpansion(node, linkType),
+      expandParent: (node, property) => this.triggerParentExpansion(node, property),
+      toggleLinkType: (file, property, sourceNodeId) => this.toggleExpansion(file, property, { sourceNodeId })
+    }, (value) => this.normalizeLinkType(value));
+    this.linkResolver = new ObsidianGraphLinkResolver(this.app, {
+      isFile: (value): value is TFile => value instanceof TFile,
+      getLabels: () => this.lastLabels,
+      getExpansionPropertyAliases: () => this.activeLinkTypeExpansionPropertiesByProperty,
+      getDiscoveryDirections: () => this.activeLinkTypeDiscoveryDirectionByProperty,
+      normalizeType: (value) => this.normalizeLinkType(value)
+    });
+    this.legacyExpansionService = new GraphLegacyExpansionService<GraphNode, TFile>({
+      expandedByBadge: this.expandedByBadge,
+      expansionNodes: this.expansionNodes,
+      nodeOwners: this.nodeOwners,
+      expansionParent: this.expansionParent,
+      rootFilePaths: this.rootFilePaths,
+      getFile: (source) => {
+        if (source instanceof TFile) return source;
+        const file = this.app.vault.getAbstractFileByPath(String(source ?? "").trim());
+        return file instanceof TFile ? file : undefined;
+      },
+      getSourcePath: (file) => file.path,
+      resolveTargets: (file, property) => this.linkResolver.resolveLinkedTargets(file, { property } as O3LinkType),
+      getNode: (nodeId) => this.nodeMap.get(nodeId),
+      ensureTarget: (target, sourceNodeId, property, anchorNode, preferExistingVisibleTarget) =>
+        this.ensureExpansionTargetNode(target as GraphLinkTarget, sourceNodeId, property, {
+          anchorNode,
+          preferExistingVisibleTarget
+        }),
+      isVisibleLinkType: (property) => this.visibleLinkTypes.has(property),
+      isDuplicateNodesEnabled: (property) => this.activeLinkTypeDuplicateNodesByProperty.get(property) === true,
+      addCurrentFile: (path) => this.currentFiles.add(path),
+      removeCurrentFileIfUnowned: (path) => this.currentFiles.delete(path),
+      getHoveredExpansionKey: () => this.hoveredExpansionKey,
+      clearHoveredExpansion: () => { this.hoveredExpansionKey = null; },
+      refreshHoveredHighlightNodes: () => this.refreshHoveredHighlightNodes(),
+      reconcileCurrentFilesFromVisibleState: () => this.reconcileCurrentFilesFromVisibleState(),
+      getCurrentFiles: () => this.getCurrentFilesAsTFiles(),
+      setLastFiles: (files) => {
+        this.lastFiles = files;
+        this.lastLinkTypeSourceFiles = files;
+      },
+      rebuildEdges: () => this.rebuildEdges(),
+      onToggle: (event) => this.menuOptions.onBadgeExpansionToggled?.(
+        event.sourceNodeId,
+        event.sourcePath,
+        event.linkType,
+        event.expanded,
+        event.expansionId,
+        event.parentExpansionId
+      )
+    });
     const architectureNoteReader = new ObsidianGraphExpansionNoteAdapter<TFile>({
       getFile: (noteId) => {
         const file = this.app.vault.getAbstractFileByPath(noteId);
@@ -777,14 +830,28 @@ export class GraphEngine {
         this.captureLegacyKinematicsFrame(sequence) },
       physicsExperiments
     );
-    const relationshipTargetReader = new LegacyGraphRelationshipTargetAdapter<TFile, O3LinkType>({
-      getSource: (noteId) => {
-        const file = this.app.vault.getAbstractFileByPath(noteId);
+    const noteRepository = new ObsidianNoteRepository<TFile>({
+      listMarkdownFiles: () => this.app.vault.getMarkdownFiles(),
+      getFile: (path) => {
+        const file = this.app.vault.getAbstractFileByPath(path);
         return file instanceof TFile ? file : undefined;
       },
-      getLinkType: (linkTypeId, contextId) =>
-        this.getLegacyRelationshipLinkType(linkTypeId, contextId),
-      resolveTargets: (source, linkType) => this.resolveLinkedTargets(source, linkType)
+      getPath: (file) => file.path,
+      getName: (file) => file.basename,
+      getProperties: (file) => this.app.metadataCache.getFileCache(file)?.frontmatter,
+      resolveLink: (candidate, sourcePath) => this.linkResolver.resolveLinkPath(candidate, sourcePath)
+    });
+    const relationshipTargetReader = new ObsidianRelationshipTargetReader({
+      notes: noteRepository,
+      getRelationshipType: (linkTypeId, contextId) => {
+        const linkType = this.getLegacyRelationshipLinkType(linkTypeId, contextId);
+        if (!linkType) return undefined;
+        return {
+          property: String(linkType.property ?? linkType.properties?.[0] ?? ""),
+          properties: this.getLinkTypeExpansionProperties(linkType),
+          direction: linkType.linkDiscoveryDirection ?? "outgoing"
+        };
+      }
     });
     const toggleService = new GraphBadgeToggleService(
       this.architectureQueries,
@@ -799,7 +866,7 @@ export class GraphEngine {
       getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
       normalizeLinkType: (value) => this.normalizeLinkType(value),
       isExpanded: (expansionId) => this.expandedByBadge.has(expansionId),
-      toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id)
+      toggle: ({ node, file, linkType }) => this.badgeExpansionCoordinator.expandFromNode(file, linkType, node.id)
     });
     const expansionBadgeReader = new LegacyGraphExpansionBadgeAdapter({
       getDefinitions: (contextId) => this.getPersistableBadgeLinkTypesForContext(contextId)
@@ -857,7 +924,7 @@ export class GraphEngine {
       getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
       normalizeLinkType: (value) => this.normalizeLinkType(value),
       handleNormalToggle: async (request) => { await toggleHandler.handle(request); },
-      toggle: ({ node, file, linkType }) => this.expandFromNode(file, linkType, node.id),
+      toggle: ({ node, file, linkType }) => this.badgeExpansionCoordinator.expandFromNode(file, linkType, node.id),
       openInput: ({ node, linkType }) => this.requestBadgeLinkInput(node.id, linkType),
       expandChain: ({ node, file, linkType }) => this.expandLinkTypeChainFromNode(file, linkType, node.id)
     });
@@ -1611,7 +1678,7 @@ export class GraphEngine {
       : this.collectSelectedTypeSourceNodeIds(linkTypeSourceFiles);
 
     for (const file of files) {
-      const frontmatterByType = this.collectFrontmatterLinksByType(file);
+      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
 
       for (const [type, targets] of frontmatterByType.entries()) {
         // Persistent graph-note views expand active LinkTypes per node through
@@ -1924,114 +1991,6 @@ export class GraphEngine {
     ].map((value) => String(Number.isFinite(Number(value)) ? Number(value) : "")).join("\u001f");
   }
 
-  private collectFrontmatterLinksByType(file: TFile): Map<string, Set<string>> {
-    const byType = new Map<string, Set<string>>();
-    const cache = this.app.metadataCache.getFileCache(file);
-
-    const addTarget = (rawKey: string, targetPath: string): void => {
-      const normalizedKey = this.normalizeFrontmatterLinkTypeKey(rawKey);
-      if (!normalizedKey) return;
-      if (!byType.has(normalizedKey)) {
-        byType.set(normalizedKey, new Set<string>());
-      }
-      byType.get(normalizedKey)!.add(targetPath);
-    };
-
-    const frontmatterLinks = this.getFrontmatterLinks(cache);
-    if (frontmatterLinks.length > 0) {
-      for (const link of frontmatterLinks) {
-        const rawKey = String(link.key ?? "").trim();
-        const linkText = String(link.link ?? "").trim();
-        if (!rawKey || !linkText) continue;
-
-        const target = this.resolveGraphLinkTarget(linkText, file.path);
-        if (!target) continue;
-
-        const baseKey = rawKey.split(/[.[\]]/)[0];
-        addTarget(baseKey, target.path);
-      }
-    }
-
-    const frontmatter = cache?.frontmatter;
-    if (!frontmatter) {
-      this.applyActiveLinkTypePropertyAliases(byType);
-      return byType;
-    }
-
-    for (const [key, value] of Object.entries(frontmatter)) {
-      if (String(key ?? "").trim().toLowerCase() === "position") continue;
-
-      const candidates = extractInternalLinkCandidates(value);
-      if (!candidates.length) continue;
-
-      for (const candidate of candidates) {
-        const target = this.resolveGraphLinkTarget(candidate, file.path);
-        if (!target) continue;
-        addTarget(key, target.path);
-      }
-    }
-
-    this.applyActiveLinkTypePropertyAliases(byType);
-    return byType;
-  }
-
-  private applyActiveLinkTypePropertyAliases(byType: Map<string, Set<string>>): void {
-    if (this.activeLinkTypeExpansionPropertiesByProperty.size === 0) return;
-    for (const [primaryProperty, expansionProperties] of this.activeLinkTypeExpansionPropertiesByProperty.entries()) {
-      if (!primaryProperty || expansionProperties.length <= 1) continue;
-      let primaryTargets = byType.get(primaryProperty);
-      for (const property of expansionProperties) {
-        if (property === primaryProperty) continue;
-        const targets = byType.get(property);
-        if (!targets || targets.size === 0) continue;
-        if (!primaryTargets) {
-          primaryTargets = new Set<string>();
-          byType.set(primaryProperty, primaryTargets);
-        }
-        for (const target of targets) {
-          primaryTargets.add(target);
-        }
-      }
-    }
-  }
-
-  private resolveGraphLinkTarget(rawLinkText: string, sourcePath: string): GraphLinkTarget | null {
-    const linkText = String(rawLinkText ?? "").trim();
-    if (!linkText || /^(?:[a-z]+:)?\/\//i.test(linkText)) return null;
-    const withoutAlias = linkText.split("|")[0]?.trim() ?? linkText;
-    const withoutHeading = withoutAlias.split("#")[0]?.trim() ?? withoutAlias;
-    const normalized = withoutHeading.replace(/\\/g, "/").trim();
-    if (!normalized) return null;
-
-    const resolved = this.app.metadataCache.getFirstLinkpathDest(normalized, sourcePath);
-    if (resolved instanceof TFile) {
-      return {
-        path: resolved.path,
-        label: this.lastLabels.get(resolved.path) ?? resolved.basename ?? resolved.name,
-        file: resolved,
-        missing: false
-      };
-    }
-
-    const missingPath = this.normalizeMissingLinkPath(normalized);
-    if (!missingPath) return null;
-    return {
-      path: missingPath,
-      label: this.labelFromPath(missingPath),
-      file: null,
-      missing: true
-    };
-  }
-
-  private normalizeMissingLinkPath(rawPath: string): string {
-    const path = String(rawPath ?? "")
-      .replace(/\\/g, "/")
-      .replace(/^\/+/, "")
-      .trim();
-    if (!path) return "";
-    return /\.md$/i.test(path) ? path : `${path}.md`;
-  }
-
   private labelFromPath(pathRaw: string): string {
     const path = String(pathRaw ?? "").trim();
     return path.split("/").pop()?.replace(/\.md$/i, "") || path;
@@ -2040,11 +1999,11 @@ export class GraphEngine {
   private collectDiscoveredTypes(files: TFile[]): Set<string> {
     const discoveredTypes = new Set<string>();
     for (const file of files) {
-      for (const type of this.collectFrontmatterLinkTypeKeys(file)) {
+      for (const type of this.linkResolver.collectFrontmatterLinkTypeKeys(file)) {
         discoveredTypes.add(type);
       }
 
-      const frontmatterByType = this.collectFrontmatterLinksByType(file);
+      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
       for (const [type, targets] of frontmatterByType.entries()) {
         if (targets.size > 0) {
           discoveredTypes.add(type);
@@ -2061,7 +2020,7 @@ export class GraphEngine {
     }
 
     for (const file of files) {
-      const frontmatterByType = this.collectFrontmatterLinksByType(file);
+      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
       let hasSelectedType = false;
       for (const [type, targets] of frontmatterByType.entries()) {
         if (!this.selectedLinkTypes.has(type)) continue;
@@ -2105,48 +2064,6 @@ export class GraphEngine {
     }
 
     return sourceIds;
-  }
-
-  private collectFrontmatterLinkTypeKeys(file: TFile): Set<string> {
-    const out = new Set<string>();
-    const cache = this.app.metadataCache.getFileCache(file);
-
-    const frontmatterLinks = this.getFrontmatterLinks(cache);
-    for (const link of frontmatterLinks) {
-      const rawKey = String(link.key ?? "").trim();
-      if (!rawKey) continue;
-      const baseKey = rawKey.split(/[.[\]]/)[0];
-      const normalizedKey = this.normalizeFrontmatterLinkTypeKey(baseKey);
-      if (normalizedKey) {
-        out.add(normalizedKey);
-      }
-    }
-
-    const frontmatter = cache?.frontmatter;
-    if (!frontmatter) return out;
-
-    for (const [key, value] of Object.entries(frontmatter)) {
-      if (String(key ?? "").trim().toLowerCase() === "position") continue;
-      const candidates = extractInternalLinkCandidates(value);
-      if (candidates.length > 0) {
-        const normalizedKey = this.normalizeFrontmatterLinkTypeKey(key);
-        if (normalizedKey) out.add(normalizedKey);
-      }
-    }
-
-    return out;
-  }
-
-  private normalizeFrontmatterLinkTypeKey(key: string): string {
-    return String(key ?? "").trim().toLowerCase();
-  }
-
-  private getFrontmatterLinks(cache: unknown): FrontmatterLinkEntry[] {
-    const record = cache && typeof cache === "object"
-      ? cache as { frontmatterLinks?: unknown }
-      : {};
-    const links = record.frontmatterLinks;
-    return Array.isArray(links) ? links : [];
   }
 
   private buildEdgeKey(from: string, to: string, type: string, linkType?: string): string {
@@ -2229,7 +2146,7 @@ export class GraphEngine {
 
     for (const file of files) {
       if (!corePaths.has(file.path)) continue;
-      const frontmatterByType = this.collectFrontmatterLinksByType(file);
+      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
       for (const linkType of this.overlayLinkTypes) {
         const targets = frontmatterByType.get(linkType);
         if (!targets) continue;
@@ -2307,7 +2224,7 @@ export class GraphEngine {
       if (!sourcePath) continue;
       const file = this.app.vault.getAbstractFileByPath(sourcePath);
       if (!(file instanceof TFile)) continue;
-      const frontmatterByType = this.collectFrontmatterLinksByType(file);
+      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
       for (const linkType of context.visibleLinkTypes) {
         const targets = frontmatterByType.get(linkType);
         if (!targets) continue;
@@ -2820,7 +2737,7 @@ export class GraphEngine {
     if (cached !== undefined) return cached;
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!(file instanceof TFile)) return false;
-    const hasLinks = this.resolveLinkedTargets(file, { property: normalizedType } as O3LinkType).length > 0;
+    const hasLinks = this.linkResolver.resolveLinkedTargets(file, { property: normalizedType } as O3LinkType).length > 0;
     this.badgeYamlLinkPresenceCache.set(cacheKey, hasLinks);
     return hasLinks;
   }
@@ -9988,7 +9905,7 @@ export class GraphEngine {
       discoveryDirection
     });
 
-    this.clearIncomingLinkIndex();
+    this.linkResolver.clearIncomingLinkIndex();
     this.registerRecentGraphLinkMutationTargets(
       targetRef.path,
       badgeLinkType,
@@ -10043,7 +9960,7 @@ export class GraphEngine {
       ...(targetNode.stateOwnerPath ? { graphCapableOwnerPath: targetNode.stateOwnerPath } : {})
     });
 
-    this.clearIncomingLinkIndex();
+    this.linkResolver.clearIncomingLinkIndex();
     this.registerRecentGraphLinkMutationTargets(
       targetRef.path,
       badgeLinkType,
@@ -10596,7 +10513,7 @@ export class GraphEngine {
     for (const linkType of this.activeNodeBadgeLinkTypes) {
       this.registerLinkTypeRuntimeConfig(linkType);
     }
-    this.clearIncomingLinkIndex();
+    this.linkResolver.clearIncomingLinkIndex();
     if (changed) {
       this.directionLayoutDirty = true;
       this.badgesDirty = true;
@@ -10649,31 +10566,6 @@ export class GraphEngine {
     const type = this.normalizeLinkType(linkType);
     if (!source || !type) return false;
     return this.expandedByBadge.has(this.badgeKey(source, type));
-  }
-
-  expandFromNode(
-    sourceFile: TFile,
-    linkType: O3LinkType,
-    sourceNodeId?: string
-  ): void {
-    const runtimeSourceNodeId = String(sourceNodeId ?? sourceFile.path).trim();
-    const embeddedSourceNode = this.nodeMap.get(runtimeSourceNodeId);
-    if (embeddedSourceNode?.stateOwnerPath && embeddedSourceNode.embeddedInstanceId) {
-      this.toggleEmbeddedNodeExpansion(embeddedSourceNode, linkType);
-      return;
-    }
-    if (linkType.semantic === "parent") {
-      const normalizedSourceNodeId = String(sourceNodeId ?? sourceFile.path).trim();
-      const sourceNode = this.nodeMap.get(normalizedSourceNodeId)
-        ?? this.nodeMap.get(sourceFile.path);
-      if (!sourceNode) return;
-      this.triggerParentExpansion(
-        sourceNode,
-        this.normalizeLinkType(String(linkType.property ?? "").trim().toLowerCase())
-      );
-      return;
-    }
-    this.toggleExpansion(sourceFile, String(linkType.property ?? ""), { sourceNodeId });
   }
 
   private toggleEmbeddedNodeExpansion(
@@ -10746,7 +10638,7 @@ export class GraphEngine {
 
     const sourceFile = this.app.vault.getAbstractFileByPath(sourceNode.sourcePath);
     if (!(sourceFile instanceof TFile)) return;
-    const targets = this.resolveLinkedTargets(sourceFile, linkType);
+    const targets = this.linkResolver.resolveLinkedTargets(sourceFile, linkType);
     const targetPaths = new Set<string>();
     const childIds = new Set<string>();
     const addedOrUpdatedNodeIds: string[] = [sourceNode.id];
@@ -10944,7 +10836,7 @@ export class GraphEngine {
         if (!childPath) continue;
         const childFile = this.app.vault.getAbstractFileByPath(childPath);
         if (!(childFile instanceof TFile)) continue;
-        if (this.resolveLinkedTargets(childFile, { property } as O3LinkType).length === 0) continue;
+        if (this.linkResolver.resolveLinkedTargets(childFile, { property } as O3LinkType).length === 0) continue;
 
         const childRuntimeNodeId = this.nodeMap.has(childNodeId)
           ? childNodeId
@@ -11011,7 +10903,7 @@ export class GraphEngine {
         )
         .filter((node) => {
           const file = this.app.vault.getAbstractFileByPath(node.sourcePath);
-          return file instanceof TFile && this.resolveLinkedTargets(file, linkType).length > 0;
+          return file instanceof TFile && this.linkResolver.resolveLinkedTargets(file, linkType).length > 0;
         });
       if (candidates.length > 0) {
         for (const candidate of candidates) {
@@ -11047,7 +10939,7 @@ export class GraphEngine {
     const badgeKey = this.badgeKey(expansionSourceNodeId, property);
     if (this.expandedByBadge.has(badgeKey)) return null;
 
-    const targets = this.resolveLinkedTargets(source, { property } as O3LinkType);
+    const targets = this.linkResolver.resolveLinkedTargets(source, { property } as O3LinkType);
     const targetPaths = new Set<string>();
     if (!this.expansionNodes.has(badgeKey)) {
       this.expansionNodes.set(badgeKey, new Set<string>());
@@ -11095,140 +10987,7 @@ export class GraphEngine {
     linkTypeName: string,
     options: { persist?: boolean; sourceNodeId?: string } = {}
   ): void {
-    const persist = options.persist !== false;
-    const source = typeof sourceFile === "string"
-      ? this.app.vault.getAbstractFileByPath(String(sourceFile ?? "").trim())
-      : sourceFile;
-    if (!(source instanceof TFile)) return;
-
-    const property = String(linkTypeName ?? "").trim().toLowerCase();
-    if (!property) return;
-    const expansionSourceNodeId = String(options.sourceNodeId ?? "").trim() || source.path;
-    const badgeKey = `${expansionSourceNodeId}::${property}`;
-    let changed = false;
-    let toggleEvent: {
-      sourceNodeId: string;
-      sourcePath: string;
-      linkType: string;
-      expanded: boolean;
-      expansionId: string;
-      parentExpansionId: string | null;
-    } | null = null;
-
-    if (this.expandedByBadge.has(badgeKey)) {
-      const subtree = this.getExpansionSubtree(badgeKey);
-      const adjacency = new Map<string, Set<string>>();
-      for (const key of subtree) {
-        adjacency.set(key, new Set<string>());
-      }
-      for (const [child, parent] of this.expansionParent.entries()) {
-        if (!parent) continue;
-        if (!subtree.has(child) || !subtree.has(parent)) continue;
-        adjacency.get(parent)?.add(child);
-      }
-      const depthMap = new Map<string, number>();
-      depthMap.set(badgeKey, 0);
-      const queue: string[] = [badgeKey];
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        const currentDepth = depthMap.get(current) ?? 0;
-        for (const child of adjacency.get(current) ?? []) {
-          if (depthMap.has(child)) continue;
-          depthMap.set(child, currentDepth + 1);
-          queue.push(child);
-        }
-      }
-      const collapseOrder = Array.from(subtree).sort((a, b) =>
-        (depthMap.get(b) ?? 0) - (depthMap.get(a) ?? 0)
-      );
-
-      for (const subKey of collapseOrder) {
-        const ownedNodes = this.expansionNodes.get(subKey);
-        for (const nodePath of ownedNodes ?? []) {
-          const owners = this.nodeOwners.get(nodePath);
-          if (!owners) continue;
-          owners.delete(subKey);
-          if (owners.size === 0) {
-            this.nodeOwners.delete(nodePath);
-            if (!this.rootFilePaths.has(nodePath)) {
-              this.currentFiles.delete(nodePath);
-            }
-          }
-        }
-
-        this.expansionNodes.delete(subKey);
-        this.expandedByBadge.delete(subKey);
-        this.expansionParent.delete(subKey);
-      }
-
-      if (subtree.has(this.hoveredExpansionKey ?? "")) {
-        this.hoveredExpansionKey = null;
-      }
-      changed = true;
-    } else {
-      const targets = this.resolveLinkedTargets(source, { property } as O3LinkType);
-      const targetPaths = new Set<string>();
-      if (!this.expansionNodes.has(badgeKey)) {
-        this.expansionNodes.set(badgeKey, new Set<string>());
-      }
-      if (!this.expansionParent.has(badgeKey)) {
-        let parentKey: string | null = null;
-        if (!this.rootFilePaths.has(expansionSourceNodeId)) {
-          const owners = this.nodeOwners.get(expansionSourceNodeId);
-          if (owners && owners.size > 0) {
-            parentKey = Array.from(owners).sort((a, b) => a.localeCompare(b))[0] ?? null;
-          }
-        }
-        this.expansionParent.set(badgeKey, parentKey);
-      }
-      for (const target of targets) {
-        const targetPath = target.path;
-        targetPaths.add(targetPath);
-        const anchorNode = this.nodeMap.get(expansionSourceNodeId) ?? null;
-        const childNodeId = this.ensureExpansionTargetNode(target, expansionSourceNodeId, property, {
-          anchorNode,
-          preferExistingVisibleTarget: this.visibleLinkTypes.has(property)
-        });
-        if (this.activeLinkTypeDuplicateNodesByProperty.get(property) !== true) {
-          this.currentFiles.add(targetPath);
-        }
-        this.expansionNodes.get(badgeKey)!.add(childNodeId);
-        if (!this.nodeOwners.has(childNodeId)) {
-          this.nodeOwners.set(childNodeId, new Set<string>());
-        }
-        this.nodeOwners.get(childNodeId)!.add(badgeKey);
-      }
-      this.expandedByBadge.set(badgeKey, targetPaths);
-      changed = true;
-    }
-
-    if (persist && changed) {
-      toggleEvent = {
-        sourceNodeId: expansionSourceNodeId,
-        sourcePath: source.path,
-        linkType: property,
-        expanded: this.expandedByBadge.has(badgeKey),
-        expansionId: badgeKey,
-        parentExpansionId: this.expansionParent.get(badgeKey) ?? null
-      };
-    }
-    this.refreshHoveredHighlightNodes();
-    this.reconcileCurrentFilesFromVisibleState();
-
-    const files = this.getCurrentFilesAsTFiles();
-    this.lastFiles = files;
-    this.lastLinkTypeSourceFiles = files;
-    this.rebuildEdges();
-    if (toggleEvent) {
-      this.menuOptions.onBadgeExpansionToggled?.(
-        toggleEvent.sourceNodeId,
-        toggleEvent.sourcePath,
-        toggleEvent.linkType,
-        toggleEvent.expanded,
-        toggleEvent.expansionId,
-        toggleEvent.parentExpansionId
-      );
-    }
+    this.legacyExpansionService.toggle(sourceFile, linkTypeName, options);
   }
 
   private requestRender(): void {
@@ -11262,75 +11021,7 @@ export class GraphEngine {
   }
 
   private getExpansionSubtree(rootKey: string): Set<string> {
-    const root = String(rootKey ?? "").trim();
-    const subtree = new Set<string>();
-    if (!root) return subtree;
-    const adjacency = new Map<string, Set<string>>();
-    for (const [child, parent] of this.expansionParent.entries()) {
-      if (!parent) continue;
-      if (!adjacency.has(parent)) {
-        adjacency.set(parent, new Set<string>());
-      }
-      adjacency.get(parent)!.add(child);
-    }
-    const queue: string[] = [root];
-    const visited = new Set<string>();
-    while (queue.length > 0) {
-      const key = queue.shift()!;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      subtree.add(key);
-      for (const child of adjacency.get(key) ?? []) {
-        if (!visited.has(child)) {
-          queue.push(child);
-        }
-      }
-    }
-    return subtree;
-  }
-
-  private resolveLinkedTargets(sourceFile: TFile, linkType: O3LinkType): GraphLinkTarget[] {
-    const property = this.normalizeLinkType(String(linkType.property ?? "").trim().toLowerCase());
-    if (!property) return [];
-    const direction = linkType.linkDiscoveryDirection
-      ?? this.activeLinkTypeDiscoveryDirectionByProperty.get(property)
-      ?? "outgoing";
-    const candidates = new Set<string>();
-    if (direction === "outgoing" || direction === "both") {
-      const frontmatterByType = this.collectFrontmatterLinksByType(sourceFile);
-      for (const targetPath of frontmatterByType.get(property) ?? []) {
-        candidates.add(targetPath);
-      }
-    }
-    if (direction === "incoming" || direction === "both") {
-      this.ensureIncomingLinkIndex();
-      for (const incomingSource of this.incomingLinksByProperty.get(property)?.get(sourceFile.path) ?? []) {
-        candidates.add(incomingSource);
-      }
-    }
-    const resolved: GraphLinkTarget[] = [];
-    const seen = new Set<string>();
-
-    for (const candidate of candidates) {
-      const file = this.app.vault.getAbstractFileByPath(candidate)
-        ?? this.app.metadataCache.getFirstLinkpathDest(candidate, sourceFile.path);
-
-      const target = file instanceof TFile
-        ? {
-            path: file.path,
-            label: this.lastLabels.get(file.path) ?? file.basename ?? file.name,
-            file,
-            missing: false
-          } satisfies GraphLinkTarget
-        : this.resolveGraphLinkTarget(candidate, sourceFile.path);
-
-      if (target && target.path !== sourceFile.path && !seen.has(target.path)) {
-        seen.add(target.path);
-        resolved.push(target);
-      }
-    }
-
-    return resolved;
+    return this.legacyExpansionService.getExpansionSubtree(rootKey);
   }
 
   private registerRecentGraphLinkMutationTargets(
@@ -11393,77 +11084,15 @@ export class GraphEngine {
     return `${sourcePath}::${this.normalizeLinkType(String(linkType ?? "").trim().toLowerCase())}`;
   }
 
-  private clearIncomingLinkIndex(): void {
-    this.incomingLinksByProperty.clear();
-    this.incomingLinksBySource.clear();
-    this.incomingLinkIndexReady = false;
-    this.badgeYamlLinkPresenceCache.clear();
-  }
-
-  private ensureIncomingLinkIndex(): void {
-    if (this.incomingLinkIndexReady) return;
-    this.incomingLinksByProperty.clear();
-    this.incomingLinksBySource.clear();
-    for (const file of this.app.vault.getMarkdownFiles()) {
-      this.indexIncomingLinksForFile(file);
-    }
-    this.incomingLinkIndexReady = true;
-  }
-
   updateLinkDiscoveryIndexForFile(file: TFile): void {
-    if (!this.incomingLinkIndexReady) {
-      this.badgeYamlLinkPresenceCache.clear();
-      return;
-    }
-    this.removeIncomingLinksForSource(file.path);
-    this.indexIncomingLinksForFile(file);
+    this.linkResolver.updateLinkDiscoveryIndexForFile(file);
     this.badgeYamlLinkPresenceCache.clear();
     this.parentLinkTypeCache.clear();
   }
 
-  private indexIncomingLinksForFile(file: TFile): void {
-    const linksByType = this.collectFrontmatterLinksByType(file);
-    const sourceEntries = new Map<string, Set<string>>();
-    for (const property of this.activeLinkTypeDiscoveryDirectionByProperty.keys()) {
-      const targets = linksByType.get(property);
-      if (!targets || targets.size === 0) continue;
-      const sourceTargets = new Set<string>();
-      for (const targetPath of targets) {
-        sourceTargets.add(targetPath);
-        let incomingByTarget = this.incomingLinksByProperty.get(property);
-        if (!incomingByTarget) {
-          incomingByTarget = new Map<string, Set<string>>();
-          this.incomingLinksByProperty.set(property, incomingByTarget);
-        }
-        let sources = incomingByTarget.get(targetPath);
-        if (!sources) {
-          sources = new Set<string>();
-          incomingByTarget.set(targetPath, sources);
-        }
-        sources.add(file.path);
-      }
-      sourceEntries.set(property, sourceTargets);
-    }
-    if (sourceEntries.size > 0) {
-      this.incomingLinksBySource.set(file.path, sourceEntries);
-    }
-  }
-
-  private removeIncomingLinksForSource(sourcePath: string): void {
-    const previous = this.incomingLinksBySource.get(sourcePath);
-    if (!previous) return;
-    for (const [property, targets] of previous.entries()) {
-      const incomingByTarget = this.incomingLinksByProperty.get(property);
-      if (!incomingByTarget) continue;
-      for (const targetPath of targets) {
-        const sources = incomingByTarget.get(targetPath);
-        if (!sources) continue;
-        sources.delete(sourcePath);
-        if (sources.size === 0) incomingByTarget.delete(targetPath);
-      }
-      if (incomingByTarget.size === 0) this.incomingLinksByProperty.delete(property);
-    }
-    this.incomingLinksBySource.delete(sourcePath);
+  private clearIncomingLinkIndex(): void {
+    this.linkResolver.clearIncomingLinkIndex();
+    this.badgeYamlLinkPresenceCache.clear();
   }
 
   private isLinkDiscoveryEnabled(linkType: string): boolean {
@@ -12364,7 +11993,7 @@ export class GraphEngine {
     const originFile = this.app.vault.getAbstractFileByPath(sourcePath);
     if (!(originFile instanceof TFile)) return [];
 
-    return this.resolveLinkedTargets(originFile, { property: normalizedLinkType } as O3LinkType)
+    return this.linkResolver.resolveLinkedTargets(originFile, { property: normalizedLinkType } as O3LinkType)
       .map((target) => target.path);
   }
 
@@ -12384,7 +12013,7 @@ export class GraphEngine {
     const sourcePath = this.getSourcePathForNodeId(normalizedOrigin) || normalizedOrigin;
     const originFile = this.app.vault.getAbstractFileByPath(sourcePath);
     if (!(originFile instanceof TFile)) return false;
-    const targets = this.resolveLinkedTargets(originFile, { property: normalizedLinkType } as O3LinkType);
+    const targets = this.linkResolver.resolveLinkedTargets(originFile, { property: normalizedLinkType } as O3LinkType);
     if (targets.length === 0) {
       this.expandedParentRequests.delete(requestKey);
       return false;

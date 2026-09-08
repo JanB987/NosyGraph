@@ -29,7 +29,7 @@ Each dependency may also be asynchronous. This lets a later repository implement
 
 ## Current migration state
 
-`GraphEngine` now supplies the existing file, context-specific link-type, and relationship resolver functions to this adapter. [GraphBadgeToggleService](GraphBadgeToggleService.md) uses it for live normal link-badge expansion planning.
+The live normal badge planner now uses [ObsidianRelationshipTargetReader](ObsidianAdapters.md). This adapter remains a tested compatibility seam for callers that still provide a legacy source and resolver.
 
 ## Removal condition
 

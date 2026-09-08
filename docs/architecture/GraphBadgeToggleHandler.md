@@ -63,6 +63,6 @@ An unavailable planning result bypasses the executor and becomes a unified `stat
 
 ## Current migration state
 
-`GraphEngine` now constructs the relationship adapter, planning service, legacy executor, and this handler. Live `toggle-badge` requests with `semantic: "link"` use this path.
+`GraphEngine` now composes the Obsidian note repository, relationship reader, planning service, legacy executor, and this handler. Live `toggle-badge` requests with `semantic: "link"` use this path.
 
 Parent toggles, Alt-click link input, and Ctrl/Cmd-click chain expansion remain on [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md). This limits the first production integration to the normal expand/collapse behavior covered by the planner and executor.

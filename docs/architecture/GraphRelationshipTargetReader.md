@@ -48,7 +48,7 @@ Relationship data belongs to Markdown notes. Runtime node identity, duplicate-no
 
 - Receives note and link-type identities from [GraphBadgeRequest](GraphBadgeRequest.md).
 - Supplies targets to [GraphBadgeToggleService](GraphBadgeToggleService.md), which passes their note IDs to [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md).
-- Will be implemented by an [Obsidian adapter](ObsidianAdapters.md).
+- Is implemented by [ObsidianRelationshipTargetReader](ObsidianAdapters.md), with [ObsidianNoteRepository](ObsidianAdapters.md) supplying detached frontmatter relationships.
 - Currently has a temporary [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md).
 
 ## Must not own

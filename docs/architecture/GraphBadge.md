@@ -37,7 +37,7 @@ createGraphBadgeId(nodeId, linkTypeId): BadgeId;
 
 1. The temporary `O3NodeBadge` DOM wrapper emits a badge intent.
 2. [GraphController](GraphController.md) resolves the command and creates a [GraphBadgeRequest](GraphBadgeRequest.md).
-3. `GraphBadgeCommandPort` delegates the request to the matching legacy expansion operation.
+3. `GraphController` delegates the request to the badge application boundary. `GraphBadgeExpansionCoordinator` selects the runtime operation while the legacy adapter remains temporary.
 4. A later extraction will move that operation into [GraphExpansion](GraphExpansion.md) functions and apply its result to [GraphStore](GraphStore.md).
 
 The badge itself does not mutate graph or note state.

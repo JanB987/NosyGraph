@@ -67,6 +67,8 @@ The flow above is the guarded store-mode composition. The live Obsidian path sti
 - [GraphBadgeRequest](GraphBadgeRequest.md) carries resolved badge intent without host objects.
 - [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
 - [GraphBadgeToggleService](GraphBadgeToggleService.md) composes live graph state and relationship targets into a complete plan.
+- [GraphBadgeExpansionCoordinator](GraphBadgeExpansionCoordinator.md) routes normal, parent, and embedded badge expansion through a runtime port.
+- [GraphLegacyExpansionService](GraphLegacyExpansionService.md) owns compatibility expansion ownership and nested collapse ordering behind that port.
 - [GraphBadgeToggleExecutor](GraphBadgeToggleExecutor.md) applies a validated plan and reports its outcome.
 - [GraphStoreBadgeToggleExecutor](GraphStoreBadgeToggleExecutor.md) applies calculated transitions atomically and rejects stale asynchronous work.
 - [GraphBadgeToggleHandler](GraphBadgeToggleHandler.md) joins planning and execution behind one application operation.
@@ -252,13 +254,13 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [ ] Capture legacy anchor state and broaden host-event/lifecycle reconciliation.
 
 ## Validation during the migration
-
 Run `npm run typecheck` for the new host-neutral architecture and `npm run build` for the complete legacy plugin bundle. The architecture typecheck is deliberately scoped: dormant Working Memory extraction files currently reference modules that are not part of this package, and the active legacy files contain pre-existing strict-type errors. Expanding the strict boundary will be a gradual part of the refactor.
 
 ### Obsidian adapter extraction
 
 - [ObsidianNoteRepository](ObsidianAdapters.md) reads detached notes and relationship links.
 - [ObsidianRelationshipTargetReader](ObsidianAdapters.md) resolves configured relationship directions.
+- [ObsidianGraphLinkResolver](ObsidianGraphLinkResolver.md) owns synchronous frontmatter parsing and linkpath resolution for the legacy renderer.
 - [ObsidianNoteWriter](ObsidianAdapters.md) isolates frontmatter relationship and property writes.
 - [ObsidianNavigationAdapter](ObsidianAdapters.md) owns opening, reveal, and hover requests.
 - [ObsidianGraphWatcher](ObsidianAdapters.md) normalizes host lifecycle events.

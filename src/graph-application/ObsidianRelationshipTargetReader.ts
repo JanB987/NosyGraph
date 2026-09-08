@@ -6,6 +6,7 @@ export type ObsidianRelationshipDirection = "outgoing" | "incoming" | "both";
 
 export interface ObsidianRelationshipType {
   property: string;
+  properties?: readonly string[];
   direction?: ObsidianRelationshipDirection;
 }
 
@@ -28,10 +29,14 @@ export class ObsidianRelationshipTargetReader implements GraphRelationshipTarget
     const direction = config.direction ?? "outgoing";
     const paths: string[] = [];
     if (direction === "outgoing" || direction === "both") {
-      paths.push(...await this.options.notes.getOutgoingLinks(query.sourceNoteId, config.property));
+      for (const property of relationshipProperties(config)) {
+        paths.push(...await this.options.notes.getOutgoingLinks(query.sourceNoteId, property));
+      }
     }
     if (direction === "incoming" || direction === "both") {
-      paths.push(...await this.options.notes.getIncomingLinks(query.sourceNoteId, config.property));
+      for (const property of relationshipProperties(config)) {
+        paths.push(...await this.options.notes.getIncomingLinks(query.sourceNoteId, property));
+      }
     }
 
     const result: GraphRelationshipTarget[] = [];
@@ -49,4 +54,11 @@ export class ObsidianRelationshipTargetReader implements GraphRelationshipTarget
     }
     return result;
   }
+}
+
+function relationshipProperties(config: ObsidianRelationshipType): readonly string[] {
+  const values = [config.property, ...(config.properties ?? [])]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(values));
 }

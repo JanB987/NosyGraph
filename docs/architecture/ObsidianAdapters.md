@@ -23,7 +23,7 @@ getIncomingLinks(noteId, property): Promise<readonly NoteId[]>;
 
 Implements [GraphRelationshipTargetReader](GraphRelationshipTargetReader.md). It combines outgoing and incoming links according to link-type configuration, resolves property aliases, and preserves missing internal-note targets.
 
-During migration, [LegacyGraphRelationshipTargetAdapter](LegacyGraphRelationshipTargetAdapter.md) wraps the existing resolver instead.
+The legacy adapter remains available for isolated compatibility tests, but live normal badge planning now uses this Obsidian repository and reader directly.
 
 [ObsidianGraphExpansionNoteAdapter](ObsidianGraphExpansionNoteAdapter.md) is the first concrete read adapter for the new expansion pipeline. It converts vault files, cached frontmatter, and unresolved paths into `GraphNote` values without exposing Obsidian objects to the materializer.
 

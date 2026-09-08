@@ -14,7 +14,7 @@ In store mode, the view is the composition root:
 - Subscribe to store changes and request rendering.
 - Block unsafe writes during startup, hydration, and shutdown.
 
-The controller routes renderer and host intents. The view does not interpret badge, relationship, or force rules.
+The controller routes renderer and host intents. Badge planning and Obsidian relationship reads are application and adapter responsibilities; the view does not interpret those rules.
 
 ## Current live implementation
 
