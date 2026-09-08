@@ -155,6 +155,8 @@ Implemented as an experimental boundary in [GraphRenderer](GraphRenderer.md):
 - Add loop prevention for writes caused by the plugin itself.
 - Restore persisted state into store-mode initialization rather than replaying legacy toggles.
 
+`StoreGraphRuntime` now composes these boundaries for one detached document runtime. It keeps the semantic store revision separate from the kinematics frame sequence, routes renderer intents through `GraphController`, and excludes motion-only frames from persistence.
+
 ### Stage 7 — activation and removal
 
 - Add an explicit test-branch setting for store mode.

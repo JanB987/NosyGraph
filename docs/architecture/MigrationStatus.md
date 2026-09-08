@@ -63,3 +63,5 @@ A component moves from **experimental** to **live** only after:
 5. the production composition explicitly selects it.
 
 Until those conditions hold, the legacy path remains the runtime authority and the detached implementation remains evidence-generating code.
+
+| Integrated store runtime | **Implemented; experimental** | StoreGraphRuntime | Composes store, scene, kinematics, physics, renderer, controller, persistence, and optional lifecycle coordination; semantic revisions remain separate from motion-frame sequences. Production GraphView/GraphEngine composition remains live. |
