@@ -75,3 +75,9 @@ Until those conditions hold, the legacy path remains the runtime authority and t
 | Evidence-gated store default | **Implemented; experimental** | GraphRuntimeActivationPolicy and GraphRuntimeModeSelector | Store becomes the selector default only when controlled physics, manual badge, interactive, persistence, lifecycle, ownership, and automated evidence are all recorded. Current evidence intentionally keeps legacy as default. |
 
 | Legacy ownership cleanup | **Blocked; audit complete** | LegacyOwnershipAudit and LegacyOwnershipAudit tests | No legacy arrays, executors, solver paths, or shadow services are removable yet: production GraphView/GraphEngine and pending parity diagnostics still depend on them. |
+
+## Architecture audit
+
+| Area | Status | Current owner or entry point | Evidence and limit |
+|---|---|---|---|
+| Architecture boundary audit | **Implemented; partial live cutover** | ArchitectureAudit and ArchitectureAudit.test.ts | Domain and controller boundaries are guarded; physics is injectable; GraphView still constructs GraphEngine and production motion remains legacy-owned. See ArchitectureAudit.md. |

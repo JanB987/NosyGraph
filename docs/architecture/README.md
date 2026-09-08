@@ -23,6 +23,8 @@ Obsidian event or user input
           +--------------> GraphRenderer
             
 GraphController <--------> Obsidian adapters
+
+The flow above is the guarded store-mode composition. The live Obsidian path still composes GraphView directly with GraphEngine until the activation gates and ownership audit are complete.
 ```
 
 ## Class map
@@ -56,6 +58,7 @@ GraphController <--------> Obsidian adapters
 - [GraphRuntimeModeSelector](GraphRuntimeModeSelector.md) selects one guarded mode at graph creation and closes before rollback to legacy.
 - [GraphRuntimeActivationPolicy](GraphRuntimeActivationPolicy.md) makes store mode default only after all parity and ownership evidence is recorded.
 - [Legacy ownership audit](LegacyOwnershipAudit.md) records the live dependencies that still block D6 cleanup.
+- [Architecture audit](ArchitectureAudit.md) checks source boundaries and records which orchestration limits remain.
 - [LegacyGraphRuntimeState](LegacyGraphRuntimeState.md) exposes legacy state as read-only through that boundary.
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
@@ -112,7 +115,7 @@ GraphController <--------> Obsidian adapters
 ## Rules of the architecture
 
 1. A Markdown note and a visible graph-node instance are different objects.
-2. Runtime state has one owner: `GraphStore`.
+2. In store mode, runtime state has one owner: `GraphStore`. Legacy mode keeps `GraphEngine` as owner until the cutover gates pass.
 3. Queries never return mutable internal collections.
 4. Domain objects do not call Obsidian APIs or handle DOM events.
 5. The renderer emits intents; `GraphController` decides their meaning.

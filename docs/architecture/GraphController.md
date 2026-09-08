@@ -6,7 +6,7 @@
 
 Current implementation: [`src/graph-application/GraphController.ts`](../../src/graph-application/GraphController.ts)
 
-Selection and normal badge routing are live bridges. Pinning, dragging, root membership, and relationship refresh now have complete command vocabulary and explicit ports, while the legacy engine remains the runtime owner of those mutations.
+Selection and normal badge routing are live bridges. Pinning, dragging, root membership, and relationship refresh have complete command vocabulary and explicit ports, while the legacy engine remains the runtime owner of those mutations. The controller is a tested application boundary, but it is not yet the live GraphView orchestrator.
 
 ## Command flow
 
@@ -40,7 +40,7 @@ executeBadge(command: GraphBadgeCommand): Promise<GraphBadgeCommandResult>;
 
 The controller resolves the stable badge ID and its node through [GraphQueries](GraphQueries.md), then creates a serializable [GraphBadgeRequest](GraphBadgeRequest.md). It passes that request to `GraphBadgeCommandPort`, currently implemented by [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md). Unknown badges, missing nodes, and unavailable ports return explicit unhandled results.
 
-Modifier-aware badge input crosses the same boundary through executeBadgeInteraction(command). The classifier preserves the legacy precedence: Alt opens link input; Ctrl/Cmd without Shift expands a chain; Ctrl/Cmd with Shift and ordinary clicks toggle. Parent-semantic badges retain semantic "parent" in the resolved request, so the legacy adapter bypasses the normal-link toggle handler and invokes parent expansion behavior.
+Modifier-aware badge input crosses the same boundary through `executeBadgeInteraction(command)`. The classifier preserves the legacy precedence: Alt opens link input; Ctrl/Cmd without Shift expands a chain; Ctrl/Cmd with Shift and ordinary clicks toggle. Parent-semantic badges retain semantic "parent" in the resolved request, so the legacy adapter bypasses the normal-link toggle handler and invokes parent expansion behavior.
 
 ### Pinning
 
@@ -80,7 +80,7 @@ A refresh identifies a trimmed source path, changed property names, and an optio
 
 The ports are temporary host adapters. They make the command contract testable without importing Obsidian or DOM types and let each legacy operation move behind a replacement implementation independently. A missing port is reported as an unhandled result; the controller never silently mutates legacy collections as a fallback.
 
-The active engine still interprets pointer events and owns live pin, drag, root, and relationship state. Production composition has not yet selected store-owned implementations for those families.
+The active engine still interprets pointer events and owns live pin, drag, root, relationship, lens, and container state. Production composition has not yet selected store-owned implementations for those families. GraphView remains responsible for connecting the current engine, so this controller boundary is implemented and verified in isolation while the final orchestration is partial.
 
 ## Connections
 
