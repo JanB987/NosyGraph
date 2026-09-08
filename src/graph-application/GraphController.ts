@@ -6,6 +6,11 @@ import {
 } from "./GraphBadgeRequest";
 import type { GraphQueries } from "./GraphQueries";
 import { GraphStore } from "./GraphStore";
+import {
+  type GraphSceneCommand,
+  type GraphSceneCommandPort,
+  type GraphSceneCommandResult
+} from "./GraphSceneCommand";
 
 /** A detached point used by pinning and drag commands. */
 export interface GraphPoint {
@@ -190,6 +195,7 @@ export interface GraphControllerOptions {
   dragPort?: GraphDragCommandPort;
   rootPort?: GraphRootCommandPort;
   relationshipPort?: GraphRelationshipRefreshCommandPort;
+  scenePort?: GraphSceneCommandPort;
 }
 
 /**
@@ -315,6 +321,18 @@ export class GraphController {
     }
     await port.executeRoot(command);
     return { handled: true };
+  }
+
+  async executeScene(command: GraphSceneCommand): Promise<GraphSceneCommandResult> {
+    const port = this.options.scenePort;
+    if (!port) {
+      return {
+        handled: false,
+        command: command.type,
+        reason: "scene-port-unavailable"
+      };
+    }
+    return await port.executeScene(command);
   }
 
   async executeRelationshipRefresh(

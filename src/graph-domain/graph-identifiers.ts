@@ -12,6 +12,7 @@ export type LinkTypeId = string;
 export type ExpansionId = string;
 export type GraphContextId = string;
 export type LensId = string;
+export type GroupId = string;
 export type GraphDocumentId = string;
 export type BadgeId = string;
 export type ContainerId = string;

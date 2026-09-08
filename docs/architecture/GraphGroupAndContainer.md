@@ -40,7 +40,7 @@ interface GraphContainer {
 
 - Groups evaluate [GraphNote](GraphNote.md) properties.
 - Containers refer to [GraphNodeInstance](GraphNodeInstance.md) IDs.
-- Both are stored in [GraphStore](GraphStore.md).
+- Both are owned by the experimental [GraphSceneStore](GraphSceneStore.md) through [GraphSceneCommand](../../src/graph-application/GraphSceneCommand.ts).
 - Containers affect [PhysicsEngine](PhysicsEngine.md); groups do not directly change physics.
 - Both provide render metadata to [GraphRenderer](GraphRenderer.md).
 

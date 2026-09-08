@@ -33,6 +33,7 @@ GraphController <--------> Obsidian adapters
 - [GraphController](GraphController.md) executes user and host commands.
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
 - [GraphStoreInitializer](GraphStoreInitializer.md) bootstraps store mode from one validated host-adapted snapshot.
+- [GraphSceneStore](GraphSceneStore.md) owns detached lens, group, and container records through explicit lifecycle commands.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
@@ -145,6 +146,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Route the older parent-overlay badge controls through the same command boundary.
 - [x] Complete controller routing for selection, normal badges, pinning, dragging, root changes, and relationship refresh through explicit host ports.
 - [x] Migrate parent-semantic badges, Alt-click input, and Ctrl/Cmd-click chain expansion through characterized controller commands.
+- [x] Add experimental GraphSceneStore ownership and controller commands for lens, group, and container creation, updates, and removal.
 - [x] Extract legacy badge-target resolution into a dedicated command adapter.
 - [x] Introduce a host-neutral badge expansion request before extracting expansion calculations.
 - [x] Characterize the inputs and results of normal badge toggle expansion.

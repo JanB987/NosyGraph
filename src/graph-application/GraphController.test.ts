@@ -4,6 +4,7 @@ import type { GraphBadgeRequest } from "./GraphBadgeRequest";
 import { GraphController } from "./GraphController";
 import { GraphQueries } from "./GraphQueries";
 import { GraphStore } from "./GraphStore";
+import { GraphSceneStore } from "./GraphSceneStore";
 
 function setup(): { controller: GraphController; store: GraphStore } {
   const store = new GraphStore();
@@ -368,5 +369,39 @@ describe("GraphController interaction and host commands", () => {
       position: { x: Number.NaN, y: 2 }
     })).toEqual({ handled: false, nodeId: "A.md", reason: "invalid-position" });
     expect(calls).toEqual([]);
+  });
+});
+describe("GraphController scene commands", () => {
+  it("delegates lens, group, and container lifecycle commands to the scene owner", async () => {
+    const sceneStore = new GraphSceneStore();
+    const controller = new GraphController(new GraphStore(), { scenePort: sceneStore });
+
+    expect(await controller.executeScene({
+      type: "create-group",
+      group: {
+        id: "group:status",
+        label: "Status",
+        property: "status",
+        operator: "equals",
+        value: "open",
+        color: "#4488cc",
+        priority: 1
+      }
+    })).toMatchObject({ handled: true, changed: true, revision: 1 });
+
+    expect(sceneStore.getSnapshot().groups[0]?.id).toBe("group:status");
+  });
+
+  it("reports an unavailable scene boundary explicitly", async () => {
+    const controller = new GraphController(new GraphStore());
+
+    expect(await controller.executeScene({
+      type: "remove-lens",
+      lensId: "lens:missing"
+    })).toEqual({
+      handled: false,
+      command: "remove-lens",
+      reason: "scene-port-unavailable"
+    });
   });
 });
