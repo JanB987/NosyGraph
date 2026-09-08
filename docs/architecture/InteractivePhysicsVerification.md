@@ -60,3 +60,7 @@ The repository has automated evidence for the host-neutral and legacy comparison
 - [Badge toggle shadow regression](BadgeToggleShadowRegression.md) records expansion and collapse checks.
 
 The live pass is currently **blocked**. Obsidian is running, but this session exposes no callable `node_repl`, `@oai/sky`, or equivalent Computer Use tool for observing elements and performing pointer gestures safely. Re-run this matrix in a session with Computer Use enabled, or execute the scenarios manually in Obsidian and fill the result and evidence columns above. A9 should be marked complete only after the matrix has recorded results for all applicable scenarios.
+
+## E2 execution record — 2026-09-08
+
+**Result: Blocked.** Obsidian processes were detected and the vault configuration is present, but this session exposed no callable node_repl, @oai/sky, or equivalent Computer Use interface. No pointer gesture or UI-state claim was made. All matrix scenarios remain Blocked until the matrix is run manually in Obsidian or from a session with Computer Use enabled.
