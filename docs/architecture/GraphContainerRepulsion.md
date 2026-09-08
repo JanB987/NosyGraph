@@ -15,6 +15,6 @@ Containers do not repel when they are identical, one contains the other's origin
 - Will extend [GraphForceAccumulator](GraphForceAccumulator.md).
 - Implements container-pair behavior from [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Current status
 
-[GraphForceAccumulator](GraphForceAccumulator.md) now applies eligible pair reactions to origin nodes. The next extraction addresses post-integration container anchoring and member translation.
+The staged engine now applies eligible pair reactions, then performs confinement and anchoring in the characterized order.

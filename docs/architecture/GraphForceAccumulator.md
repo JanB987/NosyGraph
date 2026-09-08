@@ -34,6 +34,6 @@ Container-pair origin transfer has a broader legacy eligibility rule: only a per
 - Uses [GraphPhysicsConstraints](GraphPhysicsConstraints.md) for transient eligibility.
 - Produces deltas for a future integration stage in [GraphPhysicsEngine](GraphPhysicsEngine.md).
 
-## Next extraction
+## Current status
 
-[GraphMotionIntegrator](GraphMotionIntegrator.md) and [GraphContainerConfinement](GraphContainerConfinement.md) handle later stages. The next extraction addresses container anchoring and member translation.
+The staged engine now applies integration, confinement, anchoring, and the second confinement pass. Remaining work is live runtime wiring and parity validation.

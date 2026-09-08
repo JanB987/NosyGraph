@@ -26,6 +26,6 @@ For centers closer than `0.001`, the calculation uses the legacy stable FNV-1a a
 - Complements [GraphPairwiseRepulsion](GraphPairwiseRepulsion.md).
 - Implements the spring section recorded in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Current status
 
-[GraphForceAccumulator](GraphForceAccumulator.md) composes link springs and node repulsion with explicit eligibility policies. The next extraction adds center and embedded-container gravity.
+Center gravity and embedded-container gravity are now composed by GraphForceAccumulator with explicit eligibility policies.

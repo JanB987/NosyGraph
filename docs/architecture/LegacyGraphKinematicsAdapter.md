@@ -25,4 +25,4 @@ Current implementation: [`src/graph-application/LegacyGraphKinematicsAdapter.ts`
 
 `GraphEngine.captureLegacyKinematicsFrame()` copies every current node's identity, position, and velocity. It uses the engine's shared topology revision and a caller-supplied sequence. The method does not publish to a store or affect the animation loop.
 
-The next extraction composes input and legacy-frame captures into one version-checked diagnostic sample.
+GraphPhysicsShadowSampleService now composes input and legacy-frame captures into one version-checked diagnostic sample.

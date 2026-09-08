@@ -27,4 +27,4 @@ The sample is `ready` only when both captures have the same structural revision.
 
 `GraphEngine.captureArchitecturePhysicsSample()` explicitly captures one sample. The service delegates back to the engine's two detached capture methods, so both sides use the caller's sequence and the engine's topology revision. Nothing calls it from the animation loop.
 
-The next extraction adds a replacement-engine frame runner outside the production animation loop.
+GraphPhysicsExperimentRunner can now run a replacement-engine frame sequence outside the production animation loop; parity evidence remains caller-supplied and incomplete.

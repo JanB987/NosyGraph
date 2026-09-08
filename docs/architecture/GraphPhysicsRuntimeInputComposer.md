@@ -31,6 +31,6 @@ Diagnostics from each projector remain grouped as `graph`, `constraints`, and `c
 - Composes [GraphPhysicsContainerProjector](GraphPhysicsContainerProjector.md).
 - Produces the single input consumed by [PhysicsEngine](PhysicsEngine.md).
 
-## Next extraction
+## Current status
 
-[GraphPhysicsEngine](GraphPhysicsEngine.md) now supplies the compiled host-neutral interface and deterministic test implementation. The next extraction coordinates stepping and protected frame publication.
+[GraphPhysicsCoordinator](GraphPhysicsCoordinator.md) now loads this input, steps a selected engine, and publishes protected frames. Live GraphEngine capture remains separate from this experimental path.

@@ -40,4 +40,4 @@ Adapter-level malformed-entry diagnostics remain separate from snapshot-level pr
 - Hotkey, topology, Alt-drag, lens-owner, and dragged-descendant freezes.
 - Parent and embedded container membership, bounds, origins, and embedded gravity.
 
-The captured state is composed with the semantic snapshot by [GraphPhysicsShadowInputService](GraphPhysicsShadowInputService.md). The next extraction wires that service to `GraphEngine` for explicit inspection, outside the animation loop.
+The captured state is composed with the semantic snapshot by GraphPhysicsShadowInputService and is available through explicit GraphEngine diagnostics outside the animation loop.

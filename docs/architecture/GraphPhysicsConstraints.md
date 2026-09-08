@@ -48,4 +48,4 @@ The function copies arrays and coordinate objects so input producers, physics, a
 
 ## Constraint projection
 
-[GraphPhysicsConstraintProjector](GraphPhysicsConstraintProjector.md) now derives persistent pins from a snapshot and combines them with detached transient input. Container membership and boundary constraints remain a separate next step.
+GraphPhysicsConstraintProjector now derives persistent pins and detached transient constraints. Container membership and boundary constraints are supplied by the companion container projector.

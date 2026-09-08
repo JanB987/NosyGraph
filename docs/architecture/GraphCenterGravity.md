@@ -23,6 +23,6 @@ This function does not decide whether a lock, drag, direction target, or freeze 
 - Complements [GraphForceAccumulator](GraphForceAccumulator.md).
 - Implements the centering section recorded in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Current status
 
-[GraphForceAccumulator](GraphForceAccumulator.md) now adds eligible center gravity. The next extraction handles damping, constraint enforcement, and position integration.
+Center gravity is now part of the staged force accumulator. Remaining work is live input capture and non-zero-step parity validation.

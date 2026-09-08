@@ -43,4 +43,4 @@ Legacy mode returns `runtime-read-only` when application code attempts to apply 
 
 ## Kinematics separation
 
-[GraphKinematicsStore](GraphKinematicsStore.md) now provides an independent sequence for physics frames. The next extraction composes a compatible frame into a detached render snapshot; neither boundary is connected to live production composition yet.
+[GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) now overlays compatible frames without mutating either source. Remaining work is live render-snapshot composition and activation-gate validation.

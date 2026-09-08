@@ -45,3 +45,7 @@ That boundary is the completed architecture surface, including its automated tes
 A full npx tsc -p tsconfig.json --noEmit still fails in legacy production files. The failures include unresolved imports from the incomplete Working Memory extraction tree and existing strict-type errors in GraphView.ts, GraphEngine.ts, main.ts, and related legacy/view files. Those files remain outside the strict architecture boundary because they are the live legacy composition and are not yet type-clean enough to join it.
 
 The complete plugin bundle is still validated by npm run build, which passed during this audit. The exclusion list and reasons are executable in ARCHITECTURE_VALIDATION_SCOPE and guarded by ArchitectureAudit.test.ts; an exclusion must be removed only after its source errors and missing package dependencies are resolved.
+
+## Cleanup status
+
+E10-E14 found no proven obsolete owner. The live GraphView and GraphEngine composition, supported interactions, and shadow/parity diagnostics still have documented callers. The audit therefore keeps all legacy and experimental source paths in place while their activation gates remain incomplete.

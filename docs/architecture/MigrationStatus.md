@@ -90,3 +90,7 @@ The reproducible checkpoint is recorded in [Baseline.md](Baseline.md).
 ## E10 artifact audit
 
 The inventory and cleanup prerequisites are recorded in [ArtifactAudit.md](ArtifactAudit.md). No generated, diagnostic, or legacy artifact was deleted during E10.
+
+## E10-E14 cleanup status
+
+The artifact inventory is complete, the legacy dependency audit still reports zero removable entries, and no source or generated artifact was deleted. Post-audit tests, scoped typecheck, build, and formatting validation pass. Interactive validation remains pending under E2, so no experimental component was promoted and no legacy owner was removed.

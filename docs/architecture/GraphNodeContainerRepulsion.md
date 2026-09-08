@@ -22,6 +22,6 @@ The function returns equal and opposite node and origin deltas. [GraphPhysicsSet
 - Will extend [GraphForceAccumulator](GraphForceAccumulator.md).
 - Implements the node-container section of [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Current status
 
-[GraphForceAccumulator](GraphForceAccumulator.md) now applies node-container force with separate external-node and origin eligibility. The next extraction adds container-to-container repulsion.
+Container-to-container repulsion is now composed by GraphForceAccumulator with explicit origin eligibility.

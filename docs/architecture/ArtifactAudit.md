@@ -37,7 +37,7 @@ The architecture documentation is source support, not disposable notes. Retain t
 - GraphModeRegression.md
 - LegacySolverParityAudit.md
 
-A wording cleanup is still required in several historical extraction pages. They contain forward-looking phrases such as next extraction or still missing even though later activities implemented parts of those stages. The affected pages include GraphPhysicsEngine.md, GraphMotionIntegrator.md, GraphCenterGravity.md, GraphLinkSpring.md, GraphForceAccumulator.md, GraphPairwiseRepulsion.md, GraphNodeContainerRepulsion.md, GraphContainerRepulsion.md, GraphPhysicsConstraintProjector.md, GraphPhysicsRuntimeInputComposer.md, LegacyGraphKinematicsAdapter.md, GraphPhysicsShadowObserver.md, and GraphPhysicsShadowSampleService.md.
+The extraction-page wording was refreshed during E14 so completed force, confinement, anchoring, shadow, and coordinator work is described as implemented. Remaining experimental and live-wiring limitations are stated explicitly on the affected pages.
 
 Decision: do not delete these pages. Refresh their status wording as a separate documentation cleanup after E2 and E3 evidence.
 
@@ -61,3 +61,16 @@ StoreGraphRuntime, StagedGraphPhysicsEngine, GraphRuntimeModeSelector, GraphScen
 4. Generated main.js: keep as the installed bundle; regenerate it from source for releases.
 
 E10 is an inventory only. No artifact was deleted or edited manually.
+## E13 validation
+
+No source cleanup was performed because E12 found no removable owner. The post-audit validation passed:
+
+- npm test: 77 test files and 369 tests passed.
+- npm run typecheck: passed for tsconfig.architecture.json.
+- npm run build: passed; generated main.js was restored after the build.
+- git diff --check: passed.
+- Interactive scenarios were not rerun because no production behavior changed; E2 remains blocked by unavailable UI control.
+
+## E14 documentation status
+
+LegacyOwnershipAudit.md now contains the concrete dependency map and no-deletion decision. MigrationStatus.md and this audit retain the known interactive, parity, and full-tree typecheck limitations. No status was promoted from experimental to live.

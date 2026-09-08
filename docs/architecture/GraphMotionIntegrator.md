@@ -24,8 +24,8 @@ Transient pin-reposition locks precede persistent pins so the temporary target c
 - Consumes deltas from [GraphForceAccumulator](GraphForceAccumulator.md).
 - Interprets [GraphPhysicsConstraints](GraphPhysicsConstraints.md).
 - Produces an unsequenced [GraphKinematicsFrame](GraphKinematicsFrame.md).
-- Does not yet apply parent or embedded bounds; boundary confinement is the next extraction.
+- Does not apply parent or embedded bounds; the staged engine delegates those boundaries to GraphContainerConfinement.
 
-## Next extraction
+## Current status
 
 [StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) now composes integration, [confinement](GraphContainerConfinement.md), [anchoring](GraphContainerAnchoring.md), and confinement again. Anchoring retains effective fixed coordinates separately from integration's pin/lock/drag/direction targets.

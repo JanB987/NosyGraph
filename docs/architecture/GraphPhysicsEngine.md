@@ -42,7 +42,7 @@ It intentionally applies no forces, settings, pins, or containers. Those behavio
 
 ## Staged implementation
 
-[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) composes the pure legacy-compatible force, integration, and confinement stages extracted so far. It remains experimental and incomplete; container repulsion and anchor behavior are still missing.
+[StagedGraphPhysicsEngine](StagedGraphPhysicsEngine.md) composes the extracted force, integration, confinement, anchoring, and second-confinement stages. It remains experimental because live production wiring, dynamic input capture, direction-target parity, nested ancestry synchronization, and non-zero-step parity evidence are incomplete.
 
 ## Connections
 
@@ -51,6 +51,6 @@ It intentionally applies no forces, settings, pins, or containers. Those behavio
 - Is isolated from Obsidian, DOM/canvas rendering, notes, badges, and persistence.
 - Must eventually conform to [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 
-## Next extraction
+## Current status
 
 [GraphPhysicsCoordinator](GraphPhysicsCoordinator.md) now loads composed input, steps this port, and publishes frames through `GraphKinematicsStore` with sequence and structural-revision protection.

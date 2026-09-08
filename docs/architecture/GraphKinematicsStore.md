@@ -41,4 +41,4 @@ An accepted frame advances even when its coordinates equal the previous frame. S
 
 ## Snapshot composition
 
-[GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) now overlays compatible frames without mutating either source. The next extraction defines the smaller node and edge projections that physics actually consumes.
+GraphSnapshotKinematicsComposer now overlays compatible frames without mutating either source. Remaining work is live render-snapshot wiring and activation-gate validation.

@@ -37,6 +37,6 @@ Ignoring a missing-node transient constraint is safe for a read projection. The 
 - Produces input for [PhysicsEngine](PhysicsEngine.md).
 - Does not mutate [GraphStore](GraphStore.md) or advance [GraphKinematicsStore](GraphKinematicsStore.md).
 
-## Next extraction
+## Current status
 
-[GraphPhysicsContainers](GraphPhysicsContainers.md) now models container membership, bounds, ancestry, and anchor relationships. Its validated projector remains the next extraction.
+GraphPhysicsContainerProjector now supplies container membership, bounds, ancestry, and anchor relationships to the staged runtime.

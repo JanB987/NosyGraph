@@ -28,6 +28,6 @@ Two less-obvious legacy behaviors are intentional:
 - Implements the node-node repulsion section recorded in [Legacy Physics Characterization](LegacyPhysicsCharacterization.md).
 - Will become one component of a parity-capable [GraphPhysicsEngine](GraphPhysicsEngine.md).
 
-## Next extraction
+## Current status
 
-[GraphLinkSpring](GraphLinkSpring.md) now supplies the pure boundary-based spring. The next extraction composes both calculations in a stateless force accumulator.
+GraphForceAccumulator now composes link springs, pairwise repulsion, gravity, and container interactions with explicit eligibility policies.
