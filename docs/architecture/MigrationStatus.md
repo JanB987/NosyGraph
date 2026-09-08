@@ -8,7 +8,6 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 - **Proposed** means the design or follow-up is recorded, but the production behavior is not implemented or has not passed its activation gate.
 
 ## Current runtime
-
 | Area | Status | Current owner or entry point | Evidence and limit |
 |---|---|---|---|
 | Obsidian view lifecycle and rendering | **Live** | GraphView and the legacy GraphEngine | Existing production path. |
@@ -23,11 +22,10 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 | Obsidian note writes | **Implemented; experimental** | ObsidianNoteWriter through GraphController note-write commands | Relationship and frontmatter mutation gateways are covered; live handlers remain the runtime owner. |
 | Obsidian navigation | **Implemented; experimental** | ObsidianNavigationAdapter through GraphController navigation commands | Open, reveal, and hover results are normalized; live view adoption remains pending. |
 | Obsidian host events | **Implemented; experimental** | ObsidianGraphWatcher | Event normalization and subscription cleanup are tested; GraphView lifecycle registration remains live. |
-
 | Persistence and restoration | **Implemented; experimental** | GraphDocumentPersistence and ObsidianGraphDocumentRepository | Versioned direct snapshot restore preserves IDs, ownership, expansions, scenes, layouts, and viewports; live GraphView hydration still uses legacy state paths. |
+| Lifecycle and asynchronous host changes | **Implemented; experimental** | GraphLifecycleCoordinator with ObsidianGraphWatcher | Stale reads are invalidated, rename/delete/metadata events are routed, self-writes are suppressed, and subscriptions/timers are cleaned up; GraphView still owns live lifecycle state. |
 
 ## Implemented but detached
-
 | Area | Status | What is safe to rely on |
 |---|---|---|
 | Host-neutral graph domain records | **Implemented** | Notes, node instances, edges, badges, expansions, lenses, change sets, and explicit ownership contracts are tested independently of Obsidian. |

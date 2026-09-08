@@ -36,6 +36,7 @@ GraphController <--------> Obsidian adapters
 - [GraphSceneStore](GraphSceneStore.md) owns detached lens, group, and container records through explicit lifecycle commands.
 - [GraphDocumentPersistence](GraphDocument.md) serializes and restores committed graph and scene state directly.
 - [ObsidianGraphDocumentRepository](ObsidianAdapters.md) connects persistence to the host storage gateway.
+- [GraphLifecycleCoordinator](GraphLifecycleCoordinator.md) owns document generations, async cancellation, event lifetime, timer cleanup, and write-loop suppression.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
@@ -237,7 +238,6 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 
 Run `npm run typecheck` for the new host-neutral architecture and `npm run build` for the complete legacy plugin bundle. The architecture typecheck is deliberately scoped: dormant Working Memory extraction files currently reference modules that are not part of this package, and the active legacy files contain pre-existing strict-type errors. Expanding the strict boundary will be a gradual part of the refactor.
 
-
 ### Obsidian adapter extraction
 
 - [ObsidianNoteRepository](ObsidianAdapters.md) reads detached notes and relationship links.
@@ -248,5 +248,6 @@ Run `npm run typecheck` for the new host-neutral architecture and `npm run build
 
 - [x] Complete Obsidian adapter boundaries for note reads and writes, relationship resolution, navigation, and normalized host events.
 
-
 - [x] Add versioned direct GraphDocument persistence and restoration for committed identities, ownership, expansions, scenes, layouts, and viewports.
+
+- [x] Add lifecycle coordination for stale async work, host rename/delete/metadata events, write-loop suppression, reopen behavior, and resource cleanup.

@@ -68,3 +68,8 @@ The implementations use injected host gateways so tests do not construct Obsidia
 ### ObsidianGraphDocumentRepository
 
 C7 adds `ObsidianGraphDocumentRepository`, backed by an injected storage gateway. It saves and loads the versioned `GraphDocument` JSON and restores committed state directly through `GraphDocumentPersistence`.
+
+
+## Lifecycle composition
+
+ObsidianGraphWatcher supplies normalized host events to GraphLifecycleCoordinator. The coordinator owns subscription lifetime, generation invalidation, delayed work, and write-loop suppression; the event listener decides whether a rename, delete, or metadata change triggers document restoration or relationship refresh.
