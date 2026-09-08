@@ -65,3 +65,5 @@ A component moves from **experimental** to **live** only after:
 Until those conditions hold, the legacy path remains the runtime authority and the detached implementation remains evidence-generating code.
 
 | Integrated store runtime | **Implemented; experimental** | StoreGraphRuntime | Composes store, scene, kinematics, physics, renderer, controller, persistence, and optional lifecycle coordination; semantic revisions remain separate from motion-frame sequences. Production GraphView/GraphEngine composition remains live. |
+
+| Store-mode activation gates | **Implemented; experimental** | StoreModeActivationGates and StoreGraphActivationGate tests | Supported detached operations are checked against a mutable legacy-source fixture; unsupported commands fail explicitly. Manual B01–B14 parity and interactive Obsidian evidence remain activation limits. |

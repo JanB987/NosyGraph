@@ -38,6 +38,7 @@ GraphController <--------> Obsidian adapters
 - [ObsidianGraphDocumentRepository](ObsidianAdapters.md) connects persistence to the host storage gateway.
 - [GraphLifecycleCoordinator](GraphLifecycleCoordinator.md) owns document generations, async cancellation, event lifetime, timer cleanup, and write-loop suppression.
 - [StoreGraphRuntime](StoreGraphRuntime.md) composes the detached stores, renderer, physics coordinator, commands, persistence, and lifecycle into one document runtime.
+- [Store-mode activation gates](StoreModeActivationGates.md) records D2 verification and the remaining manual activation limits.
 - [GraphKinematicsStore](GraphKinematicsStore.md) independently owns the latest high-frequency motion frame.
 - [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md) safely overlays compatible motion onto detached semantic snapshots.
 - [GraphPhysicsInputProjector](GraphPhysicsInputProjector.md) strips snapshots down to detached physics-facing data.
@@ -180,6 +181,7 @@ See [Migration status](MigrationStatus.md) for the canonical distinction between
 - [x] Compose compatible kinematics frames into detached render snapshots.
 - [x] Add the experimental [GraphRenderer](GraphRenderer.md) boundary for detached drawing and hit testing.
 - [x] Integrate renderer, physics, commands, persistence, and lifecycle behind StoreGraphRuntime while keeping semantic revisions separate from motion-frame sequences.
+- [x] Verify store-mode activation gates, detached supported operations, and visible unsupported-command failures.
 - [x] Extract host-neutral physics input projections from semantic snapshots and current motion.
 - [x] Characterize legacy physics inputs for contexts, pinning, and link-force settings.
 - [x] Introduce host-neutral physics settings and LinkType force-policy normalization.
