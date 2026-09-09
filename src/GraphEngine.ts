@@ -384,7 +384,11 @@ export interface GraphEngineMenuOptions {
     y?: number;
     pinned: boolean;
   }) => Promise<void> | void;
-  onEmbeddedGraphRuntimeChanged?: (ownerGraphPath: string, instanceId?: string) => Promise<void> | void;
+  onEmbeddedGraphRuntimeChanged?: (
+    ownerGraphPath: string,
+    instanceId?: string,
+    reason?: "badge-expansion" | "node-position"
+  ) => Promise<void> | void;
   onGraphRuntimeChanged?: () => Promise<void> | void;
   onEmbeddedRootRemoveRequested?: (payload: {
     ownerGraphPath: string;
@@ -10233,7 +10237,7 @@ export class GraphEngine {
           node.lockY = position.y;
         }
       }
-      void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId);
+      void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId, "badge-expansion");
       this.reheatSimulation(0.16, "embedded badge mutation refresh");
     };
 
@@ -10631,7 +10635,7 @@ export class GraphEngine {
         : { kind: "filter" });
       this.addEmbeddedVisibleLinkTypeEdges(container.key);
       if (persist) {
-        void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId);
+        void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId, "badge-expansion");
       }
       this.badgesDirty = true;
       this.requestRender();
@@ -10714,7 +10718,7 @@ export class GraphEngine {
       );
     }
     if (persist) {
-      void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId);
+      void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId, "badge-expansion");
     }
     this.nodeConnectionCountsDirty = true;
     this.badgesDirty = true;
@@ -10887,7 +10891,7 @@ export class GraphEngine {
     const sourceBadgeKey = this.badgeKey(sourceNode.id, property);
     if (!this.expandedByBadge.has(sourceBadgeKey)) {
       this.toggleEmbeddedNodeExpansion(sourceNode, linkType, false);
-      void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId);
+      void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId, "badge-expansion");
       return;
     }
 
@@ -10911,7 +10915,7 @@ export class GraphEngine {
         for (const candidate of candidates) {
           this.toggleEmbeddedNodeExpansion(candidate, linkType, false);
         }
-        void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId);
+        void this.menuOptions.onEmbeddedGraphRuntimeChanged?.(ownerPath, instanceId, "badge-expansion");
         return;
       }
 

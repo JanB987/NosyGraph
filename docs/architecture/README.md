@@ -97,6 +97,7 @@ The flow above is the guarded store-mode composition. The live Obsidian path sti
 - [GraphCollapseChangeSet](GraphCollapseChangeSet.md) safely removes expansion subtrees while preserving shared ownership.
 - [GraphEdge and LinkType](GraphEdgeAndLinkType.md) separate visible edges from relationship rules.
 - [GraphLens](GraphLens.md) defines a viewport into another graph context.
+- [EmbeddedGraphPersistencePolicy](EmbeddedGraphPersistencePolicy.md) defines ownership and initialization rules for runtime state created inside lenses.
 - [GraphGroup and GraphContainer](GraphGroupAndContainer.md) separate visual classification from spatial ownership.
 
 ### Technical boundaries

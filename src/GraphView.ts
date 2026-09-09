@@ -18,6 +18,7 @@ import {
 import { O3GraphDependencyWatcher } from "./O3GraphDependencyWatcher";
 import { O3GraphState, type O3GraphEmbeddedGraphState, type O3GraphEmbeddedLensState, type O3GraphRuntimeNodeSnapshot } from "./O3GraphState";
 import { O3GraphDocumentStore, type O3GraphDocumentWriteReason } from "./O3GraphDocumentStore";
+import { shouldPersistEmbeddedGraphRuntime } from "./graph-application/EmbeddedGraphPersistencePolicy";
 import { ObsidianGraphLinkInputHandler } from "./ObsidianGraphLinkInputHandler";
 import { ObsidianGraphLinkMutationHandler } from "./ObsidianGraphLinkMutationHandler";
 import { ObsidianGraphNodeOpenHandler } from "./ObsidianGraphNodeOpenHandler";
@@ -351,7 +352,7 @@ export class BasesGraphView extends FileView {
           this.engine.scheduleUnlock(runtimeOrigin);
         }
         if (ownerGraphPath) {
-          void this.persistEmbeddedGraphRuntime(ownerGraphPath, payload.ownerInstanceId);
+          void this.persistEmbeddedGraphRuntime(ownerGraphPath, payload.ownerInstanceId, "badge-expansion");
         } else {
           void this.writeGraphState("badge-expansion");
         }
@@ -430,10 +431,10 @@ export class BasesGraphView extends FileView {
         );
       },
       onEmbeddedNodePositionChanged: (payload) => {
-        return this.persistEmbeddedGraphRuntime(payload.ownerGraphPath, payload.instanceId);
+        return this.persistEmbeddedGraphRuntime(payload.ownerGraphPath, payload.instanceId, "node-position");
       },
-      onEmbeddedGraphRuntimeChanged: (ownerGraphPath, instanceId) => {
-        return this.persistEmbeddedGraphRuntime(ownerGraphPath, instanceId);
+      onEmbeddedGraphRuntimeChanged: (ownerGraphPath, instanceId, reason) => {
+        return this.persistEmbeddedGraphRuntime(ownerGraphPath, instanceId, reason ?? "badge-expansion");
       },
       onGraphRuntimeChanged: () => {
         return this.writeGraphState("badge-expansion");
@@ -1454,7 +1455,11 @@ export class BasesGraphView extends FileView {
     }
   }
 
-  private async persistEmbeddedGraphRuntime(graphPathRaw: string, instanceId?: string): Promise<void> {
+  private async persistEmbeddedGraphRuntime(
+    graphPathRaw: string,
+    instanceId?: string,
+    reason: "badge-expansion" | "node-position" = "node-position"
+  ): Promise<void> {
     if (this.isClosingOrUnloadingGraphView) return;
     if (this.isHydratingGraphRuntime) return;
     const graphPath = String(graphPathRaw ?? "").trim();
@@ -1463,14 +1468,21 @@ export class BasesGraphView extends FileView {
     const store = this.embeddedGraphDocumentStores.get(graphPath);
     if (!state || !store) return;
     const ownerIsPersistentGraphNote = await this.isPersistentGraphNotePath(graphPath);
-    if (!ownerIsPersistentGraphNote && !state.loadedFromGraphStateBlock) return;
+    const parentIsPersistentGraphNote = this.file
+      ? await this.isPersistentGraphNotePath(this.file.path)
+      : false;
+    if (!shouldPersistEmbeddedGraphRuntime({
+      ownerIsPersistentGraphNote,
+      ownerHasReadableGraphState: state.loadedFromGraphStateBlock,
+      parentIsPersistentGraphNote
+    })) return;
     const snapshots = instanceId
       ? this.engine.getEmbeddedGraphSnapshotsForInstance(instanceId)
       : this.engine.getEmbeddedGraphSnapshots(graphPath);
     if (snapshots.length === 0) return;
     state.migrateToCurrentLayout(snapshots);
     this.suppressEmbeddedGraphReloadUntil.set(graphPath, Date.now() + 2000);
-    const wrote = await store.writeState(state, { reason: "node-position" });
+    const wrote = await store.writeState(state, { reason });
     if (wrote) {
       this.suppressEmbeddedGraphReloadUntil.set(graphPath, Date.now() + 1500);
     }

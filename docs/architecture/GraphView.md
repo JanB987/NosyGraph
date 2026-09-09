@@ -13,6 +13,7 @@ In store mode, the view is the composition root:
 - Load a [GraphDocument](GraphDocument.md) through the [Obsidian adapters](ObsidianAdapters.md).
 - Subscribe to store changes and request rendering.
 - Block unsafe writes during startup, hydration, and shutdown.
+- Persist embedded lens runtime through the embedded graph note. A persistent parent graph may initialize an `o3graph` block for a graph-capable lens note on its first badge expansion; ephemeral parent views remain runtime-only.
 
 The controller routes renderer and host intents. Badge planning and Obsidian relationship reads are application and adapter responsibilities; the view does not interpret those rules.
 
