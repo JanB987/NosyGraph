@@ -16,6 +16,10 @@ Current implementation: `src/graph-application/GraphLegacyExpansionService.ts`
 
 The service does not read Obsidian metadata directly, render badges, persist graph documents, or implement physics. `GraphEngine` currently supplies the compatibility port; the eventual store executor can implement the same boundary.
 
+## Runtime rebuild invariant
+
+After a child-node badge is expanded, the source may be a duplicate runtime node whose note path is intentionally absent from the canonical `currentFiles` set. Edge rebuilding must therefore accept an expansion source when either its canonical path is visible or its runtime node identity is still present. This keeps nested child expansions and their targets alive until the next reconciliation removes them.
+
 ## Migration state
 
 Normal badge toggles now delegate from `GraphEngine` through `GraphBadgeExpansionCoordinator` to this service. Embedded-node expansion and parent-semantic expansion remain separate legacy runtime operations until their store commands are migrated.

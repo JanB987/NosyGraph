@@ -13,6 +13,7 @@ import { GraphController } from "./graph-application/GraphController";
 import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
 import { GraphBadgeExpansionCoordinator } from "./graph-application/GraphBadgeExpansionCoordinator";
 import { GraphLegacyExpansionService } from "./graph-application/GraphLegacyExpansionService";
+import { isExpansionSourceAvailable } from "./graph-application/GraphExpansionRuntimeVisibility";
 import { GraphBadgeToggleShadowComparator } from "./graph-application/GraphBadgeToggleShadowComparator";
 import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeToggleShadowService";
 import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
@@ -1718,6 +1719,7 @@ export class GraphEngine {
     }
 
     // Runtime badge expansions must remain visible even when link-type menu filters are active.
+    const runtimeNodeIds = new Set(this.nodeMap.keys());
     for (const [badgeKey, targetPaths] of this.expandedByBadge.entries()) {
       const separator = badgeKey.lastIndexOf("::");
       if (separator < 0) continue;
@@ -1728,7 +1730,7 @@ export class GraphEngine {
       if (this.getLinkTypeSemantic(linkType) === "parent") continue;
       const sourcePath = this.getSourcePathForNodeId(sourceNodeId);
       if (!sourcePath) continue;
-      if (!fileSet.has(sourcePath)) continue;
+      if (!isExpansionSourceAvailable(sourcePath, sourceNodeId, fileSet, runtimeNodeIds)) continue;
 
       for (const targetPath of targetPaths) {
         const targetNodeId = this.isLinkDuplicateNodesEnabled(linkType)
