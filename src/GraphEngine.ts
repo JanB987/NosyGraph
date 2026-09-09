@@ -2247,6 +2247,52 @@ export class GraphEngine {
     }
   }
 
+  /**
+   * Refresh visible edges for a known set of source instances.  Metadata
+   * changes are file-scoped, so rebuilding the context for every visible
+   * source causes an avoidable read of every note in a large graph.
+   */
+  private addVisibleLinkTypeEdgesForSourceNodes(
+    seen: Set<string>,
+    sourceNodeIds: Iterable<string>,
+    visibleLinkTypesRaw: Iterable<string>,
+    targetNodeIdsByPath: Map<string, string[]>,
+    sourceFrontmatterByPath: Map<string, Map<string, Set<string>>> = new Map()
+  ): void {
+    const visibleLinkTypes = Array.from(visibleLinkTypesRaw ?? [])
+      .map((linkType) => this.normalizeLinkType(linkType))
+      .filter(Boolean);
+    if (visibleLinkTypes.length === 0) return;
+
+    const frontmatterByPath = sourceFrontmatterByPath;
+    for (const sourceNodeIdRaw of sourceNodeIds ?? []) {
+      const sourceNodeId = String(sourceNodeIdRaw ?? "").trim();
+      if (!sourceNodeId) continue;
+      const sourcePath = this.getSourcePathForNodeId(sourceNodeId) || sourceNodeId;
+      if (!sourcePath) continue;
+      let frontmatterByType = frontmatterByPath.get(sourcePath);
+      if (!frontmatterByType) {
+        const file = this.app.vault.getAbstractFileByPath(sourcePath);
+        if (!(file instanceof TFile)) continue;
+        frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
+        frontmatterByPath.set(sourcePath, frontmatterByType);
+      }
+      for (const linkType of visibleLinkTypes) {
+        const targets = frontmatterByType.get(linkType);
+        if (!targets) continue;
+        for (const targetPath of targets) {
+          const targetNodeIds = targetNodeIdsByPath.get(targetPath) ?? [];
+          for (const targetNodeId of targetNodeIds) {
+            if (!this.isVisibleDuplicateEdgeOwnedBySource(sourceNodeId, targetNodeId, targetPath, linkType)) {
+              continue;
+            }
+            this.pushVisibleEdge(seen, sourceNodeId, targetNodeId, linkType);
+          }
+        }
+      }
+    }
+  }
+
   private isVisibleDuplicateEdgeOwnedBySource(
     sourceNodeId: string,
     targetNodeId: string,
@@ -2436,13 +2482,31 @@ export class GraphEngine {
         `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType)}`
       )
     );
-    const context = this.buildVisibleLinkTypeEdgeContext(
-      this.nodes
-        .filter((node) => !node.stateOwnerPath)
-        .map((node) => node.id),
-      Array.from(this.visibleLinkTypes)
+    const sourceFile = this.app.vault.getAbstractFileByPath(path);
+    if (!(sourceFile instanceof TFile)) return false;
+    const sourceFrontmatter = this.linkResolver.collectFrontmatterLinksByType(sourceFile);
+    const targetPaths = new Set<string>();
+    for (const linkType of this.visibleLinkTypes) {
+      for (const targetPath of sourceFrontmatter.get(linkType) ?? []) {
+        targetPaths.add(targetPath);
+      }
+    }
+    const targetNodeIdsByPath = new Map<string, string[]>();
+    if (targetPaths.size > 0) {
+      for (const node of this.nodes) {
+        if (node.stateOwnerPath || !targetPaths.has(node.sourcePath)) continue;
+        const ids = targetNodeIdsByPath.get(node.sourcePath) ?? [];
+        ids.push(node.id);
+        targetNodeIdsByPath.set(node.sourcePath, ids);
+      }
+    }
+    this.addVisibleLinkTypeEdgesForSourceNodes(
+      seen,
+      sourceNodeIds,
+      Array.from(this.visibleLinkTypes),
+      targetNodeIdsByPath,
+      new Map([[path, sourceFrontmatter]])
     );
-    this.addVisibleLinkTypeEdgesForContext(seen, context);
     this.nodeConnectionCountsDirty = true;
     this.reheatSimulation(0.08, "visible link refresh");
     return true;
@@ -2472,11 +2536,34 @@ export class GraphEngine {
         this.nodeMap.get(nodeId)?.sourcePath === path
       );
       if (!containsSource) continue;
+      const sourceNodeIds = Array.from(container.memberIds).filter((nodeId) =>
+        this.nodeMap.get(nodeId)?.sourcePath === path
+      );
+      if (sourceNodeIds.length === 0) continue;
+      const sourceNodeIdSet = new Set(sourceNodeIds);
       this.edges = this.edges.filter((edge) => {
         if (edge.mode !== "visible") return true;
-        return !(container.memberIds.has(edge.from) && container.memberIds.has(edge.to));
+        return !(sourceNodeIdSet.has(edge.from) && container.memberIds.has(edge.to));
       });
-      this.addEmbeddedVisibleLinkTypeEdges(container.key);
+      const targetNodeIdsByPath = new Map<string, string[]>();
+      for (const nodeId of container.memberIds) {
+        const node = this.nodeMap.get(nodeId);
+        if (!node) continue;
+        const ids = targetNodeIdsByPath.get(node.sourcePath) ?? [];
+        ids.push(node.id);
+        targetNodeIdsByPath.set(node.sourcePath, ids);
+      }
+      const seen = new Set(
+        this.edges.map((edge) =>
+          `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType)}`
+        )
+      );
+      this.addVisibleLinkTypeEdgesForSourceNodes(
+        seen,
+        sourceNodeIds,
+        container.visibleLinkTypes,
+        targetNodeIdsByPath
+      );
       refreshed = true;
     }
     if (refreshed) {
