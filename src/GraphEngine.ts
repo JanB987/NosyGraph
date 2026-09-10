@@ -11897,7 +11897,19 @@ export class GraphEngine {
     if (!this.hasNode(normalizedPath)) return;
 
     const previousNodeIds = this.getCurrentNodeIdSet();
-    let changed = this.removeEdgesForNode(normalizedPath);
+    // Canonical edges are replaced here. Visible and overlay edges have their
+    // own scoped refresh paths and must survive an unrelated metadata update;
+    // removing them here makes a grouping/status change look like lost links.
+    const before = this.edges.length;
+    this.edges = this.edges.filter((edge) =>
+      edge.relationship === "parent"
+      || edge.mode === "visible"
+      || edge.mode === "overlay"
+      || edge.from !== normalizedPath
+    );
+    const removedCanonicalEdges = this.edges.length !== before;
+    if (removedCanonicalEdges) this.nodeConnectionCountsDirty = true;
+    let changed = removedCanonicalEdges;
     for (const edge of edges) {
       changed = this.addEdge(
         edge.source,
