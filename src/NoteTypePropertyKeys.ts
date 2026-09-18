@@ -64,23 +64,24 @@ export function normalizeGroupPropertyKeys(raw: unknown): GroupPropertyKeys {
   return normalizeKeys(raw, DEFAULT_GROUP_PROPERTY_KEYS);
 }
 
-export function readConfiguredProperty<T extends Record<string, string>>(
-  frontmatter: Record<string, unknown> | null | undefined,
+export function readConfiguredProperty<T extends object>(
+  frontmatter: unknown,
   keys: T,
   defaults: T,
   key: keyof T
 ): unknown {
   if (!frontmatter || typeof frontmatter !== "object") return undefined;
+  const record = frontmatter as Record<string, unknown>;
   const candidates = [keys[key], defaults[key]]
     .map((value) => String(value ?? "").trim())
     .filter(Boolean);
   for (const candidate of candidates) {
     if (Object.prototype.hasOwnProperty.call(frontmatter, candidate)) {
-      return frontmatter[candidate];
+      return record[candidate];
     }
   }
   const normalized = new Set(candidates.map((value) => value.toLowerCase()));
-  for (const [property, value] of Object.entries(frontmatter)) {
+  for (const [property, value] of Object.entries(record)) {
     if (normalized.has(String(property ?? "").trim().toLowerCase())) {
       return value;
     }
@@ -88,12 +89,16 @@ export function readConfiguredProperty<T extends Record<string, string>>(
   return undefined;
 }
 
-function normalizeKeys<T extends Record<string, string>>(raw: unknown, defaults: T): T {
-  const source = raw && typeof raw === "object" ? raw as Partial<Record<keyof T, unknown>> : {};
-  const out = { ...defaults };
+function normalizeKeys<T extends object>(raw: unknown, defaults: T): T {
+  const source: Partial<Record<keyof T, unknown>> = raw && typeof raw === "object"
+    ? raw as Partial<Record<keyof T, unknown>>
+    : {};
+  const out = { ...defaults } as T;
   for (const key of Object.keys(defaults) as Array<keyof T>) {
     const value = String(source[key] ?? "").trim();
-    if (value) out[key] = value as T[keyof T];
+    if (value) {
+      (out as Record<keyof T, unknown>)[key] = value;
+    }
   }
   return out;
 }
