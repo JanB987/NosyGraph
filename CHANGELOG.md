@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.9 — 2026-09-18
+
+### Fixed
+
+- Updated the renderer to use Obsidian DOM helpers, CSS classes, and runtime CSS properties instead of direct inline style assignments.
+- Hardened metadata and frontmatter adapters with explicit runtime narrowing and removed unnecessary type assertions.
+- Used browser timer APIs in the lifecycle coordinator while retaining a host-neutral test fallback.
+- Added paste-event guards and generated a fresh production bundle containing the fixes.
+
+### Validation
+
+- The automated suite passes 83 test files and 385 tests; the scoped architecture typecheck and production build pass.
+- This release is intended to be rescanned by the automatic release checker.
+
 ## 0.2.8 — 2026-09-18
 
 ### Added
