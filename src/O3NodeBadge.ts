@@ -1,19 +1,36 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Obsidian DOM helper return types are validated by runtime element creation in this small badge wrapper. */
-import { App, TFile } from "obsidian";
 import { O3LinkType } from "./O3LinkType";
-import type { GraphEngine } from "./GraphEngine";
 import { setStyle } from "./domStyle";
+
+export type O3NodeBadgeIntent =
+  | "toggle-badge"
+  | "open-badge-input"
+  | "expand-badge-chain";
+
+export interface O3NodeBadgeModifiers {
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+export function resolveO3NodeBadgeIntent(
+  modifiers: O3NodeBadgeModifiers
+): O3NodeBadgeIntent {
+  if (modifiers.altKey) return "open-badge-input";
+  if ((modifiers.ctrlKey || modifiers.metaKey) && !modifiers.shiftKey) {
+    return "expand-badge-chain";
+  }
+  return "toggle-badge";
+}
 
 export class O3NodeBadge {
   private badgeElement: HTMLElement | null = null;
 
   constructor(
     private nodeElement: HTMLElement,
-    private nodeFile: TFile,
-    private sourceNodeId: string,
     private linkType: O3LinkType,
-    private app: App,
-    private graphEngine: GraphEngine
+    private onIntent: (intent: O3NodeBadgeIntent, modifiers?: O3NodeBadgeModifiers) => void
   ) {}
 
   render(): void {
@@ -26,34 +43,15 @@ export class O3NodeBadge {
     this.badgeElement.addEventListener("mousedown", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (event.altKey) {
-        this.onAltClick();
-      } else if ((event.ctrlKey || event.metaKey) && !event.shiftKey) {
-        this.onCtrlClick();
-      } else {
-        this.onClick();
-      }
+      const modifiers = {
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey
+      };
+      this.onIntent(resolveO3NodeBadgeIntent(modifiers), modifiers);
     });
   }
-
-  private onClick(): void {
-    this.graphEngine.expandFromNode(
-      this.nodeFile,
-      this.linkType,
-      this.sourceNodeId
-    );
-  }
-
-  private onAltClick(): void {
-    this.graphEngine.requestBadgeLinkInput(this.sourceNodeId, this.linkType);
-  }
-
-  private onCtrlClick(): void {
-    void this.graphEngine.expandLinkTypeChainFromNode(
-      this.nodeFile,
-      this.linkType,
-      this.sourceNodeId
-    );
-  }
 }
+
 /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Re-enable Obsidian DOM helper lint rules after this badge wrapper. */

@@ -370,7 +370,9 @@ The plugin manifest uses the id `nosygraph`, the name `NosyGraph`, and Jan Bergh
 
 ## Release Status
 
-Current status: beta.
+Current status: beta. Current release: `0.2.8`.
+
+Release history is recorded in [CHANGELOG.md](CHANGELOG.md).
 
 Before publishing to the official Obsidian Community Plugins directory, test at least:
 
