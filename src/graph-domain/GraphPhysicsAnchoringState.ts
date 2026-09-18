@@ -34,14 +34,14 @@ export interface GraphPhysicsAnchoringReconciliation {
 }
 
 export function copyGraphPhysicsAnchoringState(state: GraphPhysicsAnchoringState): GraphPhysicsAnchoringState {
+  const anchors = new Map<ContainerId, GraphContainerAnchorState>();
+  for (const [id, anchor] of state.anchors) anchors.set(id, copyAnchor(anchor));
+  const fixedCoordinates = new Map<NodeInstanceId, GraphAnchoringFixedCoordinates>();
+  for (const [id, point] of state.fixedCoordinates) fixedCoordinates.set(id, { ...point });
   return {
     minimumViewportSize: state.minimumViewportSize,
-    anchors: new Map(Array.from(state.anchors, ([id, anchor]) => [id, {
-      bounds: { ...anchor.bounds }, anchorDirection: { ...anchor.anchorDirection },
-      lastOrigin: { ...anchor.lastOrigin }, anchorVelocity: { ...anchor.anchorVelocity },
-      collisionPressure: { ...anchor.collisionPressure }
-    }])),
-    fixedCoordinates: new Map(Array.from(state.fixedCoordinates, ([id, point]) => [id, { ...point }]))
+    anchors,
+    fixedCoordinates
   };
 }
 
@@ -53,11 +53,10 @@ export function reconcileGraphPhysicsAnchoringState(
   nextContainers: GraphPhysicsContainerState,
   nextNodeIds: ReadonlySet<NodeInstanceId>
 ): GraphPhysicsAnchoringReconciliation {
-  const previousById = new Map(
-    previousContainers?.containers.map((container) => [container.id, container]) ?? []
-  );
-  const seedAnchors = nextState?.anchors ?? new Map();
-  const previousAnchors = previousState?.anchors ?? new Map();
+  const previousById = new Map<ContainerId, GraphPhysicsContainerState["containers"][number]>();
+  for (const container of previousContainers?.containers ?? []) previousById.set(container.id, container);
+  const seedAnchors: ReadonlyMap<ContainerId, GraphContainerAnchorState> = nextState?.anchors ?? new Map();
+  const previousAnchors: ReadonlyMap<ContainerId, GraphContainerAnchorState> = previousState?.anchors ?? new Map();
   const anchors = new Map<ContainerId, GraphContainerAnchorState>();
   const preservedContainerIds: ContainerId[] = [];
   const resetContainers: GraphPhysicsAnchoringReconciliation["diagnostics"]["resetContainers"][number][] = [];
@@ -101,8 +100,8 @@ export function reconcileGraphPhysicsAnchoringState(
   const nextIds = new Set(nextContainers.containers.map((container) => container.id));
   const removedContainerIds = Array.from(previousAnchors.keys())
     .filter((containerId) => !nextIds.has(containerId));
-  const previousFixed = previousState?.fixedCoordinates ?? new Map();
-  const seedFixed = nextState?.fixedCoordinates ?? new Map();
+  const previousFixed: ReadonlyMap<NodeInstanceId, GraphAnchoringFixedCoordinates> = previousState?.fixedCoordinates ?? new Map();
+  const seedFixed: ReadonlyMap<NodeInstanceId, GraphAnchoringFixedCoordinates> = nextState?.fixedCoordinates ?? new Map();
   const fixedCoordinates = new Map<NodeInstanceId, GraphAnchoringFixedCoordinates>();
   const preservedFixedCoordinateNodeIds: NodeInstanceId[] = [];
   const addedFixedCoordinateNodeIds: NodeInstanceId[] = [];

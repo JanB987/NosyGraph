@@ -3,6 +3,14 @@ import type {
   GraphHostEventSource
 } from "./ObsidianGraphWatcher";
 
+function getNodeSetTimeout(): typeof setTimeout {
+  return setTimeout;
+}
+
+function getNodeClearTimeout(): typeof clearTimeout {
+  return clearTimeout;
+}
+
 export interface GraphLifecycleToken {
   generation: number;
   path: string;
@@ -29,7 +37,7 @@ export class GraphLifecycleCoordinator {
   private generation = 0;
   private activePath: string | null = null;
   private openState = false;
-  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly timers = new Map<string, number | ReturnType<typeof setTimeout>>();
   private generationController = new AbortController();
   private readonly writeSuppressions = new Map<string, number>();
   private eventSource: GraphHostEventSource | undefined;
@@ -142,9 +150,9 @@ export class GraphLifecycleCoordinator {
     const token = this.capture(path);
     if (!normalizedKey || !token) return;
     const previous = this.timers.get(normalizedKey);
-    if (previous !== undefined) clearTimeout(previous);
+    if (previous !== undefined) this.clearTimer(previous);
 
-    const timer = setTimeout(() => {
+    const timer = this.setTimer(() => {
       this.timers.delete(normalizedKey);
       if (!token.isCurrent()) return;
       Promise.resolve(work(token)).catch((error) => this.onError(error));
@@ -156,7 +164,7 @@ export class GraphLifecycleCoordinator {
     const normalizedKey = String(key ?? "").trim();
     const timer = this.timers.get(normalizedKey);
     if (timer === undefined) return;
-    clearTimeout(timer);
+    this.clearTimer(timer);
     this.timers.delete(normalizedKey);
   }
 
@@ -200,8 +208,21 @@ export class GraphLifecycleCoordinator {
     this.generation += 1;
     this.generationController.abort();
     this.generationController = new AbortController();
-    for (const timer of this.timers.values()) clearTimeout(timer);
+    for (const timer of this.timers.values()) this.clearTimer(timer);
     this.timers.clear();
+  }
+
+  private setTimer(work: () => void, delayMs: number): number | ReturnType<typeof setTimeout> {
+    if (typeof window !== "undefined") return window.setTimeout(work, delayMs);
+    return getNodeSetTimeout()(work, delayMs);
+  }
+
+  private clearTimer(timer: number | ReturnType<typeof setTimeout>): void {
+    if (typeof window !== "undefined") {
+      window.clearTimeout(timer as number);
+      return;
+    }
+    getNodeClearTimeout()(timer);
   }
 
   private startEvents(): void {

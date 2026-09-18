@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian metadata-cache and vault APIs expose runtime-shaped host data; this adapter narrows it before graph use. */
 import type { App, TFile } from "obsidian";
 import { extractInternalLinkCandidates } from "../linkResolver";
 import type { O3LinkType } from "../O3LinkType";
@@ -10,11 +11,11 @@ export interface ObsidianGraphLinkTarget {
 }
 
 export interface ObsidianGraphLinkResolverOptions {
-  isFile(value: unknown): value is TFile;
-  getLabels(): ReadonlyMap<string, string>;
-  getExpansionPropertyAliases(): ReadonlyMap<string, readonly string[]>;
-  getDiscoveryDirections(): ReadonlyMap<string, "incoming" | "outgoing" | "both">;
-  normalizeType?(value: string): string;
+  isFile(this: void, value: unknown): value is TFile;
+  getLabels(this: void): ReadonlyMap<string, string>;
+  getExpansionPropertyAliases(this: void): ReadonlyMap<string, readonly string[]>;
+  getDiscoveryDirections(this: void): ReadonlyMap<string, "incoming" | "outgoing" | "both">;
+  normalizeType?(this: void, value: string): string;
 }
 
 /**
@@ -37,7 +38,7 @@ export class ObsidianGraphLinkResolver {
 
   collectFrontmatterLinksByType(file: TFile): Map<string, Set<string>> {
     const byType = new Map<string, Set<string>>();
-    const cache = this.app.metadataCache.getFileCache(file);
+    const cache = this.readFileCache(file);
 
     const addTarget = (rawKey: string, targetPath: string): void => {
       const normalizedKey = this.normalizeFrontmatterLinkTypeKey(rawKey);
@@ -55,14 +56,11 @@ export class ObsidianGraphLinkResolver {
       addTarget(rawKey.split(/[.[\]]/)[0] ?? rawKey, target.path);
     }
 
-    const frontmatter = cache?.frontmatter;
-    if (frontmatter) {
-      for (const [key, value] of Object.entries(frontmatter)) {
-        if (String(key ?? "").trim().toLowerCase() === "position") continue;
-        for (const candidate of extractInternalLinkCandidates(value)) {
-          const target = this.resolveGraphLinkTarget(candidate, file.path);
-          if (target) addTarget(key, target.path);
-        }
+    for (const [key, value] of Object.entries(this.getFrontmatter(cache))) {
+      if (String(key ?? "").trim().toLowerCase() === "position") continue;
+      for (const candidate of extractInternalLinkCandidates(value)) {
+        const target = this.resolveGraphLinkTarget(candidate, file.path);
+        if (target) addTarget(key, target.path);
       }
     }
 
@@ -72,16 +70,14 @@ export class ObsidianGraphLinkResolver {
 
   collectFrontmatterLinkTypeKeys(file: TFile): Set<string> {
     const out = new Set<string>();
-    const cache = this.app.metadataCache.getFileCache(file);
+    const cache = this.readFileCache(file);
     for (const link of this.getFrontmatterLinks(cache)) {
       const rawKey = String(link.key ?? "").trim();
       if (!rawKey) continue;
       const normalizedKey = this.normalizeFrontmatterLinkTypeKey(rawKey.split(/[.[\]]/)[0] ?? rawKey);
       if (normalizedKey) out.add(normalizedKey);
     }
-    const frontmatter = cache?.frontmatter;
-    if (!frontmatter) return out;
-    for (const [key, value] of Object.entries(frontmatter)) {
+    for (const [key, value] of Object.entries(this.getFrontmatter(cache))) {
       if (String(key ?? "").trim().toLowerCase() === "position") continue;
       if (extractInternalLinkCandidates(value).length > 0) {
         const normalizedKey = this.normalizeFrontmatterLinkTypeKey(key);
@@ -192,6 +188,15 @@ export class ObsidianGraphLinkResolver {
     this.incomingLinkIndexReady = true;
   }
 
+  private readFileCache(file: TFile): unknown {
+    return this.app.metadataCache.getFileCache(file);
+  }
+
+  private getFrontmatter(cache: unknown): Record<string, unknown> {
+    if (!isRecord(cache) || !isRecord(cache.frontmatter)) return {};
+    return cache.frontmatter;
+  }
+
   private indexIncomingLinksForFile(file: TFile): void {
     const linksByType = this.collectFrontmatterLinksByType(file);
     const sourceEntries = new Map<string, Set<string>>();
@@ -240,8 +245,8 @@ export class ObsidianGraphLinkResolver {
   }
 
   private getFrontmatterLinks(cache: unknown): Array<{ key?: string; link?: string }> {
-    const record = cache && typeof cache === "object" ? cache as { frontmatterLinks?: unknown } : {};
-    return Array.isArray(record.frontmatterLinks) ? record.frontmatterLinks as Array<{ key?: string; link?: string }> : [];
+    if (!isRecord(cache) || !Array.isArray(cache.frontmatterLinks)) return [];
+    return cache.frontmatterLinks.filter(isFrontmatterLink);
   }
 
   private normalizeMissingLinkPath(rawPath: string): string {
@@ -255,3 +260,15 @@ export class ObsidianGraphLinkResolver {
     return path.split("/").pop()?.replace(/\.md$/i, "") || path;
   }
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isFrontmatterLink(value: unknown): value is { key?: string; link?: string } {
+  if (!isRecord(value)) return false;
+  return (value.key === undefined || typeof value.key === "string")
+    && (value.link === undefined || typeof value.link === "string");
+}
+
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Re-enable host-boundary lint rules after this adapter. */

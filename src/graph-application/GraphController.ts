@@ -213,7 +213,7 @@ export type GraphNavigationCommand =
   | { type: "reveal-note"; path: string }
   | { type: "hover-note"; request: GraphHoverPreviewRequest };
 
-export interface GraphNavigationCommandResult extends GraphNavigationResult {}
+export type GraphNavigationCommandResult = GraphNavigationResult;
 
 export interface GraphControllerOptions {
   queries?: GraphQueries;

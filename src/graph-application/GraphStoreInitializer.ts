@@ -5,7 +5,7 @@ import {
   type GraphStoreSnapshotValidationFailure
 } from "./GraphStore";
 
-export interface GraphStoreInitializationSource extends GraphSnapshotSource {}
+export type GraphStoreInitializationSource = GraphSnapshotSource;
 
 export type GraphStoreInitializationResult =
   | {

@@ -214,7 +214,7 @@ export class StoreGraphRuntime {
   ): GraphChangeSetApplyResult {
     const result = this.store.applyChangeSet(changeSet, expectedRevision);
     if (result.applied && result.changeCount > 0) {
-      this.commitSemanticChange();
+      void this.commitSemanticChange().catch((error) => this.onError(error));
     }
     return result;
   }

@@ -138,6 +138,7 @@ export default class BasesGraphPlugin extends Plugin {
         )
     );
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, info) => {
+      if (event.defaultPrevented) return;
       this.handleGraphNodeLinksFrontmatterPaste(event, editor, info);
     }));
     this.registerDomEvent(document, "paste", (event) => {
@@ -406,7 +407,7 @@ export default class BasesGraphPlugin extends Plugin {
     if (!(destinationFile instanceof TFile)) return;
 
     const sources = this.copiedGraphNodePaths.map((path) => ({ nodeId: path, path }));
-    if (target instanceof HTMLElement) target.blur();
+    if (target.instanceOf(HTMLElement)) target.blur();
     event.preventDefault();
     event.stopImmediatePropagation();
     void new ObsidianGraphLinkMutationHandler(this.app).applyBadgeLinkAdd({

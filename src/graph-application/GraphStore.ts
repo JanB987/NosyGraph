@@ -217,10 +217,13 @@ export class GraphStore implements GraphSnapshotSource {
   }
 }
 
-export type GraphStoreReferenceValidationFailure = Extract<
-  GraphChangeSetApplyResult,
-  { applied: false; reason: "missing-reference" | "expansion-cycle" }
->;
+export type GraphStoreReferenceValidationFailure = {
+  applied: false;
+  reason: "missing-reference" | "expansion-cycle";
+  collection: GraphStoreCollectionName;
+  entityId: string;
+  referenceId?: string;
+};
 
 export type GraphStoreSnapshotValidationFailure =
   | {

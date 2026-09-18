@@ -35,8 +35,8 @@ export class GraphKinematicsTraceComparator {
 
     for (let index = 0; index < comparedStepCount; index += 1) {
       const comparison = this.frameComparator.compare(
-        expected[index]!,
-        actual[index]!,
+        expected[index],
+        actual[index],
         options
       );
       stepComparisons.push(comparison);

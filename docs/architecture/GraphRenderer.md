@@ -32,6 +32,11 @@ Canvas and DOM handles never enter GraphSnapshot:
 
 This keeps drawing, pointer hit testing, and DOM lifecycle separate from GraphStore and GraphController.
 
+Static renderer layout is supplied by the `nosygraph-renderer-*` classes in
+`styles.css`. Obsidian's `createEl` creates the canvas, overlay, and badge
+buttons; only the badge button's position and size are updated at runtime with
+`setCssProps`.
+
 ## Connections
 
 - Consumes detached semantic and motion projections from [GraphSnapshotKinematicsComposer](GraphSnapshotKinematicsComposer.md).

@@ -96,8 +96,8 @@ export class GraphForceAccumulator {
         secondIndex < input.graph.nodes.length;
         secondIndex += 1
       ) {
-        const first = input.graph.nodes[firstIndex]!;
-        const second = input.graph.nodes[secondIndex]!;
+        const first = input.graph.nodes[firstIndex];
+        const second = input.graph.nodes[secondIndex];
         if (!mayInteract(first.id, second.id)) {
           skippedSeparatedNodePairCount += 1;
           continue;
@@ -177,8 +177,8 @@ export class GraphForceAccumulator {
     const containers = input.containers.containers;
     for (let firstIndex = 0; firstIndex < containers.length; firstIndex += 1) {
       for (let secondIndex = firstIndex + 1; secondIndex < containers.length; secondIndex += 1) {
-        const first = containers[firstIndex]!;
-        const second = containers[secondIndex]!;
+        const first = containers[firstIndex];
+        const second = containers[secondIndex];
         if (!shouldGraphContainersRepel(first, second)) {
           skippedContainerPairCount += 1;
           continue;

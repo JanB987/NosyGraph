@@ -102,7 +102,7 @@ export function createGraphCollapseChangeSet(
       continue;
     }
     if (removedExpansionIds.has(node.origin.expansionId)) {
-      const owner = owners[0]!;
+      const owner = owners[0];
       rehomedNodes.push({
         ...node,
         origin: {

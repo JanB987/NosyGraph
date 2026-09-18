@@ -70,8 +70,8 @@ export function readConfiguredProperty<T extends object>(
   defaults: T,
   key: keyof T
 ): unknown {
-  if (!frontmatter || typeof frontmatter !== "object") return undefined;
-  const record = frontmatter as Record<string, unknown>;
+  if (!isRecord(frontmatter)) return undefined;
+  const record = frontmatter;
   const candidates = [keys[key], defaults[key]]
     .map((value) => String(value ?? "").trim())
     .filter(Boolean);
@@ -90,15 +90,17 @@ export function readConfiguredProperty<T extends object>(
 }
 
 function normalizeKeys<T extends object>(raw: unknown, defaults: T): T {
-  const source: Partial<Record<keyof T, unknown>> = raw && typeof raw === "object"
-    ? raw as Partial<Record<keyof T, unknown>>
-    : {};
-  const out = { ...defaults } as T;
-  for (const key of Object.keys(defaults) as Array<keyof T>) {
+  const source = isRecord(raw) ? raw : {};
+  const out = { ...defaults };
+  for (const key of Object.keys(defaults)) {
     const value = String(source[key] ?? "").trim();
     if (value) {
-      (out as Record<keyof T, unknown>)[key] = value;
+      Reflect.set(out, key, value);
     }
   }
   return out;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

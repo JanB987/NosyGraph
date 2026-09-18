@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian frontmatter mutation is a runtime-shaped host boundary isolated by this adapter. */
 import type { NoteId } from "../graph-domain/graph-identifiers";
 import { extractInternalLinkCandidates } from "../linkResolver";
 
@@ -110,3 +111,5 @@ function noteName(path: string): string {
   const filename = path.split("/").pop() ?? path;
   return filename.replace(/\.md$/i, "");
 }
+
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Re-enable host-boundary lint rules after this adapter. */

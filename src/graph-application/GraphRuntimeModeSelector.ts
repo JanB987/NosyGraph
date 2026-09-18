@@ -9,8 +9,8 @@ export interface GraphRuntimeHandle {
 }
 
 export interface GraphRuntimeModeFactories {
-  createLegacy(path: string): Promise<GraphRuntimeHandle> | GraphRuntimeHandle;
-  createStore(path: string): Promise<GraphRuntimeHandle> | GraphRuntimeHandle;
+  createLegacy(this: void, path: string): Promise<GraphRuntimeHandle> | GraphRuntimeHandle;
+  createStore(this: void, path: string): Promise<GraphRuntimeHandle> | GraphRuntimeHandle;
 }
 
 export interface GraphRuntimeModeSelectorOptions {

@@ -114,30 +114,17 @@ export class GraphRenderer {
 
   mount(container: HTMLElement): void {
     this.unmount();
-    const document = container.ownerDocument
-      ?? (typeof globalThis.document === "undefined" ? undefined : globalThis.document);
-    if (!document) {
-      throw new Error("GraphRenderer requires a document to mount.");
-    }
-
     this.mountedContainer = container;
-    this.canvas = document.createElement("canvas");
-    this.canvas.setAttribute("aria-label", "Graph");
+    this.canvas = container.createEl("canvas", {
+      cls: "nosygraph-renderer-canvas",
+      attr: { "aria-label": "Graph" }
+    });
     this.canvas.addEventListener("click", this.handleCanvasClick);
-    this.canvas.style.position = "absolute";
-    this.canvas.style.inset = "0";
-    this.canvas.style.width = "100%";
-    this.canvas.style.height = "100%";
-    this.canvas.style.zIndex = "0";
+    this.badgeOverlay = container.createEl("div", {
+      cls: "nosygraph-renderer-badge-overlay",
+      attr: { "aria-label": "Graph badges" }
+    });
 
-    this.badgeOverlay = document.createElement("div");
-    this.badgeOverlay.setAttribute("aria-label", "Graph badges");
-    this.badgeOverlay.style.position = "absolute";
-    this.badgeOverlay.style.inset = "0";
-    this.badgeOverlay.style.pointerEvents = "none";
-    this.badgeOverlay.style.zIndex = "1";
-
-    container.append(this.canvas, this.badgeOverlay);
     this.context = this.canvas.getContext("2d") ?? undefined;
     this.resize(container.clientWidth || 1, container.clientHeight || 1);
     if (this.snapshot) this.render(this.snapshot);
@@ -341,12 +328,10 @@ export class GraphRenderer {
       if (!region) continue;
       let handle = this.badgeHandles.get(badge.id);
       if (!handle) {
-        const element = overlay.ownerDocument.createElement("button");
-        element.type = "button";
-        element.setAttribute("aria-label", badge.label);
-        element.style.position = "absolute";
-        element.style.pointerEvents = "auto";
-        element.style.opacity = "0";
+        const element = overlay.createEl("button", {
+          cls: "nosygraph-renderer-badge-handle",
+          attr: { type: "button", "aria-label": badge.label }
+        });
         element.addEventListener("click", (event) => {
           event.stopPropagation();
           this.emit({
@@ -367,10 +352,12 @@ export class GraphRenderer {
         handle.badge = badge;
       }
       const topLeft = this.worldToScreen({ x: region.x, y: region.y });
-      handle.element.style.left = topLeft.x + "px";
-      handle.element.style.top = topLeft.y + "px";
-      handle.element.style.width = region.width * this.viewport.zoom + "px";
-      handle.element.style.height = region.height * this.viewport.zoom + "px";
+      handle.element.setCssProps({
+        left: `${topLeft.x}px`,
+        top: `${topLeft.y}px`,
+        width: `${region.width * this.viewport.zoom}px`,
+        height: `${region.height * this.viewport.zoom}px`
+      });
     }
   }
 

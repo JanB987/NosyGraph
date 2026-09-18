@@ -15,13 +15,13 @@ export interface LegacyGraphReadNode extends GraphNodeInstance {
 }
 
 /** A copied expansion record exposed by the legacy engine during migration. */
-export interface LegacyGraphReadExpansion extends GraphExpansion {}
+export type LegacyGraphReadExpansion = GraphExpansion;
 
-export interface LegacyGraphReadBadge extends GraphBadge {}
+export type LegacyGraphReadBadge = GraphBadge;
 
-export interface LegacyGraphReadEdge extends GraphEdge {}
+export type LegacyGraphReadEdge = GraphEdge;
 
-export interface LegacyGraphReadLens extends GraphLens {}
+export type LegacyGraphReadLens = GraphLens;
 
 export interface LegacyGraphReadState {
   nodes: readonly LegacyGraphReadNode[];
