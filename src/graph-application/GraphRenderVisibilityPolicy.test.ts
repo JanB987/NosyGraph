@@ -42,7 +42,7 @@ describe("GraphRenderVisibilityPolicy", () => {
     })).toBe(false);
   });
 
-  it("keeps populated badges visible and reveals empty badges through selection", () => {
+  it("shows badges for selected nodes but hides them on unselected nodes", () => {
     const baseline = {
       marqueeSelectionActive: false,
       dragging: false,
@@ -52,17 +52,14 @@ describe("GraphRenderVisibilityPolicy", () => {
       dragRevealTarget: false
     };
     expect(policy.shouldShowNodeBadges({
-      ...baseline,
-      hasQualifyingRelationship: true
-    })).toBe(true);
+      ...baseline
+    })).toBe(false);
     expect(policy.shouldShowNodeBadges({
       ...baseline,
-      selected: true,
-      hasQualifyingRelationship: false
+      selected: true
     })).toBe(true);
     expect(policy.shouldShowNodeBadges({
-      ...baseline,
-      hasQualifyingRelationship: false
+      ...baseline
     })).toBe(false);
   });
 
@@ -73,8 +70,7 @@ describe("GraphRenderVisibilityPolicy", () => {
       draggedNode: false,
       showAll: true,
       selected: true,
-      dragRevealTarget: true,
-      hasQualifyingRelationship: true
+      dragRevealTarget: true
     })).toBe(false);
     expect(policy.shouldShowNodeBadges({
       marqueeSelectionActive: false,
@@ -82,8 +78,7 @@ describe("GraphRenderVisibilityPolicy", () => {
       draggedNode: true,
       showAll: true,
       selected: true,
-      dragRevealTarget: true,
-      hasQualifyingRelationship: true
+      dragRevealTarget: true
     })).toBe(false);
   });
 

@@ -22,7 +22,7 @@ The policy also calculates a minimum one-screen-pixel relationship width after z
 
 ## Badge contract
 
-Outside marquee and drag suppression, a node renders badges when it is selected, is the current drop target, show-all mode is held, or it has at least one renderable badge backed by YAML relationships. This keeps populated badges visible as relationship indicators while selection still exposes empty badges for creating a first link.
+Outside marquee and drag suppression, a node renders badges when it is selected, is the current drop target, or show-all mode is held. Populated relationships do not make badges appear on unselected nodes; selection remains the normal way to expose a node's configured badges.
 
 ## Runtime status
 

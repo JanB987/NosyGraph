@@ -52,4 +52,4 @@ The older orbiting parent badges and parent-actions overlay use the same `toggle
 
 ## Live visibility policy
 
-The live engine delegates badge visibility decisions to [GraphRenderVisibilityPolicy](GraphRenderVisibilityPolicy.md). Populated badges remain visible on unselected nodes so existing typed relationships are discoverable. Selecting a node or holding the configured show-all key additionally reveals empty configured badges. Marquee and active dragged-node suppression remain unchanged.
+The live engine delegates badge visibility decisions to [GraphRenderVisibilityPolicy](GraphRenderVisibilityPolicy.md). Badges are hidden on unselected nodes during normal viewing. Selecting a node reveals its configured badges; the configured show-all key and an active drag target retain their explicit reveal behavior. Marquee and active dragged-node suppression remain unchanged.

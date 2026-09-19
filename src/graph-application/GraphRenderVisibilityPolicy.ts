@@ -13,7 +13,6 @@ export interface GraphNodeBadgeVisibilityInput {
   showAll: boolean;
   selected: boolean;
   dragRevealTarget: boolean;
-  hasQualifyingRelationship: boolean;
 }
 
 export interface GraphEdgeLineWidthInput {
@@ -46,8 +45,7 @@ export class GraphRenderVisibilityPolicy {
     }
     return input.showAll
       || input.selected
-      || input.dragRevealTarget
-      || input.hasQualifyingRelationship;
+      || input.dragRevealTarget;
   }
 
   getEdgeLineWidth(input: GraphEdgeLineWidthInput): number {

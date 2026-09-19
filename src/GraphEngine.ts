@@ -3970,16 +3970,7 @@ export class GraphEngine {
       draggedNode,
       showAll: this.showAllLinkTypeBadgesHeld,
       selected: this.graphStore.isNodeSelected(node.id),
-      dragRevealTarget: this.dragBadgeRevealNodeId === node.id,
-      hasQualifyingRelationship: this.hasRenderablePopulatedBadge(node)
-    });
-  }
-
-  private hasRenderablePopulatedBadge(node: GraphNode): boolean {
-    return this.getBadgeLinkTypesForNode(node).some((linkType) => {
-      if (!this.shouldRenderLinkTypeBadge(node, linkType)) return false;
-      const property = this.normalizeLinkType(String(linkType.property ?? ""));
-      return Boolean(property) && this.hasBadgeYamlLinks(node.sourcePath, property);
+      dragRevealTarget: this.dragBadgeRevealNodeId === node.id
     });
   }
 
