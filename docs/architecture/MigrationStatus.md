@@ -19,6 +19,8 @@ change the runtime ownership statuses below: the live path remains
 |---|---|---|---|
 | Obsidian view lifecycle and rendering | **Live** | GraphView and the legacy GraphEngine | Existing production path. |
 | Force simulation, dragging, pins, freezes, directional links, lenses, and persistence | **Live** | Legacy src/GraphEngine.ts | This remains the user-visible solver while parity work continues. |
+| Relationship and badge render visibility policy | **Live** | GraphRenderVisibilityPolicy through legacy src/GraphEngine.ts | Existing-node relationship lines remain renderable when persistent mode disables global discovery; populated badges remain visible while selection reveals empty badges. Live collection and drawing ownership remains in GraphEngine. |
+| Explicit LinkType definition resolution | **Live** | GraphView and LinkTypeRegistry | Folder settings scope automatic discovery; valid definitions referenced by active, overlay, or visible graph-note configuration load independently of folder location. |
 | Selection command boundary | **Live** | GraphController backed by GraphStore selection state | Selection is the first state slice moved to the store. |
 | Normal badge command routing | **Live bridge** | GraphController to GraphBadgeToggleHandler to LegacyBadgeCommandAdapter | Planning enters the new boundary; legacy mutation and persistence still perform the operation. |
 | Badge interaction variants | **Live bridge** | O3NodeBadge modifier classifier to GraphController to LegacyBadgeCommandAdapter | Parent semantics, Alt input, and Ctrl/Cmd chain expansion preserve characterized precedence; legacy operations still own mutation. |
@@ -58,6 +60,11 @@ These items are intentionally not described as live:
 4. **GraphStore ownership cutover.** Store mode must own the complete graph collection lifecycle before legacy arrays are removed. There will be no long-term dual-write mirror.
 5. **Persistence and lifecycle reconciliation.** Close/reopen replay, lens lifecycle, topology changes, and host event ordering remain application-boundary work.
 6. **Behavior changes.** Any intentional change must be recorded beside the relevant parity evidence and accepted as a new contract. Comparators must continue reporting semantic differences.
+7. **Lens LinkType unification.** Iteration 1 records the proposed contract and
+   released behavior baseline in [LensLinkTypeIteration1.md](LensLinkTypeIteration1.md).
+   `linkType: lens`, definition-keyed badges, overlapping Lens LinkTypes, and
+   LinkType-owned lens persistence are proposed only; none is selected by the
+   live runtime yet.
 
 ## Activation rule
 

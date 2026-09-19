@@ -49,3 +49,7 @@ The badge itself does not mutate graph or note state.
 All current graph-node badge clicks now enter [GraphController](GraphController.md) as stable-ID commands. `O3NodeBadge` knows only how to render and emit one of three intents; it no longer imports Obsidian files, the Obsidian app, or `GraphEngine`. [LegacyBadgeCommandAdapter](LegacyBadgeCommandAdapter.md) temporarily implements the output port so expansion behavior remains unchanged.
 
 The older orbiting parent badges and parent-actions overlay use the same `toggle-badge` command. This means normal badges and both parent-specific controls now share one application entry point even though their drawing code has not yet been unified.
+
+## Live visibility policy
+
+The live engine delegates badge visibility decisions to [GraphRenderVisibilityPolicy](GraphRenderVisibilityPolicy.md). Populated badges remain visible on unselected nodes so existing typed relationships are discoverable. Selecting a node or holding the configured show-all key additionally reveals empty configured badges. Marquee and active dragged-node suppression remain unchanged.

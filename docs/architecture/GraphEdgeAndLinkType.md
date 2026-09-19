@@ -62,3 +62,7 @@ Edges are stored in [GraphStore](GraphStore.md), rendered by [GraphRenderer](Gra
 [GraphPhysicsSettings](GraphPhysicsSettings.md) represents force and direction behavior as separate policy variants selected by an edge's `linkTypeId`.
 
 During migration, [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) maps the active engine's discovered, visible, overlay, parent, and expansion-owned edges into this model. The adapter copies endpoint IDs and classifies their origin without changing the renderer's edge collection.
+
+## Live visibility policy
+
+[GraphRenderVisibilityPolicy](GraphRenderVisibilityPolicy.md) separates node admission from line rendering in the live `GraphEngine`. Persistent graph-note mode can disable global LinkType discovery without hiding an eligible relationship whose two endpoint notes are already visible. It also applies a one-screen-pixel minimum to scaled relationship lines and delegates parent and duplicate-node relationships to their specialized paths.

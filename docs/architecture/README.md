@@ -75,6 +75,7 @@ The flow above is the guarded store-mode composition. The live Obsidian path sti
 - [StoreGraphRuntimeState](StoreGraphRuntimeState.md) delegates the boundary atomically to `GraphStore`.
 - [GraphQueries](GraphQueries.md) provides safe, read-only access to graph state.
 - [GraphBadgeRequest](GraphBadgeRequest.md) carries resolved badge intent without host objects.
+- [GraphRenderVisibilityPolicy](GraphRenderVisibilityPolicy.md) separates live existing-node line rendering and badge visibility from graph discovery and host access.
 - [GraphBadgeTogglePlan](GraphBadgeTogglePlan.md) describes normal expand/collapse decisions without mutation.
 - [GraphBadgeToggleService](GraphBadgeToggleService.md) composes live graph state and relationship targets into a complete plan.
 - [GraphBadgeExpansionCoordinator](GraphBadgeExpansionCoordinator.md) routes normal, parent, and embedded badge expansion through a runtime port.

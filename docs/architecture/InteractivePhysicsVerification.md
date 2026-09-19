@@ -64,3 +64,11 @@ The live pass is currently **blocked**. Obsidian is running, but this session ex
 ## E2 execution record — 2026-09-08
 
 **Result: Blocked.** Obsidian processes were detected and the vault configuration is present, but this session exposed no callable node_repl, @oai/sky, or equivalent Computer Use interface. No pointer gesture or UI-state claim was made. All matrix scenarios remain Blocked until the matrix is run manually in Obsidian or from a session with Computer Use enabled.
+
+## Render-visibility regression record — 2026-09-19
+
+Automated coverage now verifies that active ordinary LinkType relationships render when both endpoint nodes are already visible, without re-enabling global node discovery; populated badges remain visible on unselected nodes; empty badges remain available through selection or show-all mode; and scaled relationship lines keep a one-screen-pixel minimum. The complete automated suite passes with 87 test files and 401 tests.
+
+Visible Obsidian confirmation remains **Blocked** for this session because Computer Use reported no available app or browser surfaces. After reloading the built plugin, manually confirm that `Graph Note 123.md` displays the expected `parts` and `blocked_and` lines, that populated badges remain visible after deselection, and that selecting a node reveals empty configured badges.
+
+The first manual retest still showed no relationship lines or badges. Investigation found that Obsidian was loading the installed `.obsidian/plugins/nosygraph` bundle, which had no settings file and therefore used the default `O3/LinkTypes` folder, while this vault stores definitions in `System/LinkTypes`. The live resolver now loads valid definitions explicitly referenced by the graph note regardless of registry-folder location. A second manual confirmation is required after the rebuilt bundle is synchronized to the enabled plugin folder and reloaded.

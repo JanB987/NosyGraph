@@ -27,6 +27,8 @@ The production Obsidian path has not selected store mode. `src/GraphView.ts` sti
 
 Graph-note frontmatter, LinkType definitions, active group definitions, and connected Base filters remain configuration changes. Those changes can affect many nodes and therefore retain their broader reload/rebuild paths. This boundary is recorded in [Use Case - Refresh graph after note metadata change](../../../../../../PRJT%20-%20Graph%20Plugin%20V2/Use%20Case%20-%20Refresh%20graph%20after%20note%20metadata%20change.md).
 
+The live view first loads the configured LinkType registry folder, then asks `LinkTypeRegistry` to load valid LinkType files referenced explicitly by the graph note. This keeps folder-based discovery scoped while ensuring that `activeLinkTypes`, `activeOverlayLinkTypes`, and `visibleLinkTypes` remain authoritative across plugin installation or a missing/stale settings file. Embedded graph definitions use the same referenced-definition path.
+
 This is an intentional migration boundary: the architecture audit records the target composition and the live composition separately so a detached implementation is not mistaken for a production cutover.
 
 ## Proposed API

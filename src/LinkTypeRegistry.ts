@@ -55,6 +55,39 @@ export class LinkTypeRegistry {
       .filter((file) => this.isInRegistryFolder(file.path))
       .sort((a, b) => a.path.localeCompare(b.path));
 
+    await this.loadFiles(files);
+  }
+
+  /**
+   * Loads definitions that a graph note references explicitly, even when the
+   * note lives outside the configured discovery folder. The folder continues
+   * to define menu/discovery scope; an explicit graph-note link is authoritative
+   * configuration and must remain usable after installation or settings reset.
+   */
+  async loadReferencedFiles(files: readonly TFile[]): Promise<void> {
+    const knownPaths = new Set(this.allLinkTypes.map((linkType) => linkType.file.path));
+    const additions = Array.from(new Map(
+      (files ?? [])
+        .filter((file): file is TFile => file instanceof TFile && file.extension === "md")
+        .map((file) => [file.path, file] as const)
+    ).values())
+      .filter((file) => !knownPaths.has(file.path))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    await this.loadFiles(additions);
+  }
+
+  getAll(): O3LinkType[] {
+    return [...this.allLinkTypes];
+  }
+
+  getByProperty(property: string): O3LinkType | undefined {
+    const key = String(property ?? "").trim().toLowerCase();
+    if (!key) return undefined;
+    const list = this.byProperty.get(key);
+    return list?.[0];
+  }
+
+  private async loadFiles(files: readonly TFile[]): Promise<void> {
     for (const file of files) {
       const fm = await this.readFrontmatter(file);
       if (!frontmatterMatchesIdentifier(fm, this.identifiers.linkType)) continue;
@@ -67,17 +100,6 @@ export class LinkTypeRegistry {
       list.push(linkType);
       this.byProperty.set(property, list);
     }
-  }
-
-  getAll(): O3LinkType[] {
-    return [...this.allLinkTypes];
-  }
-
-  getByProperty(property: string): O3LinkType | undefined {
-    const key = String(property ?? "").trim().toLowerCase();
-    if (!key) return undefined;
-    const list = this.byProperty.get(key);
-    return list?.[0];
   }
 
   private normalizeFolderPath(raw: string): string {

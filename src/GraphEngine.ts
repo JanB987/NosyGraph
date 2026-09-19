@@ -13,6 +13,7 @@ import { GraphController } from "./graph-application/GraphController";
 import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
 import { GraphBadgeExpansionCoordinator } from "./graph-application/GraphBadgeExpansionCoordinator";
 import { GraphLegacyExpansionService } from "./graph-application/GraphLegacyExpansionService";
+import { GraphRenderVisibilityPolicy } from "./graph-application/GraphRenderVisibilityPolicy";
 import { isExpansionSourceAvailable } from "./graph-application/GraphExpansionRuntimeVisibility";
 import { GraphBadgeToggleShadowComparator } from "./graph-application/GraphBadgeToggleShadowComparator";
 import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeToggleShadowService";
@@ -522,6 +523,7 @@ export class GraphEngine {
   private readonly linkResolver: ObsidianGraphLinkResolver;
   private readonly badgeExpansionCoordinator: GraphBadgeExpansionCoordinator<GraphNode, TFile>;
   private readonly legacyExpansionService: GraphLegacyExpansionService<GraphNode, TFile>;
+  private readonly renderVisibilityPolicy = new GraphRenderVisibilityPolicy();
   private recentGraphLinkMutationTargets = new Map<string, Map<string, number>>();
   private readonly recentGraphLinkMutationTargetTtlMs = 10000;
   private parentContainers = new Map<string, ParentContainerState>();
@@ -1686,18 +1688,15 @@ export class GraphEngine {
       const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
 
       for (const [type, targets] of frontmatterByType.entries()) {
-        // Persistent graph-note views expand active LinkTypes per node through
-        // expandedByBadge. Do not rediscover the same property globally during
-        // an edge rebuild, otherwise one badge click appears to expand every
-        // node that has links under that property.
-        if (this.lastDisableLinkTypeDiscovery) continue;
-        if (!this.selectedLinkTypes.has(type)) continue;
-        if (this.getLinkTypeSemantic(type) === "parent") continue;
         const duplicateMode = this.isLinkDuplicateNodesEnabled(type);
-        if (duplicateMode) continue;
-        if (!this.isLinkDiscoveryEnabled(type)) continue;
         for (const targetPath of targets) {
-          if (!fileSet.has(targetPath)) continue;
+          if (!this.renderVisibilityPolicy.shouldRenderRelationshipEdge({
+            selected: this.selectedLinkTypes.has(type),
+            parentSemantic: this.getLinkTypeSemantic(type) === "parent",
+            duplicateNodes: duplicateMode,
+            discoveryEnabled: this.isLinkDiscoveryEnabled(type),
+            targetAlreadyVisible: fileSet.has(targetPath)
+          })) continue;
           this.pushEdge(seen, file.path, targetPath, type);
         }
       }
@@ -2648,17 +2647,20 @@ export class GraphEngine {
     if (visual.color) return visual.color;
     if (edge.mode === "overlay") return "rgba(150, 170, 190, 0.42)";
     if (edge.relationship === "parent") return `rgba(110, 150, 220, ${alpha.toFixed(3)})`;
-    return "#444";
+    return this.getCssColorVariable("--text-muted", "#888888");
   }
 
   private getEdgeLineWidth(edge: Edge, highlighted: boolean): number {
     const visual = this.getEdgeVisualConfig(edge);
     const base = visual.thickness ?? (edge.relationship === "parent" ? 1.25 : 1);
     const renderScale = this.getEdgeEmbeddedRenderScale(edge);
-    const scaled = Math.max(0.35, base * this.camera.zoom * renderScale);
-    if (highlighted) return Math.max(scaled, 1.4);
-    if (edge.relationship === "parent") return Math.max(0.7, scaled);
-    return scaled;
+    return this.renderVisibilityPolicy.getEdgeLineWidth({
+      baseWidth: base,
+      zoom: this.camera.zoom,
+      renderScale,
+      highlighted,
+      parentSemantic: edge.relationship === "parent"
+    });
   }
 
   private getEdgeEmbeddedRenderScale(edge: Edge): number {
@@ -3957,12 +3959,28 @@ export class GraphEngine {
   }
 
   private shouldShowNodeBadges(node: GraphNode): boolean {
-    if (this.marqueeSelection) return false;
-    if (this.isDraggingNode && this.draggedNode) {
-      if (this.draggedNodeOriginPositions.has(node.id) || node.id === this.draggedNode.id) return false;
-      return this.showAllLinkTypeBadgesHeld || this.graphStore.isNodeSelected(node.id) || this.dragBadgeRevealNodeId === node.id;
-    }
-    return this.showAllLinkTypeBadgesHeld || this.graphStore.isNodeSelected(node.id);
+    const draggedNode = Boolean(
+      this.isDraggingNode
+      && this.draggedNode
+      && (this.draggedNodeOriginPositions.has(node.id) || node.id === this.draggedNode.id)
+    );
+    return this.renderVisibilityPolicy.shouldShowNodeBadges({
+      marqueeSelectionActive: Boolean(this.marqueeSelection),
+      dragging: Boolean(this.isDraggingNode && this.draggedNode),
+      draggedNode,
+      showAll: this.showAllLinkTypeBadgesHeld,
+      selected: this.graphStore.isNodeSelected(node.id),
+      dragRevealTarget: this.dragBadgeRevealNodeId === node.id,
+      hasQualifyingRelationship: this.hasRenderablePopulatedBadge(node)
+    });
+  }
+
+  private hasRenderablePopulatedBadge(node: GraphNode): boolean {
+    return this.getBadgeLinkTypesForNode(node).some((linkType) => {
+      if (!this.shouldRenderLinkTypeBadge(node, linkType)) return false;
+      const property = this.normalizeLinkType(String(linkType.property ?? ""));
+      return Boolean(property) && this.hasBadgeYamlLinks(node.sourcePath, property);
+    });
   }
 
   private syncNodeBadges(): void {

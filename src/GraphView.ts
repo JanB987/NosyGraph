@@ -1273,6 +1273,7 @@ export class BasesGraphView extends FileView {
     if (!(file instanceof TFile)) return null;
     const frontmatter = await this.readGraphFrontmatterFromDisk(file);
     if (!this.isGraphFrontmatterExpandable(file, frontmatter)) return null;
+    await this.loadReferencedLinkTypesFromGraphFrontmatter(frontmatter);
 
     let state = this.embeddedGraphStates.get(graphPath);
     let store = this.embeddedGraphDocumentStores.get(graphPath);
@@ -1503,6 +1504,28 @@ export class BasesGraphView extends FileView {
     return this.resolveLinkTypesFromGraphYamlValue(
       readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "activeLinkTypes") ?? []
     );
+  }
+
+  private async loadReferencedLinkTypesFromGraphFrontmatter(frontmatter: Record<string, unknown>): Promise<void> {
+    const referencedFiles = this.mergeGraphFiles(
+      resolveWikiLinkArray(
+        this.app,
+        readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "activeLinkTypes") ?? []
+      ),
+      resolveWikiLinkArray(
+        this.app,
+        readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "activeOverlayLinkTypes") ?? []
+      ),
+      resolveWikiLinkArray(
+        this.app,
+        readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "visibleLinkTypes") ?? []
+      )
+    );
+    if (referencedFiles.length === 0) return;
+    await this.globalLinkTypeRegistry.loadReferencedFiles(referencedFiles);
+    for (const linkType of this.globalLinkTypeRegistry.getAll()) {
+      this.linkTypeRegistry.set(linkType.file.path, linkType);
+    }
   }
 
   private async resolveActiveOverlayLinkTypesFromYaml(frontmatter: Record<string, unknown>): Promise<O3LinkType[]> {
@@ -1894,6 +1917,7 @@ export class BasesGraphView extends FileView {
 
     await this.loadLinkTypeRegistry();
     const fm = await this.loadGraphFile();
+    await this.loadReferencedLinkTypesFromGraphFrontmatter(fm);
     const fileModeGraphSettings = this.isFileMode ? { ...this.graphSettings } : null;
     const resolvedRootNodes = this.resolveRootNodeFilesFromGraphFrontmatter(fm);
     this.fileModeRootFiles = resolvedRootNodes.files;
