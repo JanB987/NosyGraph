@@ -4,6 +4,16 @@ This guide describes the target architecture for the incremental NosyGraph refac
 
 The existing plugin remains operational while responsibilities move out of the large `src/GraphEngine.ts` and `src/GraphView.ts` files one at a time.
 
+## Current release checkpoint
+
+The prepared release is NosyGraph `0.2.9`, at local commit `46ebb0e` with
+annotated tag `v0.2.9`. Release metadata, the generated bundle, scoped
+typecheck, production build, and the 83-file/385-test suite have been
+validated. The local `origin/main` tracking ref now contains the release
+commit; verify the remote tag and publish the GitHub release before the
+release checker scans `0.2.9`. See
+[the development handover](../Handover-2026-09-19.md).
+
 ## Runtime flow
 
 ```text

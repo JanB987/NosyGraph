@@ -370,7 +370,7 @@ The plugin manifest uses the id `nosygraph`, the name `NosyGraph`, and Jan Bergh
 
 ## Release Status
 
-Current status: beta. Current release: `0.2.8`.
+Current status: beta. Current release: `0.2.9` (release commit `46ebb0e`; GitHub release publication and checker scan are pending). See the handover document for the current release state.
 
 Release history is recorded in [CHANGELOG.md](CHANGELOG.md).
 
