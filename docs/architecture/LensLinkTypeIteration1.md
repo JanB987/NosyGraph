@@ -2,7 +2,7 @@
 
 ## Status
 
-This document records the behavior contract and the released `0.2.9` baseline
+This document records the behavior contract and the released `0.2.10` baseline
 for the planned Lens LinkType feature. No Lens LinkType runtime behavior is live
 in Iteration 1. The production composition remains `GraphView -> GraphEngine`.
 
@@ -92,6 +92,31 @@ Executable coverage is in:
 - Existing Graph Lens opening requires a graph-capable source note and loads
   the source note's graph definition rather than resolving a Lens LinkType's
   properties.
+
+## Review additions before Iteration 2
+
+The current live badge policy hides ordinary badges on unselected nodes. Lens
+badges are the planned exception: an eligible unselected node may show a
+compact Lens indicator, while selected nodes reveal empty configured Lens
+badges for first-link input. This exception must be implemented as a separate
+Lens eligibility/presentation rule and must not make ordinary badges visible.
+
+Before introducing runtime objects, resolve these contract points:
+
+- whether a Lens badge click always opens an embedded Graph Lens viewport and
+  how it coexists with the existing graph-capable-note lens;
+- whether the LinkType path remains the identity or an explicit stable ID is
+  added, including rename/delete behavior;
+- how invalid, missing, duplicated, or out-of-set write properties fail;
+- whether incoming Lens discovery is in scope for the first implementation;
+- the exact far-view eligibility predicate and zoom threshold;
+- how unknown `linkType` values are represented and surfaced;
+- how a Lens definition change reconciles already-open instances.
+
+Additional regressions are required for Lens/ordinary property overlap,
+definition rename/delete, read/write-property changes, nested same-property
+replay, immediate drop-refresh-undo behavior, graph-capable parent two-write
+behavior, and large-vault far-view badge performance.
 
 ## Iteration 1 acceptance
 
