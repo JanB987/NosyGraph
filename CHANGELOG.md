@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.10 - 2026-09-19
+
+### Fixed
+
+- Restored graph relationship lines and badge interactions when LinkType notes
+  are explicitly referenced by a graph note outside the configured discovery
+  folder.
+- Kept badges hidden on unselected nodes during normal graph viewing while
+  preserving selected-node, show-all, and drag-target interactions.
+
+### Validation
+
+- The scoped architecture typecheck, production build, and 88-file/403-test
+  suite pass.
+- The generated `main.js` was synchronized to the enabled `nosygraph` plugin
+  folder.
+
 ## 0.2.9 — 2026-09-18
 
 ### Fixed

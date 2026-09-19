@@ -1,6 +1,6 @@
 {
   "name": "nosygraph",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.js",
