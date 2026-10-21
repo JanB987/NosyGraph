@@ -3,7 +3,6 @@ import type {
   LinkDiscoveryDirection,
   LinkPointerDirection,
   LinkTypeActivationPolicy,
-  LinkTypeDefinitionReference,
   LinkTypeIconKind,
   LinkTypeRenderStyle,
 } from "./types.js";
@@ -68,7 +67,7 @@ export function validateLensLinkTypeDefinition(
     errors: [],
     definition: {
       id,
-      definitionReference: definitionReference as LinkTypeDefinitionReference,
+      definitionReference,
       label,
       property: properties[0],
       properties,

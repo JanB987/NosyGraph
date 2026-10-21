@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
-import { App, FileView, Menu, Modal, Notice, WorkspaceLeaf, type ViewStateResult, parsePropertyId, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
+import { App, FileView, Menu, Modal, Notice, WorkspaceLeaf, type ViewStateResult, parseYaml, stringifyYaml, TFile, TFolder } from "obsidian";
+import { loadGraphLocalStorage, saveGraphLocalStorage, parseGraphPropertyId } from "./ObsidianCompatibility";
 import { setStyle } from "./domStyle";
 import {
   DIRECTION_GRAPH_LAYOUT_ID,
@@ -6006,7 +6007,7 @@ export class BasesGraphView extends FileView {
     if (!key) return null;
 
     try {
-      return parsePropertyId(key);
+      return parseGraphPropertyId(key);
     } catch {
       return null;
     }
@@ -7092,7 +7093,7 @@ export class BasesGraphView extends FileView {
     this.syncViewStateModelFromRuntime();
 
     try {
-      this.app.saveLocalStorage(this.storageKey(key, "graphState"), JSON.stringify(StateManager.serializeState(this.viewStateModel)));
+      saveGraphLocalStorage(this.app, this.storageKey(key, "graphState"), JSON.stringify(StateManager.serializeState(this.viewStateModel)));
 
       this.debug("persistStateToLocalStorage", {
         key,
@@ -7110,7 +7111,7 @@ export class BasesGraphView extends FileView {
     const scopedKey = this.persistenceKey ?? this.resolvePersistenceKey();
 
     try {
-      const raw = this.app.loadLocalStorage(this.storageKey(scopedKey, suffix));
+      const raw = loadGraphLocalStorage(this.app, this.storageKey(scopedKey, suffix));
       if (!raw) return null;
       this.debug("readLocalStorageValue:hit", {
         suffix,
@@ -7132,7 +7133,7 @@ export class BasesGraphView extends FileView {
 
   private loadConfigStore(): void {
     try {
-      const raw = this.app.loadLocalStorage(this.configStorageKey());
+      const raw = loadGraphLocalStorage(this.app, this.configStorageKey());
       if (!raw) {
         this.configData = {};
         return;
@@ -7148,7 +7149,7 @@ export class BasesGraphView extends FileView {
 
   private persistConfigStore(): void {
     try {
-      this.app.saveLocalStorage(this.configStorageKey(), JSON.stringify(this.configData));
+      saveGraphLocalStorage(this.app, this.configStorageKey(), JSON.stringify(this.configData));
     } catch {
       // Ignore vault-scoped storage failures for config state.
     }

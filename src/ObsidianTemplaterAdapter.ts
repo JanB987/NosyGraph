@@ -33,7 +33,7 @@ class TemplaterTemplatePicker extends FuzzySuggestModal<TFile> {
   }
 
   onOpen(): void {
-    super.onOpen();
+    void super.onOpen();
     this.inputEl?.focus();
   }
 
@@ -69,7 +69,7 @@ export class ObsidianTemplaterAdapter {
 
   private getPlugin(): TemplaterPluginLike | null {
     const plugin = (this.app as AppWithPlugins).plugins.getPlugin("templater-obsidian");
-    return plugin && typeof plugin === "object" ? plugin as TemplaterPluginLike : null;
+    return plugin && typeof plugin === "object" ? plugin : null;
   }
 
   isAvailable(): boolean {

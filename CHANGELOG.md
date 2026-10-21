@@ -14,6 +14,12 @@
 
 ### Fixed
 
+- Address the automatic plugin review: guard post-1.5 storage APIs with a
+  vault-scoped fallback and migration, parse property IDs without the newer
+  Bases helper, use DOM helpers, and correct lifecycle/paste/promise handling.
+- Replace browser confirmation with an Obsidian Templater confirmation modal,
+  remove deprecated slider tooltip calls, and restore the extracted engine's
+  missing typed connection-preview dependency.
 - Persist inline grouping rules in the graph note, including an explicitly
   empty rule list.
 - Save Lens open/closed state from both node badges and the window close button;
@@ -33,7 +39,8 @@
 
 ### Validation and limitations
 
-- Scoped architecture typecheck, production build, and 102-file/541-test suite pass.
+- Scoped architecture typecheck, production build, and 103-file/551-test suite pass.
+- Local lint checks reproduce the reported compatibility and code-safety rules.
 - The live composition remains `GraphView -> GraphEngine`. Store runtime and
   replacement physics remain experimental; the separate 0.3 development plugin
   is not included.

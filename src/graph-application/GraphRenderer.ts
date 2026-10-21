@@ -122,7 +122,7 @@ export class GraphRenderer {
       attr: { "aria-label": "Graph" }
     });
     this.canvas.addEventListener("click", this.handleCanvasClick);
-    this.badgeOverlay = container.createEl("div", {
+    this.badgeOverlay = container.createDiv({
       cls: "nosygraph-renderer-badge-overlay",
       attr: { "aria-label": "Graph badges" }
     });

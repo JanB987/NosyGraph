@@ -44,7 +44,7 @@ export class O3NodeBadge {
   ) {}
 
   render(): void {
-    const badgeElement = this.nodeElement.createEl("div");
+    const badgeElement = this.nodeElement.createDiv();
     badgeElement.addClass("o3-node-badge");
     const iconKind = this.linkType.semantic === "lens"
       ? "lens"

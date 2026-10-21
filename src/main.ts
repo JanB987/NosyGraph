@@ -12,6 +12,7 @@ import { ObsidianGraphRootInputHandler } from "./ObsidianGraphRootInputHandler";
 import { ObsidianGraphRootPropertyMutationHandler } from "./ObsidianGraphRootPropertyMutationHandler";
 import { ExportGraphImageModal } from "./ExportGraphImageModal";
 import { ObsidianTemplaterAdapter } from "./ObsidianTemplaterAdapter";
+import { ConfirmTemplaterBatchModal } from "./ConfirmTemplaterBatchModal";
 import { TemplaterBatchService, type TemplaterBatchTarget } from "./TemplaterBatchService";
 import { setStyle } from "./domStyle";
 import {
@@ -144,7 +145,9 @@ export default class BasesGraphPlugin extends Plugin {
     );
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, info) => {
       if (event.defaultPrevented) return;
-      this.handleGraphNodeLinksFrontmatterPaste(event, editor, info);
+      if (this.handleGraphNodeLinksFrontmatterPaste(event, editor, info)) {
+        event.preventDefault();
+      }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       if (!(file instanceof TFile)) return;
@@ -402,11 +405,11 @@ export default class BasesGraphPlugin extends Plugin {
     event: ClipboardEvent,
     editor: Editor,
     info: MarkdownFileInfo
-  ): void {
-    if (event.defaultPrevented || this.copiedGraphNodePaths.length === 0) return;
+  ): boolean {
+    if (event.defaultPrevented || this.copiedGraphNodePaths.length === 0) return false;
     const pastedText = event.clipboardData?.getData("text/plain") ?? "";
-    if (!pastedText || pastedText !== this.copiedGraphNodeClipboardText) return;
-    if (!this.isEditorSelectionInsideFrontmatter(editor)) return;
+    if (!pastedText || pastedText !== this.copiedGraphNodeClipboardText) return false;
+    if (!this.isEditorSelectionInsideFrontmatter(editor)) return false;
 
     const destinationPath = info.file?.path ?? "";
     const yamlLinks = this.copiedGraphNodePaths.map((path) => {
@@ -416,10 +419,10 @@ export default class BasesGraphPlugin extends Plugin {
         : `[[${path.replace(/\.md$/i, "")}]]`;
       return `- "${link.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
     });
-    if (yamlLinks.length === 0) return;
+    if (yamlLinks.length === 0) return false;
 
-    event.preventDefault();
     editor.replaceSelection(this.formatFrontmatterLinkPaste(editor, yamlLinks), "paste");
+    return true;
   }
 
   private handleGraphNodeLinksPropertiesPaste(event: ClipboardEvent): void {
@@ -607,7 +610,7 @@ export default class BasesGraphPlugin extends Plugin {
       adapter.showUnavailableNotice();
       return;
     }
-    if (refs.length > 1 && !window.confirm(`Apply one Templater template to ${refs.length} selected node instances?`)) {
+    if (refs.length > 1 && !await ConfirmTemplaterBatchModal.ask(this.app, refs.length)) {
       return;
     }
     if (refs.length === 0) {
@@ -658,7 +661,7 @@ export default class BasesGraphPlugin extends Plugin {
     new Notice(`Applied template to ${batch.succeeded.length} selected note${batch.succeeded.length === 1 ? "" : "s"}.`);
   }
 
-  async onunload() {
+  onunload(): void {
     for (const action of this.markdownGraphSwitchActions.values()) {
       action.remove();
     }
@@ -2408,7 +2411,6 @@ class BasesGraphSettingTab extends PluginSettingTab {
       .addSlider((slider) => {
         slider
           .setLimits(0, 100, 1)
-          .setDynamicTooltip()
           .setValue(this.plugin.settings.nearestActiveLinkedNodeIndicatorOpacityPercent)
           .onChange(async (value) => {
             this.plugin.settings.nearestActiveLinkedNodeIndicatorOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
@@ -2487,7 +2489,6 @@ class BasesGraphSettingTab extends PluginSettingTab {
       .addSlider((slider) => {
         slider
           .setLimits(0, 100, 1)
-          .setDynamicTooltip()
           .setValue(this.plugin.settings.subnodeOpacityPercent)
           .onChange(async (value) => {
             this.plugin.settings.subnodeOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
@@ -2502,7 +2503,6 @@ class BasesGraphSettingTab extends PluginSettingTab {
       .addSlider((slider) => {
         slider
           .setLimits(0, 100, 1)
-          .setDynamicTooltip()
           .setValue(this.plugin.settings.iconOpacityPercent)
           .onChange(async (value) => {
             this.plugin.settings.iconOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
@@ -2553,7 +2553,6 @@ class BasesGraphSettingTab extends PluginSettingTab {
       .addSlider((slider) => {
         slider
           .setLimits(0.1, 5, 0.05)
-          .setDynamicTooltip()
           .setValue(this.plugin.settings.defaultBadgeFarViewThreshold)
           .onChange(async (value) => {
             this.plugin.settings.defaultBadgeFarViewThreshold = Math.max(0.1, Math.min(5, Number(value)));
