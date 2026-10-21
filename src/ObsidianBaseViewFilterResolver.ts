@@ -7,9 +7,17 @@ export interface BaseViewFilterResult {
   viewName: string | null;
   filterId: string | null;
   source: "bases-api" | "base-yaml" | "none";
-  status: "empty" | "base-unresolved" | "view-unresolved" | "resolved";
+  status: "empty" | "base-unresolved" | "base-unreadable" | "view-unresolved" | "filter-unsupported" | "resolved";
   message?: string;
   filterPreview?: unknown;
+}
+
+export interface ConnectedBaseFilterResult {
+  files: TFile[];
+  baseFiles: TFile[];
+  results: BaseViewFilterResult[];
+  filterId: string | null;
+  source: BaseViewFilterResult["source"] | "mixed";
 }
 
 interface ParsedBaseViewLink {
@@ -17,10 +25,45 @@ interface ParsedBaseViewLink {
   viewName: string | null;
 }
 
+class UnsupportedBaseFilterError extends Error {}
+
+type FilePredicate = (file: TFile) => boolean;
+
 export class ObsidianBaseViewFilterResolver {
   constructor(private readonly app: App) {}
 
-  async resolve(value: unknown, graphFile: TFile | null): Promise<BaseViewFilterResult> {
+  async resolveAll(value: unknown, graphFile: TFile | null): Promise<ConnectedBaseFilterResult> {
+    const seen = new Set<string>();
+    const requests: Array<Promise<BaseViewFilterResult>> = [];
+    const contentCache = new Map<string, Promise<string>>();
+    for (const reference of this.collectStringValues(value)) {
+      const parsed = this.parseBaseViewLink(reference);
+      if (!parsed) continue;
+      const baseFile = this.resolveBaseFile(parsed.linkPath, graphFile);
+      const filterId = this.buildFilterId(baseFile?.path ?? parsed.linkPath, parsed.viewName);
+      const identity = this.buildFilterId(baseFile?.path ?? parsed.linkPath, parsed.viewName?.toLowerCase() ?? null);
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      requests.push(this.resolve(reference, graphFile, contentCache).catch((error: unknown): BaseViewFilterResult => ({
+        ...this.empty(), baseFile, viewName: parsed.viewName, filterId,
+        status: "base-unreadable",
+        message: `Connected Base "${filterId}" could not be evaluated: ${error instanceof Error ? error.message : String(error)}`
+      })));
+    }
+    const results = await Promise.all(requests);
+    const baseFiles = Array.from(new Map(results.flatMap((result) => result.baseFile
+      ? [[result.baseFile.path, result.baseFile] as const] : [])).values());
+    const sources = new Set(results.map((result) => result.source));
+    return {
+      files: this.dedupeFiles(results.flatMap((result) => result.status === "resolved" ? result.files : [])),
+      baseFiles,
+      results,
+      filterId: results.map((result) => result.filterId).filter(Boolean).join(" + ") || null,
+      source: sources.size > 1 ? "mixed" : results[0]?.source ?? "none"
+    };
+  }
+
+  async resolve(value: unknown, graphFile: TFile | null, contentCache?: Map<string, Promise<string>>): Promise<BaseViewFilterResult> {
     const parsed = this.parseBaseViewLink(value);
     if (!parsed) {
       return this.empty();
@@ -37,6 +80,28 @@ export class ObsidianBaseViewFilterResolver {
       };
     }
 
+    // A valid .base definition is the authoritative source for this graph's
+    // requested Base/view pair. Obsidian does not expose a supported headless
+    // Bases query API, and internal method probes can return a result belonging
+    // to a previously displayed Base view. Evaluating the linked file directly
+    // prevents one graph note from inheriting another graph note's nodes.
+    const yamlResult = await this.resolveFromBaseYaml(baseFile, parsed.viewName, contentCache);
+    if (yamlResult.viewFound) {
+      return {
+        files: this.dedupeFiles(yamlResult.files),
+        baseFile,
+        viewName: parsed.viewName,
+        filterId: this.buildFilterId(baseFile.path, parsed.viewName),
+        source: "base-yaml",
+        status: yamlResult.unsupported ? "filter-unsupported" : "resolved",
+        ...(yamlResult.message ? { message: yamlResult.message } : {}),
+        ...(yamlResult.filterPreview !== undefined ? { filterPreview: yamlResult.filterPreview } : {})
+      };
+    }
+
+    // Keep the compatibility probe for environments where the file cannot be
+    // parsed or the requested view is not represented in YAML. It is never
+    // preferred over a resolvable file-backed view.
     const apiFiles = await this.tryResolveWithBasesApi(baseFile, parsed.viewName);
     if (apiFiles) {
       return {
@@ -49,7 +114,6 @@ export class ObsidianBaseViewFilterResolver {
       };
     }
 
-    const yamlResult = await this.resolveFromBaseYaml(baseFile, parsed.viewName);
     return {
       files: this.dedupeFiles(yamlResult.files),
       baseFile,
@@ -326,8 +390,13 @@ export class ObsidianBaseViewFilterResolver {
     return resolved instanceof TFile && resolved.extension === "md" ? resolved : null;
   }
 
-  private async resolveFromBaseYaml(baseFile: TFile, viewName: string | null): Promise<{ files: TFile[]; viewFound: boolean; message?: string; filterPreview?: unknown }> {
-    const content = await this.app.vault.read(baseFile);
+  private async resolveFromBaseYaml(baseFile: TFile, viewName: string | null, contentCache?: Map<string, Promise<string>>): Promise<{ files: TFile[]; viewFound: boolean; unsupported?: boolean; message?: string; filterPreview?: unknown }> {
+    let contentPromise = contentCache?.get(baseFile.path);
+    if (!contentPromise) {
+      contentPromise = this.app.vault.read(baseFile);
+      contentCache?.set(baseFile.path, contentPromise);
+    }
+    const content = await contentPromise;
     const parsed = parseYaml(content);
     if (!parsed || typeof parsed !== "object") {
       return { files: [], viewFound: false, message: `Base file "${baseFile.path}" could not be parsed as YAML.` };
@@ -347,9 +416,28 @@ export class ObsidianBaseViewFilterResolver {
       };
     }
 
-    const filter = view.filters ?? view.filter ?? (parsed as Record<string, unknown>).filters ?? (parsed as Record<string, unknown>).filter;
-    const files = this.app.vault.getMarkdownFiles()
-      .filter((file) => this.matchesFilter(file, filter));
+    const base = parsed as Record<string, unknown>;
+    const globalFilter = base.filters ?? base.filter;
+    const viewFilter = view.filters ?? view.filter;
+    // Bases applies both scopes. Preserve explicit false filters, and use the
+    // same combined expression for validation, matching, and diagnostics.
+    const filter = globalFilter != null && viewFilter != null
+      ? { and: [globalFilter, viewFilter] }
+      : globalFilter ?? viewFilter;
+    let predicate: FilePredicate;
+    try {
+      // Compile every branch before evaluating files, so unsupported syntax is
+      // reported even in an empty vault or a short-circuited boolean branch.
+      predicate = this.compileFilter(filter);
+    } catch (error) {
+      if (!(error instanceof UnsupportedBaseFilterError)) throw error;
+      return {
+        files: [], viewFound: true, unsupported: true,
+        message: `Unsupported or invalid Base filter in "${baseFile.path}": ${error.message}`,
+        filterPreview: this.previewFilter(filter)
+      };
+    }
+    const files = this.app.vault.getMarkdownFiles().filter(predicate);
     const limit = Number(view.limit);
     return {
       files: Number.isFinite(limit) && limit > 0 ? files.slice(0, Math.floor(limit)) : files,
@@ -371,103 +459,169 @@ export class ObsidianBaseViewFilterResolver {
     if (viewName) {
       const normalizedName = viewName.trim().toLowerCase();
       const named = views.find((view) => String(view.name ?? "").trim().toLowerCase() === normalizedName);
-      if (named) return named;
+      return named ?? null;
     }
     return views[0] ?? null;
   }
 
-  private matchesFilter(file: TFile, filter: unknown): boolean {
-    if (!filter) return true;
+  private compileFilter(filter: unknown): FilePredicate {
+    if (filter === undefined || filter === null) return () => true;
+    if (typeof filter === "boolean") return () => filter;
 
     if (typeof filter === "string") {
-      return this.matchesFilterExpression(file, filter);
+      return this.compileFilterExpression(filter);
     }
 
     if (Array.isArray(filter)) {
-      return filter.every((child) => this.matchesFilter(file, child));
+      const children = filter.map((child) => this.compileFilter(child));
+      return (file) => children.every((child) => child(file));
     }
 
-    if (typeof filter !== "object") return true;
+    if (typeof filter !== "object") throw new UnsupportedBaseFilterError(JSON.stringify(filter));
     const obj = filter as Record<string, unknown>;
 
     if (Array.isArray(obj.and)) {
-      return obj.and.every((child) => this.matchesFilter(file, child));
+      const children = obj.and.map((child) => this.compileFilter(child));
+      return (file) => children.every((child) => child(file));
     }
     if (Array.isArray(obj.or)) {
-      return obj.or.some((child) => this.matchesFilter(file, child));
+      const children = obj.or.map((child) => this.compileFilter(child));
+      return (file) => children.some((child) => child(file));
     }
     if (obj.not !== undefined) {
-      return !this.matchesFilter(file, obj.not);
+      if (Array.isArray(obj.not)) {
+        // Bases' not group means none of its children may match. Compile all
+        // children first so invalid syntax cannot hide behind short circuiting.
+        const children = obj.not.map((child) => this.compileFilter(child));
+        return (file) => !children.some((child) => child(file));
+      }
+      const child = this.compileFilter(obj.not);
+      return (file) => !child(file);
     }
-    const structured = this.matchesStructuredFilter(file, obj);
+    const structured = this.compileStructuredFilter(obj);
     if (structured !== null) {
       return structured;
     }
 
-    return true;
+    throw new UnsupportedBaseFilterError(JSON.stringify(filter));
   }
 
-  private matchesStructuredFilter(file: TFile, filter: Record<string, unknown>): boolean | null {
+  private compileStructuredFilter(filter: Record<string, unknown>): FilePredicate | null {
     const rawField = filter.field ?? filter.property ?? filter.key ?? filter.name ?? filter.column;
     const rawOperator = filter.operator ?? filter.op ?? filter.condition ?? filter.type;
     const rawValue = filter.value ?? filter.query ?? filter.text ?? filter.values;
     if (rawField === undefined || rawOperator === undefined) {
       return null;
     }
-    return this.compareValues(
+    this.assertSupportedField(String(rawField));
+    this.assertSupportedOperator(String(rawOperator));
+    return (file) => this.compareValues(
       this.readFieldValue(file, String(rawField)),
       String(rawOperator),
-      rawValue
+      rawValue,
+      String(rawField)
     );
   }
 
-  private matchesFilterExpression(file: TFile, expression: string): boolean {
+  private compileFilterExpression(expression: string): FilePredicate {
     const normalizedExpression = expression.trim();
+    const closingOuterParen = this.validateExpressionDelimiters(normalizedExpression);
+    if (normalizedExpression.startsWith("(") && closingOuterParen === normalizedExpression.length - 1) {
+      return this.compileFilterExpression(normalizedExpression.slice(1, -1));
+    }
+    if (normalizedExpression.startsWith("!") && !normalizedExpression.startsWith("!=")) {
+      const operand = this.compileFilterExpression(normalizedExpression.slice(1));
+      return (file) => !operand(file);
+    }
+    if (normalizedExpression === "true") return () => true;
+    if (normalizedExpression === "false") return () => false;
     const inFolderMatch = normalizedExpression.match(/^file\.(?:inFolder|folderContains)\((.*)\)$/i);
     if (inFolderMatch) {
       const expected = this.unquote(String(inFolderMatch[1] ?? "").trim());
-      return this.valueToText(this.readFieldValue(file, "file.folder")).includes(expected);
+      return (file) => this.valueToText(this.readFieldValue(file, "file.folder")).includes(expected);
     }
 
     const hasTagMatch = normalizedExpression.match(/^file\.hasTag\((.*)\)$/i);
     if (hasTagMatch) {
       const expected = this.normalizeTag(this.unquote(String(hasTagMatch[1] ?? "").trim()));
-      const tags = this.readFileTags(file);
-      return tags.has(expected);
+      return (file) => this.readFileTags(file).has(expected);
     }
 
     const fileLinksContainsCurrentMatch = normalizedExpression.match(/^file\((.*)\)\.links\.contains\(file\)$/i);
     if (fileLinksContainsCurrentMatch) {
       const sourceLinkText = this.unquote(String(fileLinksContainsCurrentMatch[1] ?? "").trim());
-      return this.fileLinksContainFile(sourceLinkText, file);
+      return (file) => this.fileLinksContainFile(sourceLinkText, file);
     }
 
     const methodMatch = normalizedExpression.match(/^(.+?)\.(contains|icontains|startsWith|endsWith)\((.*)\)$/i);
     if (methodMatch) {
       const field = String(methodMatch[1] ?? "").trim();
+      this.assertSupportedField(field);
       const operator = String(methodMatch[2] ?? "").trim().toLowerCase();
       const expected = this.parseLiteral(String(methodMatch[3] ?? "").trim());
       if (operator === "contains") {
-        return this.compareValues(this.readFieldValue(file, field), "contains", expected);
+        return (file) => this.compareValues(this.readFieldValue(file, field), "contains", expected, field);
       }
       if (operator === "icontains") {
-        return this.compareValues(this.readFieldValue(file, field), "icontains", expected);
+        return (file) => this.compareValues(this.readFieldValue(file, field), "icontains", expected, field);
       }
       if (operator === "startswith") {
-        return this.compareValues(this.readFieldValue(file, field), "startsWith", expected);
+        return (file) => this.compareValues(this.readFieldValue(file, field), "startsWith", expected, field);
       }
       if (operator === "endswith") {
-        return this.compareValues(this.readFieldValue(file, field), "endsWith", expected);
+        return (file) => this.compareValues(this.readFieldValue(file, field), "endsWith", expected, field);
       }
     }
 
     const match = normalizedExpression.match(/^(.+?)\s*(==|=|!=|>=|<=|>|<|contains|icontains|startsWith|endsWith|is|is-not|does-not-contain)\s*(.+)$/i);
-    if (!match) return false;
+    if (!match) throw new UnsupportedBaseFilterError(expression);
 
     const field = String(match[1] ?? "").trim();
+    this.assertSupportedField(field);
     const operator = String(match[2] ?? "").trim().toLowerCase();
     const expected = this.parseLiteral(String(match[3] ?? "").trim());
-    return this.compareValues(this.readFieldValue(file, field), operator, expected);
+    return (file) => this.compareValues(this.readFieldValue(file, field), operator, expected, field);
+  }
+
+  private assertSupportedField(field: string): void {
+    if (!/^[\p{L}_][\p{L}\p{N}_ -]*(?:\.[\p{L}\p{N}_ -]+|\[['"][^'"]+['"]\])*$/u.test(field)) {
+      throw new UnsupportedBaseFilterError(`Field expression: ${field}`);
+    }
+  }
+
+  private assertSupportedOperator(operator: string): void {
+    if (!["equals", "not-equals", "contains", "not-contains", "icontains", "starts-with", "ends-with", "gt", "gte", "lt", "lte"].includes(this.normalizeOperator(operator))) {
+      throw new UnsupportedBaseFilterError(`Operator: ${operator}`);
+    }
+  }
+
+  private validateExpressionDelimiters(expression: string): number {
+    let depth = 0;
+    let quote = "";
+    let escaped = false;
+    let closingOuterParen = -1;
+    for (let index = 0; index < expression.length; index += 1) {
+      const char = expression[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = "";
+        continue;
+      }
+      if (char === '"' || char === "'") quote = char;
+      else if (char === "(") depth += 1;
+      else if (char === ")") {
+        depth -= 1;
+        if (depth < 0) throw new UnsupportedBaseFilterError(expression);
+        if (depth === 0 && closingOuterParen < 0) closingOuterParen = index;
+      } else if (char === "&" || char === "|") {
+        throw new UnsupportedBaseFilterError(`Use YAML and/or filters for compound expressions: ${expression}`);
+      } else if (char === ",") {
+        throw new UnsupportedBaseFilterError(`Multiple function arguments: ${expression}`);
+      }
+    }
+    if (depth !== 0 || quote) throw new UnsupportedBaseFilterError(expression);
+    return closingOuterParen;
   }
 
   private readFieldValue(file: TFile, field: string): unknown {
@@ -586,13 +740,13 @@ export class ObsidianBaseViewFilterResolver {
     return normalized;
   }
 
-  private compareValues(actual: unknown, operator: string, expectedRaw: unknown): boolean {
+  private compareValues(actual: unknown, operator: string, expectedRaw: unknown, field: string): boolean {
     const normalizedOperator = this.normalizeOperator(operator);
     const expected = this.valueToText(expectedRaw);
     const actualText = this.valueToText(actual);
     const actualItems = Array.isArray(actual) ? actual.map((item) => this.valueToText(item)) : [actualText];
-    const expectedComparable = this.normalizeComparableText(expected);
-    const actualComparableItems = actualItems.map((item) => this.normalizeComparableText(item));
+    const expectedComparable = this.normalizeComparableText(expected, field);
+    const actualComparableItems = actualItems.map((item) => this.normalizeComparableText(item, field));
 
     if (normalizedOperator === "equals") {
       return actualComparableItems.some((item) => item === expectedComparable);
@@ -678,7 +832,9 @@ export class ObsidianBaseViewFilterResolver {
   private parseLiteral(value: string): unknown {
     const linkMatch = value.match(/^link\((.*)\)$/i);
     if (linkMatch) {
-      return this.unquote(String(linkMatch[1] ?? "").trim());
+      const target = String(linkMatch[1] ?? "").trim();
+      this.assertLiteralText(target);
+      return this.unquote(target);
     }
     const todayPartMatch = value.match(/^today\(\)\.(month|day|year)$/i);
     if (todayPartMatch) {
@@ -688,6 +844,7 @@ export class ObsidianBaseViewFilterResolver {
     if (/^today\(\)$/i.test(value.trim())) {
       return this.formatDate(new Date());
     }
+    this.assertLiteralText(value);
     const unquoted = this.unquote(value);
     if (/^(true|false)$/i.test(unquoted)) {
       return unquoted.toLowerCase() === "true";
@@ -699,7 +856,18 @@ export class ObsidianBaseViewFilterResolver {
     return unquoted;
   }
 
-  private normalizeComparableText(value: string): string {
+  private assertLiteralText(value: string): void {
+    const quoted = (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"));
+    if (!quoted && /[()]/.test(value)) {
+      throw new UnsupportedBaseFilterError(`Literal expression: ${value}`);
+    }
+  }
+
+  private normalizeComparableText(value: string, field: string): string {
+    // File fields are literal metadata, not note links. In particular, paths
+    // and folders must retain directories, extensions, and trailing slashes.
+    if (this.normalizeFieldName(field).startsWith("file.")) return value;
     let text = String(value ?? "").trim();
     const wikiMatch = text.match(/^\[\[([^|\]#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]$/);
     if (wikiMatch) {

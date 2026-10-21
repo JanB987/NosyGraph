@@ -108,4 +108,35 @@ describe("LegacyGraphExpansionBadgeAdapter", () => {
 
     await expect(adapter.readBadges(input)).resolves.toHaveLength(1);
   });
+
+  it("keeps same-property definitions distinct when their definition identities differ", async () => {
+    const adapter = new LegacyGraphExpansionBadgeAdapter({
+      getDefinitions: () => [
+        {
+          linkTypeId: "LinkTypes/Client Lens.md",
+          legacyLinkTypeId: "status",
+          label: "Client",
+          color: "#4488cc",
+          semantic: "lens",
+          duplicateNodes: false
+        },
+        {
+          linkTypeId: "LinkTypes/Project Lens.md",
+          legacyLinkTypeId: "status",
+          label: "Project",
+          color: "#cc8844",
+          semantic: "lens",
+          duplicateNodes: false
+        }
+      ],
+      hasRelationships: (noteId, linkTypeId) => noteId === "B.md" && linkTypeId === "status"
+    });
+
+    const badges = await adapter.readBadges(input);
+    expect(badges.map((badge) => badge.id)).toEqual([
+      "instance:B::LinkTypes/Client Lens.md",
+      "instance:B::LinkTypes/Project Lens.md"
+    ]);
+    expect(badges.every((badge) => badge.semantic === "lens")).toBe(true);
+  });
 });

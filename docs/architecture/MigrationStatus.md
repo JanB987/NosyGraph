@@ -7,9 +7,10 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 - **Experimental** means the code is detached, shadowed, staged, or available only through an explicit test/diagnostic entry point.
 - **Proposed** means the design or follow-up is recorded, but the production behavior is not implemented or has not passed its activation gate.
 
-The current plugin release is `0.2.10` at release commit `e5aa1de`; the local
-remote-tracking branch already contains that commit. Verify the remote tag and
-release publication before scanning. The next-chat development context is recorded in
+Release `0.2.11` is prepared from the published `0.2.10` baseline (`e5aa1de`).
+See the [release notes](../releases/0.2.11.md) and
+[publication guide](../releases/0.2.11-release-guide.md) for assets, validation,
+and remaining interactive checks. Historical next-chat context is recorded in
 [`Handover-2026-09-19.md`](../Handover-2026-09-19.md). The release does not
 change the runtime ownership statuses below: the live path remains
 `GraphView -> GraphEngine`, while the store composition remains experimental.

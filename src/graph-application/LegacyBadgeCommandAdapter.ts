@@ -11,6 +11,7 @@ export interface LegacyBadgeNode {
 /** Minimum legacy link-type data needed to match a GraphBadge. */
 export interface LegacyBadgeLinkType {
   property?: unknown;
+  definitionId?: unknown;
 }
 
 export interface LegacyBadgeCommandTarget<
@@ -33,6 +34,7 @@ export interface LegacyBadgeCommandAdapterOptions<
   getLinkTypes(node: TNode): readonly TLinkType[];
   normalizeLinkType(value: string): string;
   handleNormalToggle?(request: GraphBadgeRequest): void | Promise<void>;
+  toggleLens?(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
   toggle(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
   openInput(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
   expandChain(target: LegacyBadgeCommandTarget<TNode, TFile, TLinkType>): void | Promise<void>;
@@ -41,8 +43,8 @@ export interface LegacyBadgeCommandAdapterOptions<
 /**
  * Temporary bridge from host-neutral badge commands to legacy runtime objects.
  *
- * The adapter owns identity resolution while GraphEngine supplies access to its
- * current objects and its unchanged legacy operations.
+ * Canonical LinkType-definition IDs are preferred. The normalized property is
+ * retained as a fallback so persisted 0.2.9 badge commands remain readable.
  */
 export class LegacyBadgeCommandAdapter<
   TNode extends LegacyBadgeNode,
@@ -54,6 +56,11 @@ export class LegacyBadgeCommandAdapter<
   ) {}
 
   executeBadge(request: GraphBadgeRequest): void | Promise<void> {
+    if (request.action === "toggle-badge" && request.semantic === "lens" && this.options.toggleLens) {
+      const target = this.resolveTarget(request);
+      if (target) return this.options.toggleLens(target);
+      return;
+    }
     if (
       request.action === "toggle-badge"
       && request.semantic === "link"
@@ -81,7 +88,8 @@ export class LegacyBadgeCommandAdapter<
     const file = this.options.getFile(node.sourcePath);
     if (!file) return undefined;
     const linkType = this.options.getLinkTypes(node).find((candidate) =>
-      this.options.normalizeLinkType(String(candidate.property ?? "")) === request.linkTypeId
+      String(candidate.definitionId ?? "").trim() === request.linkTypeId
+      || this.options.normalizeLinkType(String(candidate.property ?? "")) === request.linkTypeId
     );
     return linkType ? { node, file, linkType } : undefined;
   }

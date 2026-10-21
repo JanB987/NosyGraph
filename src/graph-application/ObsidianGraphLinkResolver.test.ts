@@ -8,7 +8,7 @@ interface FixtureFile {
   frontmatter: Record<string, unknown>;
 }
 
-function fixture() {
+function fixture(mixedConfig = false) {
   const createFile = (path: string, frontmatter: Record<string, unknown>): FixtureFile => {
     const file = Object.assign({}, {
       path,
@@ -44,8 +44,8 @@ function fixture() {
   const resolver = new ObsidianGraphLinkResolver(app, {
     isFile: (value): value is TFile => typeof value === "object" && value !== null && "path" in value,
     getLabels: () => new Map([["B.md", "Bee"], ["C.md", "See"]]),
-    getExpansionPropertyAliases: () => new Map([["related", ["related", "parts"]]]),
-    getDiscoveryDirections: () => new Map([["related", "outgoing"]])
+    getExpansionPropertyAliases: () => new Map([[mixedConfig ? "RELATED" : "related", ["Related", "PARTS"]]]),
+    getDiscoveryDirections: () => new Map([[mixedConfig ? "RELATED" : "related", mixedConfig ? "incoming" : "outgoing"]])
   });
   return { records, resolver };
 }
@@ -56,6 +56,14 @@ const linkType = (direction?: O3LinkType["linkDiscoveryDirection"]): O3LinkType 
 } as O3LinkType);
 
 describe("ObsidianGraphLinkResolver", () => {
+  it("normalizes alias identities and incoming configuration keys as properties", () => {
+    const { records, resolver } = fixture(true);
+    expect(resolver.collectFrontmatterLinksByType(records[0]!.file).get("related")).toEqual(new Set(["B.md", "Missing.md", "C.md"]));
+    const configured = { property: " Related " } as O3LinkType;
+    expect(resolver.resolveLinkedTargets(records[0]!.file, configured).map((target) => target.path)).toEqual(["B.md"]);
+    expect(resolver.resolveLinkedTargets(records[2]!.file, configured).map((target) => target.path)).toEqual(["A.md"]);
+  });
+
   it("collects YAML links by property, resolves aliases, and preserves missing links", () => {
     const { records, resolver } = fixture();
     const byType = resolver.collectFrontmatterLinksByType(records[0]!.file);

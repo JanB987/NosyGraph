@@ -2,6 +2,7 @@ export interface LinkTypePropertyKeys {
   key: string;
   property: string;
   properties: string;
+  writeProperty: string;
   linkType: string;
   direction: string;
   linkDiscoveryDirection: string;
@@ -31,6 +32,7 @@ export const DEFAULT_LINK_TYPE_PROPERTY_KEYS: LinkTypePropertyKeys = {
   key: "key",
   property: "property",
   properties: "properties",
+  writeProperty: "writeProperty",
   linkType: "linkType",
   direction: "direction",
   linkDiscoveryDirection: "LinkDiscoveryDirection",

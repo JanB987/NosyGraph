@@ -5,6 +5,7 @@ import {
   DIRECTION_GRAPH_LAYOUT_ID,
   FORCE_GRAPH_LAYOUT_ID,
   GraphEngine,
+  type GraphLinkMutationNodeRef,
   type GraphImageExportArea,
   type GraphLineStyle,
   type GraphLayoutOption,
@@ -18,13 +19,16 @@ import {
 import { O3GraphDependencyWatcher } from "./O3GraphDependencyWatcher";
 import { O3GraphState, type O3GraphEmbeddedGraphState, type O3GraphEmbeddedLensState, type O3GraphRuntimeNodeSnapshot } from "./O3GraphState";
 import { O3GraphDocumentStore, type O3GraphDocumentWriteReason } from "./O3GraphDocumentStore";
-import { shouldPersistEmbeddedGraphRuntime } from "./graph-application/EmbeddedGraphPersistencePolicy";
+import {
+  resolveEmbeddedGraphPersistenceOwner,
+  shouldPersistEmbeddedGraphRuntime
+} from "./graph-application/EmbeddedGraphPersistencePolicy";
 import { ObsidianGraphLinkInputHandler } from "./ObsidianGraphLinkInputHandler";
 import { ObsidianGraphLinkMutationHandler } from "./ObsidianGraphLinkMutationHandler";
 import { ObsidianGraphNodeOpenHandler } from "./ObsidianGraphNodeOpenHandler";
 import { ObsidianGraphRootInputHandler } from "./ObsidianGraphRootInputHandler";
 import { ObsidianGraphRootPropertyMutationHandler } from "./ObsidianGraphRootPropertyMutationHandler";
-import { ObsidianBaseViewFilterResolver, type BaseViewFilterResult } from "./ObsidianBaseViewFilterResolver";
+import { ObsidianBaseViewFilterResolver, type ConnectedBaseFilterResult } from "./ObsidianBaseViewFilterResolver";
 import type { ExpandedNodeState, GraphViewState } from "./GraphState";
 import { O3GraphGroup } from "./O3GraphGroup";
 import { O3LinkType } from "./O3LinkType";
@@ -34,6 +38,7 @@ import type { GraphEvent } from "./GraphEvents";
 import { GraphModel, type GraphEdge } from "./GraphModel";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE, resolveWikiLinkArray } from "./linkResolver";
 import { StateManager } from "./StateManager";
+import { normalizeGraphGroupingRules } from "./GraphGroupingRules";
 import {
   DEFAULT_GRAPH_PROPERTY_KEYS,
   type GraphPropertyKeys,
@@ -69,6 +74,7 @@ const DEFAULT_GRAPH_SETTINGS: GraphSimulationSettings = {
   restVelocityThreshold: 0.015,
   textFadeThreshold: 97
 };
+const DEFAULT_BADGE_FAR_VIEW_THRESHOLD = 0.55;
 const DEFAULT_LAYOUT_ID = FORCE_GRAPH_LAYOUT_ID;
 const DEFAULT_NODE_DRAG_HOLD_DURATION_MS = 180;
 const DEFAULT_LINK_TYPE_MENU_SIZE: LinkTypeMenuSize = { width: 260, height: 360 };
@@ -109,7 +115,7 @@ export class BasesGraphView extends FileView {
   private fileModeActiveLinkTypeFiles: TFile[] = [];
   private fileModeActiveOverlayLinkTypeFiles: TFile[] = [];
   private fileModeActiveGroupFiles: TFile[] = [];
-  private connectedBaseFilterResult: BaseViewFilterResult | null = null;
+  private connectedBaseFilterResult: ConnectedBaseFilterResult | null = null;
   private lastConnectedBaseFilterMessage: string | null = null;
   private graphState: O3GraphState | null = null;
   private graphDocumentStore: O3GraphDocumentStore | null = null;
@@ -153,7 +159,10 @@ export class BasesGraphView extends FileView {
   private expandedParents: ExpandedNodeState[] = [];
   private viewStateModel: GraphViewState = StateManager.createDefaultState();
   private graphStateWriteSkippedForEmptySnapshot = false;
+  private graphNotePersistenceEnabled = false;
+  private pendingGraphNotePromotionSnapshots: O3GraphRuntimeNodeSnapshot[] | null = null;
   private graphSettings: GraphSimulationSettings;
+  private badgeFarViewThreshold = DEFAULT_BADGE_FAR_VIEW_THRESHOLD;
   private layoutId = DEFAULT_LAYOUT_ID;
   private linkTypeMenuSize: LinkTypeMenuSize = { ...DEFAULT_LINK_TYPE_MENU_SIZE };
   private nodeDragHoldDurationMs = DEFAULT_NODE_DRAG_HOLD_DURATION_MS;
@@ -175,6 +184,11 @@ export class BasesGraphView extends FileView {
   private hasRuntimeHideNodesSettingChanges = false;
   private hasHydratedPersistedState = false;
   private viewportPersistTimer: number | null = null;
+  private groupingPersistTimer: number | null = null;
+  private pendingGroupingWrite: (() => Promise<void>) | null = null;
+  private embeddedGraphStateWriteQueue: Promise<void> = Promise.resolve();
+  private reportedEphemeralLensOwners = new Set<string>();
+  private badgeFarViewThresholdWriteTimer: number | null = null;
   private viewportPersistDelayMs = 250;
   private suppressGraphFileReloadUntil = 0;
   private suppressEmbeddedGraphReloadUntil = new Map<string, number>();
@@ -200,6 +214,7 @@ export class BasesGraphView extends FileView {
   private onHeaderMenuClickBound = (event: MouseEvent) => this.onHeaderMenuClick(event);
   private onHeaderMenuContextMenuBound = (event: MouseEvent) => this.onHeaderMenuClick(event);
   private onBeforeUnloadBound = () => {
+    void this.flushGroupingStateWrite();
     this.isClosingOrUnloadingGraphView = true;
     this.cancelPendingViewportStateWrite();
     this.persistLinkTypesToConfig(true);
@@ -242,9 +257,12 @@ export class BasesGraphView extends FileView {
     private linkTypePropertyKeys: LinkTypePropertyKeys = DEFAULT_LINK_TYPE_PROPERTY_KEYS,
     private groupPropertyKeys: GroupPropertyKeys = DEFAULT_GROUP_PROPERTY_KEYS,
     private onGraphNodeLinksCopied?: (paths: string[], clipboardText: string) => void,
-    private onGraphTabZoomIntoNode?: (graphLeaf: WorkspaceLeaf, path: string) => Promise<void> | void
+    private onGraphTabOpenNodeInMarkdown?: (graphLeaf: WorkspaceLeaf, path: string) => Promise<void> | void,
+    private defaultBadgeFarViewThreshold = DEFAULT_BADGE_FAR_VIEW_THRESHOLD
   ) {
     super(leaf);
+    this.defaultBadgeFarViewThreshold = this.normalizeBadgeFarViewThreshold(this.defaultBadgeFarViewThreshold);
+    this.badgeFarViewThreshold = this.defaultBadgeFarViewThreshold;
     this.graphPropertyKeys = normalizeGraphPropertyKeys(this.graphPropertyKeys);
     this.noteTypeIdentifiers = normalizeNoteTypeIdentifiers(this.noteTypeIdentifiers);
     this.linkTypePropertyKeys = normalizeLinkTypePropertyKeys(this.linkTypePropertyKeys);
@@ -325,6 +343,7 @@ export class BasesGraphView extends FileView {
         this.groupingRules = this.normalizeGroupingRules(rules);
         this.updateRelevantProperties();
         this.persistStateToLocalStorage();
+        this.scheduleGroupingStateWrite();
       },
       groupingEvaluator: (nodePath) => this.evaluateGrouping(nodePath),
       groupingStyleEvaluator: (nodePath) => this.evaluateGroupingStyle(nodePath),
@@ -378,6 +397,9 @@ export class BasesGraphView extends FileView {
       onSettingsChange: (settings) => {
         void this.handleGraphSettingsChanged(settings);
       },
+      onBadgeFarViewThresholdChange: (threshold) => {
+        void this.handleBadgeFarViewThresholdChanged(threshold);
+      },
       onGraphLinkBadgeDrop: async (request) => {
         return new ObsidianGraphLinkMutationHandler(this.app).applyBadgeDrop(request);
       },
@@ -405,7 +427,17 @@ export class BasesGraphView extends FileView {
         return result;
       },
       onNodeOpen: (request) => {
-        return new ObsidianGraphNodeOpenHandler(this.app).openNode(request);
+        return new ObsidianGraphNodeOpenHandler(this.app, {
+          sourceLeaf: this.leaf,
+          isGraphCapable: (path) => this.isGraphNotePath(path),
+          openGraphInLeaf: (leaf, path) => leaf.setViewState({
+            type: BASES_GRAPH_VIEW,
+            state: { file: path },
+            active: true
+          }, true),
+          graphTab: this.graphTabMode,
+          openMarkdownFromGraphTab: this.onGraphTabOpenNodeInMarkdown
+        }).openNode(request);
       },
       onZoomIntoNode: (request) => {
         return this.zoomIntoNode(request.path);
@@ -418,16 +450,29 @@ export class BasesGraphView extends FileView {
       },
       isGraphNote: (path) => this.isGraphNotePath(path),
       onEmbeddedGraphExpansionRequested: (payload) => {
-        return this.loadEmbeddedGraphDefinition(payload.graphPath, payload.ancestry);
+        if (payload.linkTypeId) {
+          return this.engine?.getLensEmbeddedGraphDefinition(
+            payload.originNodeId,
+            payload.linkTypeId,
+            payload.ancestry
+          ) ?? null;
+        }
+        return this.loadEmbeddedGraphDefinition(
+          payload.graphPath,
+          payload.ancestry,
+          payload.ownerGraphPath
+        );
       },
-      onEmbeddedGraphExpansionChanged: (originNodeId, graphPath, expanded, ownerGraphPath, lens, parentChain) => {
+      onEmbeddedGraphExpansionChanged: (originNodeId, graphPath, expanded, ownerGraphPath, lens, parentChain, linkTypeId, instanceId) => {
         void this.handleEmbeddedGraphExpansionChanged(
           originNodeId,
           graphPath,
           expanded,
           ownerGraphPath,
           lens,
-          parentChain
+          parentChain,
+          linkTypeId,
+          instanceId
         );
       },
       onEmbeddedNodePositionChanged: (payload) => {
@@ -474,6 +519,7 @@ export class BasesGraphView extends FileView {
         this.renderLinkTypeMenuSections(container);
       }
     });
+    this.engine.setBadgeFarViewThreshold(this.badgeFarViewThreshold);
     this.engine.onNodePositionChanged = (path, x, y) => {
       void this.handleNodePositionChanged(path, x, y);
     };
@@ -494,6 +540,46 @@ export class BasesGraphView extends FileView {
     if (!normalized) return;
     this.activeNodeRingColor = normalized;
     this.engine.setActiveNodeRingColor(normalized);
+  }
+
+  setDefaultBadgeFarViewThreshold(value: number): void {
+    this.defaultBadgeFarViewThreshold = this.normalizeBadgeFarViewThreshold(value);
+    if (!this.hasGraphBadgeFarViewThresholdOverride()) {
+      this.badgeFarViewThreshold = this.defaultBadgeFarViewThreshold;
+      this.engine.setBadgeFarViewThreshold(this.badgeFarViewThreshold);
+    }
+  }
+
+  private async handleBadgeFarViewThresholdChanged(value: number): Promise<void> {
+    const normalized = this.normalizeBadgeFarViewThreshold(value);
+    this.badgeFarViewThreshold = normalized;
+    this.engine.setBadgeFarViewThreshold(normalized);
+    if (!this.file) return;
+
+    if (this.badgeFarViewThresholdWriteTimer !== null) {
+      window.clearTimeout(this.badgeFarViewThresholdWriteTimer);
+    }
+    this.badgeFarViewThresholdWriteTimer = window.setTimeout(() => {
+      this.badgeFarViewThresholdWriteTimer = null;
+      void this.writeBadgeFarViewThresholdOverride(normalized);
+    }, 300);
+  }
+
+  private async writeBadgeFarViewThresholdOverride(value: number): Promise<void> {
+    const file = this.file;
+    if (!(file instanceof TFile) || this.isClosingOrUnloadingGraphView) return;
+    try {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        writeFrontmatterProperty(
+          frontmatter as Record<string, unknown>,
+          this.graphPropertyKeys,
+          "graphBadgeFarViewThreshold",
+          this.normalizeBadgeFarViewThreshold(value)
+        );
+      });
+    } catch (error) {
+      console.error("[GraphView] Failed to persist badge far-view threshold:", error);
+    }
   }
 
   setNearestActiveLinkedNodeIndicator(settings: {
@@ -631,8 +717,8 @@ export class BasesGraphView extends FileView {
       new Notice("This note is not recognized as a NosyGraph-capable note.");
       return;
     }
-    if (this.graphTabMode && this.onGraphTabZoomIntoNode) {
-      await this.onGraphTabZoomIntoNode(this.leaf, file.path);
+    if (this.graphTabMode && this.onGraphTabOpenNodeInMarkdown) {
+      await this.onGraphTabOpenNodeInMarkdown(this.leaf, file.path);
       return;
     }
     await this.leaf.setViewState({
@@ -652,6 +738,14 @@ export class BasesGraphView extends FileView {
 
   selectAllGraphNodes(): number {
     return this.engine.selectAllNodes();
+  }
+
+  getSelectedGraphNodeRefs(): GraphLinkMutationNodeRef[] {
+    return this.engine.getSelectedNodeRefs();
+  }
+
+  getSelectedGraphNodeCount(): number {
+    return this.engine.getSelectedNodeCount();
   }
 
   getViewType(): string {
@@ -687,11 +781,17 @@ export class BasesGraphView extends FileView {
     return this.graphTabMode;
   }
 
+  isGraphCapablePath(path: string): boolean {
+    return this.isGraphNotePath(path);
+  }
+
   getFile(): TFile | null {
     return this.file;
   }
 
   async setState(state: unknown, result: ViewStateResult) {
+    await this.embeddedGraphStateWriteQueue;
+    await this.flushGroupingStateWrite();
     const inputState = state && typeof state === "object"
       ? state as Record<string, unknown>
       : {};
@@ -707,7 +807,6 @@ export class BasesGraphView extends FileView {
 
     const previousLoadedPath = this.file?.path ?? "";
     await super.setState(normalizedState, result);
-    const loadedByBaseFileView = Boolean(resolvedFilePath && this.file?.path === resolvedFilePath && previousLoadedPath !== this.file.path);
     this.filePath = resolvedFilePath || null;
     if (resolvedFilePath) {
       const abstractFile = this.app.vault.getAbstractFileByPath(resolvedFilePath);
@@ -718,19 +817,38 @@ export class BasesGraphView extends FileView {
 
     this.refreshLeafHeader();
 
-    if (this.file && !loadedByBaseFileView) {
-      if (this.initialized) {
-        this.scheduleGraphHydration("set-state");
-      } else {
-        this.pendingReloadAfterInitialize = true;
+    // A graph view can be reused for another graph note (especially a graph tab
+    // following the active note). FileView may load the new file without calling
+    // our onLoadFile hook in every workspace transition, so setState must always
+    // invalidate and hydrate the source set for the file it now owns.
+    if (this.file && this.initialized) {
+      if (previousLoadedPath !== this.file.path) {
+        this.isClosingOrUnloadingGraphView = false;
+        this.fileModeRootFiles = [];
+        this.fileModeFilterFiles = [];
+        this.currentGraphFiles = [];
+        this.connectedBaseFilterResult = null;
       }
+      this.scheduleGraphHydration("set-state");
+    } else if (this.file) {
+      this.pendingReloadAfterInitialize = true;
     }
   }
 
   async onLoadFile(file: TFile): Promise<void> {
+    await this.embeddedGraphStateWriteQueue;
+    await this.flushGroupingStateWrite();
+    const previousLoadedPath = this.file?.path ?? this.filePath ?? "";
     this.file = file;
     this.filePath = file.path;
+    this.isClosingOrUnloadingGraphView = false;
     this.refreshLeafHeader();
+    if (previousLoadedPath && previousLoadedPath !== file.path) {
+      this.fileModeRootFiles = [];
+      this.fileModeFilterFiles = [];
+      this.currentGraphFiles = [];
+      this.connectedBaseFilterResult = null;
+    }
     if (this.initialized) {
       this.scheduleGraphHydration("load-file");
     } else {
@@ -739,6 +857,8 @@ export class BasesGraphView extends FileView {
   }
 
   async onUnloadFile(file: TFile): Promise<void> {
+    await this.embeddedGraphStateWriteQueue;
+    await this.flushGroupingStateWrite();
     if (this.file?.path === file.path) {
       this.isClosingOrUnloadingGraphView = true;
       this.cancelPendingViewportStateWrite();
@@ -774,6 +894,8 @@ export class BasesGraphView extends FileView {
   }
 
   async onClose(): Promise<void> {
+    await this.embeddedGraphStateWriteQueue;
+    await this.flushGroupingStateWrite();
     this.isClosingOrUnloadingGraphView = true;
     for (const timer of this.metadataDebounceTimers.values()) {
       window.clearTimeout(timer);
@@ -787,6 +909,10 @@ export class BasesGraphView extends FileView {
       window.clearTimeout(this.viewportPersistTimer);
       this.viewportPersistTimer = null;
     }
+    if (this.badgeFarViewThresholdWriteTimer !== null) {
+      window.clearTimeout(this.badgeFarViewThresholdWriteTimer);
+      this.badgeFarViewThresholdWriteTimer = null;
+    }
     if (this.graphOpenRetryTimer !== null) {
       window.clearTimeout(this.graphOpenRetryTimer);
       this.graphOpenRetryTimer = null;
@@ -794,6 +920,10 @@ export class BasesGraphView extends FileView {
     if (this.graphTruthReconciliationTimer !== null) {
       window.clearTimeout(this.graphTruthReconciliationTimer);
       this.graphTruthReconciliationTimer = null;
+    }
+    if (this.badgeFarViewThresholdWriteTimer !== null) {
+      window.clearTimeout(this.badgeFarViewThresholdWriteTimer);
+      this.badgeFarViewThresholdWriteTimer = null;
     }
     this.viewContainer.removeEventListener("dragover", this.onGraphDragOverBound);
     this.viewContainer.removeEventListener("drop", this.onGraphDropBound);
@@ -891,6 +1021,7 @@ export class BasesGraphView extends FileView {
   }
 
   onunload() {
+    void this.flushGroupingStateWrite();
     this.isClosingOrUnloadingGraphView = true;
     this.debug("onunload", {
       selectedLinkTypes: this.selectedLinkTypes
@@ -1187,6 +1318,10 @@ export class BasesGraphView extends FileView {
     if (!this.file) return {};
 
     const fm = await this.readGraphFrontmatterFromDisk(this.file);
+    this.graphNotePersistenceEnabled = frontmatterMatchesIdentifier(
+      fm,
+      this.noteTypeIdentifiers.graph
+    );
     this.isFileMode = this.isGraphFrontmatterExpandable(this.file, fm);
 
     if (this.isFileMode) {
@@ -1222,6 +1357,15 @@ export class BasesGraphView extends FileView {
 
   private isGraphFrontmatterExpandable(file: TFile, frontmatter: Record<string, unknown>): boolean {
     if (frontmatterMatchesIdentifier(frontmatter, this.noteTypeIdentifiers.graph)) return true;
+
+    // A graph note may be defined entirely by its connected Base view. Treat a
+    // nonempty connected_base_filter as a graph-note marker so this note enters
+    // file mode instead of reusing the previous graph's global root state.
+    if (this.hasNonEmptyGraphValue(
+      readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "connectedBaseFilter")
+    )) {
+      return true;
+    }
 
     const hasConfiguredProperties = hasFrontmatterProperty(frontmatter, this.graphPropertyKeys, "rootNodeProperties");
     const defaultPropertyNames = this.defaultRootNodeProperties
@@ -1259,7 +1403,8 @@ export class BasesGraphView extends FileView {
 
   private async loadEmbeddedGraphDefinition(
     graphPathRaw: string,
-    ancestryRaw: string[]
+    ancestryRaw: string[],
+    ownerGraphPathRaw?: string
   ): Promise<EmbeddedGraphDefinition | null> {
     const graphPath = String(graphPathRaw ?? "").trim();
     const ancestry = Array.from(new Set(
@@ -1273,6 +1418,16 @@ export class BasesGraphView extends FileView {
     if (!(file instanceof TFile)) return null;
     const frontmatter = await this.readGraphFrontmatterFromDisk(file);
     if (!this.isGraphFrontmatterExpandable(file, frontmatter)) return null;
+    const targetIsPersistentGraphNote = frontmatterMatchesIdentifier(
+      frontmatter,
+      this.noteTypeIdentifiers.graph
+    );
+    const parentOwnerPath = String(ownerGraphPathRaw ?? this.file?.path ?? "").trim();
+    const persistenceOwnerPath = resolveEmbeddedGraphPersistenceOwner({
+      targetPath: graphPath,
+      targetIsPersistentGraphNote,
+      parentOwnerPath
+    });
     await this.loadReferencedLinkTypesFromGraphFrontmatter(frontmatter);
 
     let state = this.embeddedGraphStates.get(graphPath);
@@ -1327,6 +1482,7 @@ export class BasesGraphView extends FileView {
     snapshots = this.normalizeEmbeddedSnapshots(snapshots, embeddedLinkTypes);
     return {
       graphPath,
+      ...(persistenceOwnerPath ? { persistenceOwnerPath } : {}),
       color: containerColor,
       colorSource: containerColorSource,
       linkForce: Number.isFinite(forceRaw) ? Math.max(0, Math.min(1, forceRaw)) : 0.015,
@@ -1338,7 +1494,12 @@ export class BasesGraphView extends FileView {
       embeddedGraphs: state.listExpandedEmbeddedGraphs().map((entry) => ({
         originNodeId: entry.originNodeId,
         graphPath: entry.graphPath,
+        expanded: true,
+        ...(entry.linkTypeId ? { linkTypeId: entry.linkTypeId } : {}),
         ...(entry.lens ? { lens: entry.lens } : {}),
+        ...(entry.snapshots && entry.snapshots.length > 0
+          ? { snapshots: entry.snapshots }
+          : {}),
         ...(entry.embeddedGraphs && entry.embeddedGraphs.length > 0
           ? { embeddedGraphs: entry.embeddedGraphs }
           : {})
@@ -1427,7 +1588,9 @@ export class BasesGraphView extends FileView {
     expanded: boolean,
     ownerGraphPath?: string,
     lens?: O3GraphEmbeddedLensState,
-    parentChain: O3GraphEmbeddedGraphState[] = []
+    parentChain: O3GraphEmbeddedGraphState[] = [],
+    linkTypeId?: string,
+    instanceId?: string
   ): Promise<void> {
     if (this.isClosingOrUnloadingGraphView) return;
     if (this.isHydratingGraphRuntime) return;
@@ -1440,53 +1603,118 @@ export class BasesGraphView extends FileView {
       ? this.graphDocumentStore
       : this.embeddedGraphDocumentStores.get(ownerPath);
     if (!ownerState || !ownerStore) return;
-    const ownerIsPersistentGraphNote = await this.isPersistentGraphNotePath(ownerPath);
-    if (!ownerIsPersistentGraphNote && !ownerState.loadedFromGraphStateBlock) return;
-    if (!ownerState.setEmbeddedGraphExpansion(originNodeId, graphPath, expanded, lens, parentChain)) return;
-    if (ownerPath !== this.file?.path) {
-      this.suppressEmbeddedGraphReloadUntil.set(ownerPath, Date.now() + 2000);
-    } else {
-      this.suppressGraphFileReloadUntil = Date.now() + 2000;
-    }
-    const wrote = await ownerStore.writeState(ownerState, { reason: "lens-state" });
-    if (wrote && ownerPath === this.file?.path) {
-      this.suppressGraphFileReloadUntil = Date.now() + 1500;
-    } else if (wrote) {
-      this.suppressEmbeddedGraphReloadUntil.set(ownerPath, Date.now() + 1500);
-    }
+    // Capture the runtime while this event's Lens still exists. Ownership
+    // checks and document writes are asynchronous and must retain event order.
+    const persistenceSnapshot = expanded && instanceId
+      ? this.engine.getEmbeddedGraphPersistenceSnapshot(instanceId)
+      : null;
+    return this.queueEmbeddedGraphStateWrite(async () => {
+      const ownerIsPersistentGraphNote = await this.isPersistentGraphNotePath(ownerPath);
+      if (!ownerIsPersistentGraphNote) {
+        if (!this.reportedEphemeralLensOwners.has(ownerPath)) {
+          this.reportedEphemeralLensOwners.add(ownerPath);
+          const identifier = this.noteTypeIdentifiers.graph;
+          new Notice(`Lens changes in "${ownerPath}" are temporary. To save them, set ${identifier.property} to ${identifier.value} in that graph note.`);
+        }
+        return;
+      }
+      this.reportedEphemeralLensOwners.delete(ownerPath);
+      let changed = ownerState.setEmbeddedGraphExpansion(
+        originNodeId,
+        graphPath,
+        expanded,
+        lens,
+        parentChain,
+        linkTypeId
+      );
+      if (
+        persistenceSnapshot
+        && persistenceSnapshot.ownerGraphPath === ownerPath
+        && persistenceSnapshot.graphPath !== ownerPath
+      ) {
+        changed = ownerState.setEmbeddedGraphSnapshots(
+          persistenceSnapshot.originNodeId,
+          persistenceSnapshot.graphPath,
+          persistenceSnapshot.snapshots,
+          persistenceSnapshot.parentChain
+        ) || changed;
+      }
+      if (!changed) return;
+      if (ownerPath !== this.file?.path) {
+        this.suppressEmbeddedGraphReloadUntil.set(ownerPath, Date.now() + 2000);
+      } else {
+        this.suppressGraphFileReloadUntil = Date.now() + 2000;
+      }
+      const wrote = await ownerStore.writeState(ownerState, { reason: "lens-state" });
+      if (wrote && ownerPath === this.file?.path) {
+        this.suppressGraphFileReloadUntil = Date.now() + 1500;
+      } else if (wrote) {
+        this.suppressEmbeddedGraphReloadUntil.set(ownerPath, Date.now() + 1500);
+      }
+    });
+  }
+
+  private queueEmbeddedGraphStateWrite(write: () => Promise<void>): Promise<void> {
+    const pending = this.embeddedGraphStateWriteQueue.then(write);
+    this.embeddedGraphStateWriteQueue = pending.catch((error) => {
+      console.error("Failed to persist Lens state:", error);
+    });
+    return this.embeddedGraphStateWriteQueue;
   }
 
   private async persistEmbeddedGraphRuntime(
-    graphPathRaw: string,
+    ownerPathRaw: string,
     instanceId?: string,
     reason: "badge-expansion" | "node-position" = "node-position"
   ): Promise<void> {
     if (this.isClosingOrUnloadingGraphView) return;
     if (this.isHydratingGraphRuntime) return;
-    const graphPath = String(graphPathRaw ?? "").trim();
-    if (!graphPath) return;
-    const state = this.embeddedGraphStates.get(graphPath);
-    const store = this.embeddedGraphDocumentStores.get(graphPath);
+    const ownerPath = String(ownerPathRaw ?? "").trim();
+    if (!ownerPath) return;
+    const state = ownerPath === this.file?.path
+      ? this.graphState
+      : this.embeddedGraphStates.get(ownerPath);
+    const store = ownerPath === this.file?.path
+      ? this.graphDocumentStore
+      : this.embeddedGraphDocumentStores.get(ownerPath);
     if (!state || !store) return;
-    const ownerIsPersistentGraphNote = await this.isPersistentGraphNotePath(graphPath);
-    const parentIsPersistentGraphNote = this.file
-      ? await this.isPersistentGraphNotePath(this.file.path)
-      : false;
-    if (!shouldPersistEmbeddedGraphRuntime({
-      ownerIsPersistentGraphNote,
-      ownerHasReadableGraphState: state.loadedFromGraphStateBlock,
-      parentIsPersistentGraphNote
-    })) return;
-    const snapshots = instanceId
-      ? this.engine.getEmbeddedGraphSnapshotsForInstance(instanceId)
-      : this.engine.getEmbeddedGraphSnapshots(graphPath);
+    const persistenceSnapshot = instanceId
+      ? this.engine.getEmbeddedGraphPersistenceSnapshot(instanceId)
+      : null;
+    const snapshots = persistenceSnapshot?.snapshots
+      ?? (instanceId
+        ? this.engine.getEmbeddedGraphSnapshotsForInstance(instanceId)
+        : this.engine.getEmbeddedGraphSnapshots(ownerPath));
     if (snapshots.length === 0) return;
-    state.migrateToCurrentLayout(snapshots);
-    this.suppressEmbeddedGraphReloadUntil.set(graphPath, Date.now() + 2000);
-    const wrote = await store.writeState(state, { reason });
-    if (wrote) {
-      this.suppressEmbeddedGraphReloadUntil.set(graphPath, Date.now() + 1500);
-    }
+    return this.queueEmbeddedGraphStateWrite(async () => {
+      const ownerIsPersistentGraphNote = await this.isPersistentGraphNotePath(ownerPath);
+      if (!shouldPersistEmbeddedGraphRuntime({
+        ownerIsPersistentGraphNote,
+        ownerHasReadableGraphState: state.loadedFromGraphStateBlock,
+        parentIsPersistentGraphNote: false
+      })) return;
+      if (persistenceSnapshot && persistenceSnapshot.graphPath !== ownerPath) {
+        if (!state.setEmbeddedGraphSnapshots(
+          persistenceSnapshot.originNodeId,
+          persistenceSnapshot.graphPath,
+          snapshots,
+          persistenceSnapshot.parentChain
+        )) return;
+      } else {
+        state.migrateToCurrentLayout(snapshots);
+      }
+      if (ownerPath === this.file?.path) {
+        this.suppressGraphFileReloadUntil = Date.now() + 2000;
+      } else {
+        this.suppressEmbeddedGraphReloadUntil.set(ownerPath, Date.now() + 2000);
+      }
+      const wrote = await store.writeState(state, { reason });
+      if (wrote && ownerPath === this.file?.path) {
+        this.suppressGraphFileReloadUntil = Date.now() + 1500;
+      } else if (wrote) {
+        this.suppressEmbeddedGraphReloadUntil.set(ownerPath, Date.now() + 1500);
+      }
+    });
   }
 
   private async readGraphFrontmatterFromDisk(file: TFile): Promise<Record<string, unknown>> {
@@ -1507,6 +1735,13 @@ export class BasesGraphView extends FileView {
   }
 
   private async loadReferencedLinkTypesFromGraphFrontmatter(frontmatter: Record<string, unknown>): Promise<void> {
+    const visibleLinkTypeReferences = hasFrontmatterProperty(
+      frontmatter,
+      this.graphPropertyKeys,
+      "visibleLinkTypes"
+    )
+      ? readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "visibleLinkTypes") ?? []
+      : this.defaultVisibleLinkTypes;
     const referencedFiles = this.mergeGraphFiles(
       resolveWikiLinkArray(
         this.app,
@@ -1518,7 +1753,7 @@ export class BasesGraphView extends FileView {
       ),
       resolveWikiLinkArray(
         this.app,
-        readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "visibleLinkTypes") ?? []
+        visibleLinkTypeReferences
       )
     );
     if (referencedFiles.length === 0) return;
@@ -1898,6 +2133,7 @@ export class BasesGraphView extends FileView {
   }
 
   private async reloadFromFile(): Promise<void> {
+    await this.embeddedGraphStateWriteQueue;
     if (!this.file) {
       if (this.debugEnabled) {
         console.warn("reloadFromFile called but no file bound.");
@@ -1916,7 +2152,25 @@ export class BasesGraphView extends FileView {
     }
 
     await this.loadLinkTypeRegistry();
+    this.engine.refreshOpenLensDefinitions();
     const fm = await this.loadGraphFile();
+    if (
+      this.graphNotePersistenceEnabled
+      && this.pendingGraphNotePromotionSnapshots
+      && this.graphState
+      && !this.graphState.loadedFromGraphStateBlock
+      && this.isActiveGraphViewForPersistence()
+    ) {
+      this.graphState.migrateToCurrentLayout(this.pendingGraphNotePromotionSnapshots);
+      this.pendingGraphNotePromotionSnapshots = null;
+    }
+    const graphBadgeFarViewThreshold = Number(
+      readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "graphBadgeFarViewThreshold")
+    );
+    this.badgeFarViewThreshold = Number.isFinite(graphBadgeFarViewThreshold)
+      ? this.normalizeBadgeFarViewThreshold(graphBadgeFarViewThreshold)
+      : this.defaultBadgeFarViewThreshold;
+    this.engine.setBadgeFarViewThreshold(this.badgeFarViewThreshold);
     await this.loadReferencedLinkTypesFromGraphFrontmatter(fm);
     const fileModeGraphSettings = this.isFileMode ? { ...this.graphSettings } : null;
     const resolvedRootNodes = this.resolveRootNodeFilesFromGraphFrontmatter(fm);
@@ -1934,7 +2188,7 @@ export class BasesGraphView extends FileView {
     }
     this.graphOpenRetryCount = 0;
     this.connectedBaseFilterResult = this.isFileMode
-      ? await this.baseViewFilterResolver.resolve(readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "connectedBaseFilter"), this.file)
+      ? await this.baseViewFilterResolver.resolveAll(readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "connectedBaseFilter"), this.file)
       : null;
     this.reportConnectedBaseFilterResult(readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "connectedBaseFilter"));
     this.fileModeFilterFiles = this.connectedBaseFilterResult?.files ?? [];
@@ -1944,7 +2198,9 @@ export class BasesGraphView extends FileView {
     this.currentGraphFiles = this.isFileMode
       ? this.mergeGraphFiles(this.fileModeRootFiles, this.fileModeFilterFiles)
       : this.resolveRootNodeFiles();
-    if (this.isFileMode && this.currentGraphFiles.length === 0) {
+    const hasConnectedBaseFilter = this.isFileMode
+      && this.hasNonEmptyGraphValue(readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "connectedBaseFilter"));
+    if (this.isFileMode && this.currentGraphFiles.length === 0 && !hasConnectedBaseFilter) {
       const snapshotFiles = this.resolveGraphStateSnapshotFiles();
       if (snapshotFiles.length > 0) {
         this.currentGraphFiles = snapshotFiles;
@@ -2041,9 +2297,12 @@ export class BasesGraphView extends FileView {
     const usesActiveGroupSource = this.isFileMode
       || hasFrontmatterProperty(fm, this.graphPropertyKeys, "activeGroups")
       || this.defaultActiveGroups.length > 0;
-    this.groupingRules = usesActiveGroupSource
+    const fallbackGroupingRules = usesActiveGroupSource
       ? activeGroupRules
       : this.normalizeGroupingRules(nextState.groupingRules);
+    this.groupingRules = this.isFileMode && this.graphState
+      ? this.graphState.getGroupingRules(fallbackGroupingRules)
+      : fallbackGroupingRules;
     this.graphSettings = fileModeGraphSettings ?? {
       repulsionStrength: nextState.graphSettings.repulsionStrength,
       centerStrength: nextState.graphSettings.centerStrength,
@@ -2060,7 +2319,7 @@ export class BasesGraphView extends FileView {
       graphFile: this.file,
       linkTypeFiles: this.globalLinkTypeRegistry.getAll().map((lt) => lt.file),
       groupFiles: this.activeGroups.map((g) => g.file),
-      baseFilterFiles: this.connectedBaseFilterResult?.baseFile ? [this.connectedBaseFilterResult.baseFile] : [],
+      baseFilterFiles: this.connectedBaseFilterResult?.baseFiles ?? [],
       nodeFiles: this.currentGraphFiles,
       linkTypeFolder: this.linkTypeFolder,
       watchedProperties: [
@@ -2113,12 +2372,20 @@ export class BasesGraphView extends FileView {
     if (!this.graphState) return;
     for (const entry of this.graphState.listExpandedEmbeddedGraphs()) {
       if (!this.engine.isEmbeddedGraphExpanded(entry.originNodeId, entry.graphPath)) {
-        const definition = await this.loadEmbeddedGraphDefinition(entry.graphPath, []);
+        const definition = entry.linkTypeId
+          ? this.engine.getLensEmbeddedGraphDefinition(entry.originNodeId, entry.linkTypeId, [])
+          : await this.loadEmbeddedGraphDefinition(entry.graphPath, [], this.file?.path);
         if (definition) {
           this.engine.expandEmbeddedGraph(entry.originNodeId, {
             ...definition,
+            snapshots: entry.snapshots ?? definition.snapshots,
             lens: entry.lens ?? definition.lens,
             embeddedGraphs: entry.embeddedGraphs ?? definition.embeddedGraphs
+          });
+        } else if (entry.linkTypeId) {
+          this.debug("restoreEmbeddedGraphExpansions: Lens definition unavailable; preserving persisted entry", {
+            originNodeId: entry.originNodeId,
+            linkTypeId: entry.linkTypeId
           });
         }
       }
@@ -2492,7 +2759,10 @@ export class BasesGraphView extends FileView {
     const currentProperty = String(linkType.property ?? "").trim().toLowerCase();
     const propertyOptions = Array.from(new Set([
       ...this.discoveredProperties.map((item) => String(item ?? "").trim().toLowerCase()).filter(Boolean),
-      ...this.globalLinkTypeRegistry.getAll().map((item) => String(item.property ?? "").trim().toLowerCase()).filter(Boolean),
+      ...this.globalLinkTypeRegistry.getAll().flatMap((item) => [
+        String(item.property ?? "").trim().toLowerCase(),
+        ...(item.properties ?? []).map((property) => String(property ?? "").trim().toLowerCase())
+      ]).filter(Boolean),
       currentProperty
     ])).sort((a, b) => a.localeCompare(b));
     if (propertyOptions.length === 0) {
@@ -2503,9 +2773,13 @@ export class BasesGraphView extends FileView {
     const modal = new CreateLinkTypeModal(this.app, {
       propertyOptions,
       initialProperty: currentProperty,
+      initialProperties: linkType.properties,
+      initialWriteProperty: linkType.writeProperty,
       initialLabel: String(linkType.key ?? "").trim(),
       initialLinkType: linkType.semantic === "parent"
         ? "parent"
+        : linkType.semantic === "lens"
+          ? "lens"
         : linkType.linkType === "Direction Based"
           ? "Direction Based"
           : "Force Based",
@@ -2544,12 +2818,18 @@ export class BasesGraphView extends FileView {
 
   private async createAndActivateLinkType(payload: CreateLinkTypePayload): Promise<void> {
     const canonical = String(payload.property ?? "").trim().toLowerCase();
+    const properties = Array.from(new Set((payload.properties ?? [canonical])
+      .map((property) => String(property ?? "").trim().toLowerCase())
+      .filter(Boolean)));
     const normalizedLabel = String(payload.label ?? "").trim();
     const linkTypeMode = payload.linkType === "Direction Based"
       ? "Direction Based"
       : payload.linkType === "parent"
         ? "parent"
+        : payload.linkType === "lens"
+          ? "lens"
         : "Force Based";
+    const writeProperty = String(payload.writeProperty ?? properties[0] ?? "").trim().toLowerCase();
     const direction = payload.direction === "incoming" || payload.direction === "both"
       ? payload.direction
       : "outgoing";
@@ -2567,12 +2847,16 @@ export class BasesGraphView extends FileView {
     ) ? linkDirectionRaw : "right";
     const linkYAxis = Number(payload.linkYAxis);
     const linkXAxis = Number(payload.linkXAxis);
-    if (!canonical || !normalizedLabel) {
+    if (!canonical || !normalizedLabel || properties.length === 0) {
       new Notice("LinkType property and label are required.");
       return;
     }
+    if (linkTypeMode === "lens" && (!writeProperty || !properties.includes(writeProperty))) {
+      new Notice("Lens write property must be one of its read properties.");
+      return;
+    }
     if (
-      (linkTypeMode !== "Direction Based" && (!Number.isFinite(linkForce) || !Number.isFinite(linkDistance)))
+      (linkTypeMode === "Force Based" && (!Number.isFinite(linkForce) || !Number.isFinite(linkDistance)))
       || (linkTypeMode === "Direction Based" && (!Number.isFinite(linkYAxis) || !Number.isFinite(linkXAxis)))
     ) {
       new Notice("Please provide valid numeric link-type parameters.");
@@ -2582,27 +2866,40 @@ export class BasesGraphView extends FileView {
     const filePath = `${this.linkTypeFolder}/LinkType - ${normalizedLabel}.md`;
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
     if (!existingFile) {
+      const propertyLines = linkTypeMode === "lens"
+        ? [
+            `${this.linkTypePropertyKeys.property}:`,
+            ...properties.map((property) => `  - ${property}`),
+            `${this.linkTypePropertyKeys.writeProperty}: ${writeProperty}`
+          ]
+        : [`${this.linkTypePropertyKeys.property}: ${canonical}`];
       const content = [
         "---",
         `${this.noteTypeIdentifiers.linkType.property}: ${this.formatIdentifierFrontmatterValue(this.noteTypeIdentifiers.linkType)}`,
         `${this.linkTypePropertyKeys.key}: ${normalizedLabel}`,
-        `${this.linkTypePropertyKeys.property}: ${canonical}`,
+        ...propertyLines,
         `${this.linkTypePropertyKeys.linkType}: ${linkTypeMode}`,
-        `${this.linkTypePropertyKeys.direction}: ${direction}`,
-        `${this.linkTypePropertyKeys.linkDiscoveryDirection}: ${linkDiscoveryDirection}`,
-        `${this.linkTypePropertyKeys.recursive}: ${recursive ? "true" : "false"}`,
-        `${this.linkTypePropertyKeys.linkDiscovery}: ${linkDiscovery ? "true" : "false"}`,
-        `${this.linkTypePropertyKeys.linkDuplicateNodes}: ${linkDuplicateNodes ? "true" : "false"}`,
-        ...(linkTypeMode !== "Direction Based"
+        ...(linkTypeMode === "lens"
+          ? [`${this.linkTypePropertyKeys.linkDiscoveryDirection}: outgoing`]
+          : [
+              `${this.linkTypePropertyKeys.direction}: ${direction}`,
+              `${this.linkTypePropertyKeys.linkDiscoveryDirection}: ${linkDiscoveryDirection}`,
+              `${this.linkTypePropertyKeys.recursive}: ${recursive ? "true" : "false"}`,
+              `${this.linkTypePropertyKeys.linkDiscovery}: ${linkDiscovery ? "true" : "false"}`,
+              `${this.linkTypePropertyKeys.linkDuplicateNodes}: ${linkDuplicateNodes ? "true" : "false"}`
+            ]),
+        ...(linkTypeMode === "Force Based"
           ? [
               `${this.linkTypePropertyKeys.linkForce}: ${linkForce}`,
               `${this.linkTypePropertyKeys.linkDistance}: ${linkDistance}`
             ]
-          : [
+          : linkTypeMode === "Direction Based"
+            ? [
               `${this.linkTypePropertyKeys.linkDirection}: ${linkDirection}`,
               `${this.linkTypePropertyKeys.linkYAxis}: ${linkYAxis}`,
               `${this.linkTypePropertyKeys.linkXAxis}: ${linkXAxis}`
-            ]),
+            ]
+            : []),
         "---",
         ""
       ].join("\n");
@@ -2664,12 +2961,18 @@ export class BasesGraphView extends FileView {
 
   private async updateExistingLinkType(linkType: O3LinkType, payload: CreateLinkTypePayload): Promise<void> {
     const canonical = String(payload.property ?? "").trim().toLowerCase();
+    const properties = Array.from(new Set((payload.properties ?? [canonical])
+      .map((property) => String(property ?? "").trim().toLowerCase())
+      .filter(Boolean)));
     const normalizedLabel = String(payload.label ?? "").trim();
     const linkTypeMode = payload.linkType === "Direction Based"
       ? "Direction Based"
       : payload.linkType === "parent"
         ? "parent"
+        : payload.linkType === "lens"
+          ? "lens"
         : "Force Based";
+    const writeProperty = String(payload.writeProperty ?? properties[0] ?? "").trim().toLowerCase();
     const direction = payload.direction === "incoming" || payload.direction === "both"
       ? payload.direction
       : "outgoing";
@@ -2687,12 +2990,16 @@ export class BasesGraphView extends FileView {
     ) ? linkDirectionRaw : "right";
     const linkYAxis = Number(payload.linkYAxis);
     const linkXAxis = Number(payload.linkXAxis);
-    if (!canonical || !normalizedLabel) {
+    if (!canonical || !normalizedLabel || properties.length === 0) {
       new Notice("LinkType property and label are required.");
       return;
     }
+    if (linkTypeMode === "lens" && (!writeProperty || !properties.includes(writeProperty))) {
+      new Notice("Lens write property must be one of its read properties.");
+      return;
+    }
     if (
-      (linkTypeMode !== "Direction Based" && (!Number.isFinite(linkForce) || !Number.isFinite(linkDistance)))
+      (linkTypeMode === "Force Based" && (!Number.isFinite(linkForce) || !Number.isFinite(linkDistance)))
       || (linkTypeMode === "Direction Based" && (!Number.isFinite(linkYAxis) || !Number.isFinite(linkXAxis)))
     ) {
       new Notice("Please provide valid numeric link-type parameters.");
@@ -2722,20 +3029,40 @@ export class BasesGraphView extends FileView {
 
     const { frontmatter, body, hasFrontmatter, eol } = this.parseFrontmatter(content);
     this.writeLinkTypeFrontmatterProperty(frontmatter, "key", normalizedLabel);
-    this.writeLinkTypeFrontmatterProperty(frontmatter, "property", canonical);
+    this.writeLinkTypeFrontmatterProperty(frontmatter, "property", linkTypeMode === "lens" ? properties : canonical);
+    if (linkTypeMode === "lens") {
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "writeProperty", writeProperty);
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "properties");
+    } else {
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "writeProperty");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "properties");
+    }
     this.writeLinkTypeFrontmatterProperty(frontmatter, "linkType", linkTypeMode);
-    this.writeLinkTypeFrontmatterProperty(frontmatter, "direction", direction);
-    this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDiscoveryDirection", linkDiscoveryDirection);
-    this.writeLinkTypeFrontmatterProperty(frontmatter, "recursive", recursive);
-    this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDiscovery", linkDiscovery);
-    this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDuplicateNodes", linkDuplicateNodes);
-    if (linkTypeMode !== "Direction Based") {
+    if (linkTypeMode === "lens") {
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDiscoveryDirection", "outgoing");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "direction");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "recursive");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkDiscovery");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkDuplicateNodes");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkForce");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkDistance");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkDirection");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkYAxis");
+      this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkXAxis");
+    } else {
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "direction", direction);
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDiscoveryDirection", linkDiscoveryDirection);
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "recursive", recursive);
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDiscovery", linkDiscovery);
+      this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDuplicateNodes", linkDuplicateNodes);
+    }
+    if (linkTypeMode === "Force Based") {
       this.writeLinkTypeFrontmatterProperty(frontmatter, "linkForce", linkForce);
       this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDistance", linkDistance);
       this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkDirection");
       this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkYAxis");
       this.deleteLinkTypeFrontmatterProperty(frontmatter, "linkXAxis");
-    } else {
+    } else if (linkTypeMode === "Direction Based") {
       this.writeLinkTypeFrontmatterProperty(frontmatter, "linkDirection", linkDirection);
       this.writeLinkTypeFrontmatterProperty(frontmatter, "linkYAxis", linkYAxis);
       this.writeLinkTypeFrontmatterProperty(frontmatter, "linkXAxis", linkXAxis);
@@ -2759,6 +3086,14 @@ export class BasesGraphView extends FileView {
   }
 
   private async activateLinkType(linkType: O3LinkType): Promise<void> {
+    if (!linkType.isSupportedLinkType) {
+      new Notice(`Cannot activate unsupported LinkType mode: ${linkType.rawLinkType || "unknown"}.`);
+      return;
+    }
+    if (!linkType.isValid) {
+      new Notice(`Cannot activate invalid LinkType: ${linkType.validationErrors.join(" ")}`);
+      return;
+    }
     await this.writeLinkTypeToGraphYaml(linkType);
   }
 
@@ -2794,10 +3129,7 @@ export class BasesGraphView extends FileView {
       const text = String(item ?? "").trim();
       if (!text) continue;
 
-      const unwrapped = text.replace(/^\[\[/, "").replace(/\]\]$/, "").trim();
-      const linkpath = unwrapped.split("|")[0]?.trim() ?? "";
-      const resolved = this.app.metadataCache.getFirstLinkpathDest(linkpath, file.path)
-        ?? this.app.metadataCache.getFirstLinkpathDest(text, file.path);
+      const { linkpath, resolved } = this.resolveGraphYamlLinkEntry(text, file.path);
 
       const matchesByPath = resolved?.path === linkType.file.path;
       const matchesByName = linkpath.length > 0 && (
@@ -2834,6 +3166,10 @@ export class BasesGraphView extends FileView {
   }
 
   private async activateOverlayLinkType(linkType: O3LinkType): Promise<void> {
+    if (!linkType.isSupportedLinkType || !linkType.isValid) {
+      new Notice(`Cannot activate invalid or unsupported LinkType: ${linkType.key}.`);
+      return;
+    }
     await this.addLinkTypeToGraphYamlList(linkType, "activeOverlayLinkTypes");
   }
 
@@ -2842,6 +3178,10 @@ export class BasesGraphView extends FileView {
   }
 
   private async activateVisibleLinkType(linkType: O3LinkType): Promise<void> {
+    if (!linkType.isSupportedLinkType || !linkType.isValid) {
+      new Notice(`Cannot activate invalid or unsupported LinkType: ${linkType.key}.`);
+      return;
+    }
     await this.addLinkTypeToGraphYamlList(linkType, "visibleLinkTypes");
   }
 
@@ -2861,7 +3201,7 @@ export class BasesGraphView extends FileView {
 
     const content = await this.app.vault.read(file);
     const { frontmatter, body, hasFrontmatter, eol } = this.parseFrontmatter(content);
-    const wikilink = `[[${String(linkType.file?.basename ?? "").trim()}]]`;
+    const wikilink = this.generateLinkTypeReference(linkType.file, file.path);
     const rawValue = readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, propertyKey);
     const rawList = Array.isArray(rawValue) ? rawValue : [];
     const activeList = rawList.map((item) => String(item ?? "").trim()).filter(Boolean);
@@ -2939,13 +3279,39 @@ export class BasesGraphView extends FileView {
   private graphYamlLinkTypeEntryMatches(entry: string, linkType: O3LinkType, graphFile: TFile): boolean {
     const text = String(entry ?? "").trim();
     if (!text) return false;
-    const unwrapped = text.replace(/^\[\[/, "").replace(/\]\]$/, "").trim();
-    const linkpath = unwrapped.split("|")[0]?.trim() ?? "";
-    const resolved = this.app.metadataCache.getFirstLinkpathDest(linkpath, graphFile.path)
-      ?? this.app.metadataCache.getFirstLinkpathDest(text, graphFile.path);
+    const { linkpath, resolved } = this.resolveGraphYamlLinkEntry(text, graphFile.path);
     return resolved?.path === linkType.file.path
       || linkpath === linkType.file.basename
       || linkpath === linkType.file.path;
+  }
+
+  private generateLinkTypeReference(linkTypeFile: TFile, sourcePath: string): string {
+    try {
+      return this.app.fileManager.generateMarkdownLink(linkTypeFile, sourcePath);
+    } catch {
+      return `[[${String(linkTypeFile.path ?? "").replace(/\.md$/i, "")}]]`;
+    }
+  }
+
+  private resolveGraphYamlLinkEntry(entry: string, sourcePath: string): {
+    linkpath: string;
+    resolved: TFile | null;
+  } {
+    const text = String(entry ?? "").trim();
+    const wikiMatch = text.match(/^\[\[([^|\]#]+)(?:#[^|\]]+)?(?:\|[^\]]+)?\]\]$/);
+    const markdownMatch = text.match(/^\[[^\]]*\]\(([^)#]+)(?:#[^)]*)?\)$/);
+    const rawLinkpath = String(wikiMatch?.[1] ?? markdownMatch?.[1] ?? text)
+      .trim()
+      .replace(/^<|>$/g, "");
+    let linkpath = rawLinkpath;
+    try {
+      linkpath = decodeURIComponent(rawLinkpath);
+    } catch {
+      // Keep the original linkpath when it contains malformed encoding.
+    }
+    const resolved = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)
+      ?? this.app.metadataCache.getFirstLinkpathDest(text, sourcePath);
+    return { linkpath, resolved };
   }
 
   private async writeLinkTypeToGraphYaml(linkType: O3LinkType): Promise<void> {
@@ -2972,24 +3338,26 @@ export class BasesGraphView extends FileView {
     }
 
     const { frontmatter, body, hasFrontmatter, eol } = this.parseFrontmatter(content);
-    const wikilink = `[[${String(linkType.file?.basename ?? "").trim()}]]`;
-    const targetProperty = String(linkType.property ?? "").trim().toLowerCase();
+    const wikilink = this.generateLinkTypeReference(linkType.file, file.path);
+    const targetProperties = new Set(
+      linkType.properties
+        .map((property) => String(property ?? "").trim().toLowerCase())
+        .filter(Boolean)
+    );
 
     const rawActive = readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "activeLinkTypes");
     const activeList = Array.isArray(rawActive)
       ? rawActive.map((item) => String(item ?? "").trim()).filter(Boolean)
       : [];
     const nextActive: string[] = [];
+    const conflicts: O3LinkType[] = [];
     let changed = false;
 
     for (const entry of activeList) {
       const text = String(entry ?? "").trim();
       if (!text) continue;
 
-      const unwrapped = text.replace(/^\[\[/, "").replace(/\]\]$/, "").trim();
-      const linkpath = unwrapped.split("|")[0]?.trim() ?? "";
-      const resolved = this.app.metadataCache.getFirstLinkpathDest(linkpath, file.path)
-        ?? this.app.metadataCache.getFirstLinkpathDest(text, file.path);
+      const { linkpath, resolved } = this.resolveGraphYamlLinkEntry(text, file.path);
 
       const isTargetLinkType = resolved?.path === linkType.file.path
         || linkpath === linkType.file.basename
@@ -2999,16 +3367,25 @@ export class BasesGraphView extends FileView {
         continue;
       }
 
-      if (targetProperty && resolved) {
+      if (linkType.semantic !== "lens" && resolved && targetProperties.size > 0) {
         const existing = this.linkTypeRegistry.get(resolved.path);
-        const existingProperty = String(existing?.property ?? "").trim().toLowerCase();
-        if (existingProperty && existingProperty === targetProperty) {
-          changed = true;
-          continue;
+        const existingProperties = new Set(existing?.properties ?? []);
+        const overlaps = Array.from(targetProperties).some((property) => existingProperties.has(property));
+        if (existing && existing.semantic !== "lens" && overlaps) {
+          conflicts.push(existing);
         }
       }
 
       nextActive.push(text);
+    }
+
+    if (conflicts.length > 0) {
+      const labels = conflicts
+        .map((conflict) => String(conflict.key ?? conflict.file.basename).trim())
+        .filter(Boolean)
+        .join(", ");
+      new Notice(`Cannot activate ${String(linkType.key ?? linkType.file.basename).trim()}: property conflict with ${labels}.`);
+      return;
     }
 
     if (!nextActive.includes(wikilink)) {
@@ -3718,7 +4095,21 @@ export class BasesGraphView extends FileView {
 
     this.registerEvent(this.app.metadataCache.on("changed", (file) => {
       if (!(file instanceof TFile)) return;
+      if (this.file?.path === file.path && this.hasGraphNoteIdentifier(file) !== this.graphNotePersistenceEnabled) {
+        const becomingPersistent = this.hasGraphNoteIdentifier(file);
+        if (becomingPersistent && this.isActiveGraphViewForPersistence()) {
+          this.pendingGraphNotePromotionSnapshots = this.engine.getRuntimeNodeSnapshots();
+          new Notice("Graph note promotion recognized. The current graph state will be preserved.");
+        }
+        this.scheduleGraphHydration("graph-note-identifier-change", 0);
+        return;
+      }
+      if (this.isLinkTypeDefinitionFile(file)) {
+        this.scheduleGraphHydration("link-type-definition-change", 120);
+        return;
+      }
       this.engine.updateLinkDiscoveryIndexForFile(file);
+      this.engine.refreshOpenLensDefinitionsForSourcePath(file.path);
       if (Date.now() < (this.suppressMutationMetadataUntil.get(file.path) ?? 0)) {
         return;
       }
@@ -3747,7 +4138,12 @@ export class BasesGraphView extends FileView {
 
     this.registerEvent(this.app.vault.on("create", (file) => {
       if (!(file instanceof TFile)) return;
-      if (!this.file || file.extension !== "md") return;
+      if (!this.file) return;
+      if (file.extension === "base") {
+        if (this.connectedBaseFilterResult?.filterId) this.scheduleGraphHydration("connected-base-created", 300);
+        return;
+      }
+      if (file.extension !== "md") return;
       window.setTimeout(() => {
         if (!this.initialized) return;
         const currentFile = this.app.vault.getAbstractFileByPath(file.path);
@@ -3770,7 +4166,7 @@ export class BasesGraphView extends FileView {
       if (Date.now() < (this.suppressMutationMetadataUntil.get(file.path) ?? 0)) {
         return;
       }
-      if (this.connectedBaseFilterResult?.baseFile?.path === file.path) {
+      if (this.isConnectedBaseFilterFile(file.path)) {
         void this.handleConnectedBaseFilterModify(file);
         return;
       }
@@ -3799,6 +4195,10 @@ export class BasesGraphView extends FileView {
     const oldPath = String(oldPathRaw ?? "").trim();
     const newPath = String(file.path ?? "").trim();
     if (!oldPath || !newPath || oldPath === newPath) return;
+    if (file.extension === "base" && this.connectedBaseFilterResult?.filterId) {
+      this.scheduleGraphHydration("connected-base-rename", 150);
+      return;
+    }
 
     this.moveMapEntry(this.nodeMetadataCache, oldPath, newPath);
     this.moveMapEntry(this.nodeLinkCache, oldPath, newPath);
@@ -4005,13 +4405,21 @@ export class BasesGraphView extends FileView {
     this.embeddedGraphDocumentStores.delete(file.path);
 
     for (const instance of instances) {
-      const definition = await this.loadEmbeddedGraphDefinition(file.path, instance.ancestry);
+      const currentSnapshots = this.engine.getEmbeddedGraphSnapshotsForInstance(instance.instanceId);
+      const definition = await this.loadEmbeddedGraphDefinition(
+        file.path,
+        instance.ancestry,
+        instance.persistenceOwnerPath
+      );
       if (!definition) {
         if (previousState) this.embeddedGraphStates.set(file.path, previousState);
         if (previousStore) this.embeddedGraphDocumentStores.set(file.path, previousStore);
         continue;
       }
-      const replaced = this.engine.replaceEmbeddedGraphInstance(instance.originNodeId, definition);
+      const replaced = this.engine.replaceEmbeddedGraphInstance(instance.originNodeId, {
+        ...definition,
+        ...(currentSnapshots.length > 0 ? { snapshots: currentSnapshots } : {})
+      });
       if (!replaced && previousState) {
         this.embeddedGraphStates.set(file.path, previousState);
         if (previousStore) this.embeddedGraphDocumentStores.set(file.path, previousStore);
@@ -4020,13 +4428,17 @@ export class BasesGraphView extends FileView {
   }
 
   private async handleConnectedBaseFilterModify(file: TFile): Promise<void> {
-    if (!this.connectedBaseFilterResult?.baseFile || this.connectedBaseFilterResult.baseFile.path !== file.path) {
+    if (!this.isConnectedBaseFilterFile(file.path)) {
       return;
     }
     const filterFilesChanged = await this.refreshConnectedBaseFilterFiles();
     if (filterFilesChanged) {
       this.rebuildGraph(this.currentGraphFiles);
     }
+  }
+
+  private isConnectedBaseFilterFile(path: string): boolean {
+    return this.connectedBaseFilterResult?.baseFiles.some((file) => file.path === path) ?? false;
   }
 
   private isGraphRelevantFile(file: TFile): boolean {
@@ -4051,6 +4463,26 @@ export class BasesGraphView extends FileView {
     return false;
   }
 
+  private isLinkTypeDefinitionFile(fileOrPath: TFile | string): boolean {
+    const path = fileOrPath instanceof TFile
+      ? fileOrPath.path
+      : String(fileOrPath ?? "").trim();
+    if (!path) return false;
+    if (this.globalLinkTypeRegistry.getByPath(path)) return true;
+    const configuredFolder = String(this.linkTypeFolder ?? "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    if (configuredFolder && (path === configuredFolder || path.startsWith(`${configuredFolder}/`))) {
+      return true;
+    }
+    const file = fileOrPath instanceof TFile
+      ? fileOrPath
+      : this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return false;
+    return frontmatterMatchesIdentifier(
+      this.app.metadataCache.getFileCache(file)?.frontmatter,
+      this.noteTypeIdentifiers.linkType
+    );
+  }
+
   private scheduleMetadataProcessing(file: TFile): void {
     const path = file.path;
     const existing = this.metadataDebounceTimers.get(path);
@@ -4073,7 +4505,7 @@ export class BasesGraphView extends FileView {
       (this.file && file.path === this.file.path)
       || this.isLinkTypeDefinitionFile(file.path)
       || this.activeGroups.some((group) => group.file.path === file.path)
-      || this.connectedBaseFilterResult?.baseFile?.path === file.path
+      || this.isConnectedBaseFilterFile(file.path)
     );
     if (
       this.isFileMode
@@ -4116,7 +4548,7 @@ export class BasesGraphView extends FileView {
     if (this.file && file.path === this.file.path) return true;
     if (this.isLinkTypeDefinitionFile(file.path)) return true;
     if (this.activeGroups.some((group) => group.file.path === file.path)) return true;
-    if (this.connectedBaseFilterResult?.baseFile?.path === file.path) return true;
+    if (this.isConnectedBaseFilterFile(file.path)) return true;
     if (this.isFileMode && this.connectedBaseFilterResult?.filterId && file.extension === "md") return true;
     return this.engine.hasNode(file.path) || this.engine.hasVisibleNodeForSourcePath(file.path);
   }
@@ -4205,7 +4637,9 @@ export class BasesGraphView extends FileView {
             this.activeGroups.push(group);
           }
         }
-        this.groupingRules = this.normalizeActiveGroupRules();
+        this.groupingRules = this.isFileMode && this.graphState
+          ? this.graphState.getGroupingRules(this.normalizeActiveGroupRules())
+          : this.normalizeActiveGroupRules();
         this.engine.setGroupingRules(this.groupingRules);
         this.updateRelevantProperties();
         this.rebuildGraph();
@@ -4233,7 +4667,7 @@ export class BasesGraphView extends FileView {
     const beforeSignature = this.buildFilePathSignature(this.fileModeFilterFiles);
     const fm = (this.app.metadataCache.getFileCache(this.file)?.frontmatter ?? {}) as Record<string, unknown>;
     const connectedBaseFilter = readFrontmatterPropertyByKey(fm, this.graphPropertyKeys, "connectedBaseFilter");
-    this.connectedBaseFilterResult = await this.baseViewFilterResolver.resolve(connectedBaseFilter, this.file);
+    this.connectedBaseFilterResult = await this.baseViewFilterResolver.resolveAll(connectedBaseFilter, this.file);
     this.reportConnectedBaseFilterResult(connectedBaseFilter);
     this.fileModeFilterFiles = this.connectedBaseFilterResult.files;
     this.currentGraphFiles = this.mergeGraphFiles(this.fileModeRootFiles, this.fileModeFilterFiles);
@@ -4241,7 +4675,7 @@ export class BasesGraphView extends FileView {
       graphFile: this.file,
       linkTypeFiles: this.globalLinkTypeRegistry.getAll().map((lt) => lt.file),
       groupFiles: this.activeGroups.map((g) => g.file),
-      baseFilterFiles: this.connectedBaseFilterResult.baseFile ? [this.connectedBaseFilterResult.baseFile] : [],
+      baseFilterFiles: this.connectedBaseFilterResult.baseFiles,
       nodeFiles: this.currentGraphFiles,
       linkTypeFolder: this.linkTypeFolder,
       watchedProperties: [
@@ -4274,12 +4708,17 @@ export class BasesGraphView extends FileView {
       return;
     }
 
-    let message: string | null = null;
-    if (result.status === "base-unresolved" || result.status === "view-unresolved") {
-      message = result.message ?? "Connected Base filter could not be resolved.";
-    } else if (result.status === "resolved" && result.files.length === 0) {
-      message = `Connected Base filter resolved "${result.filterId ?? result.baseFile?.path ?? "unknown"}" but matched 0 notes.`;
-    }
+    const messages = result.results.flatMap((entry) => {
+      if (entry.status !== "resolved" && entry.status !== "empty") {
+        const prefix = result.results.length > 1 ? `${entry.filterId ?? "Connected Base"}: ` : "";
+        return [prefix + (entry.message ?? "Connected Base filter could not be resolved.")];
+      }
+      if (entry.status === "resolved" && entry.files.length === 0) {
+        return [`Connected Base filter resolved "${entry.filterId ?? entry.baseFile?.path ?? "unknown"}" but matched 0 notes.`];
+      }
+      return [];
+    });
+    const message = messages.join("\n") || null;
 
     if (!message) {
       this.lastConnectedBaseFilterMessage = null;
@@ -4292,12 +4731,10 @@ export class BasesGraphView extends FileView {
     console.warn("[GraphView] Connected Base filter issue", {
       rawValue,
       filterId: result.filterId,
-      baseFile: result.baseFile?.path ?? null,
-      viewName: result.viewName,
+      baseFiles: result.baseFiles.map((file) => file.path),
+      connections: result.results,
       source: result.source,
-      status: result.status,
       files: result.files.length,
-      filterPreview: result.filterPreview,
       message
     });
     new Notice(message);
@@ -4424,6 +4861,41 @@ export class BasesGraphView extends FileView {
       height: normalized.height
     };
     void this.writeGraphState("link-type-menu");
+  }
+
+  private scheduleGroupingStateWrite(): void {
+    if (!this.isFileMode || !this.graphNotePersistenceEnabled) return;
+    if (this.isClosingOrUnloadingGraphView || this.isHydratingGraphRuntime) return;
+    if (!this.hasCompletedInitialGraphRuntimeHydration) return;
+    const state = this.graphState;
+    const store = this.graphDocumentStore;
+    if (!state || !store) return;
+    // Update only after an explicit UI edit. Hydration must never create an override.
+    state.setGroupingRules(this.groupingRules);
+    if (this.groupingPersistTimer !== null) window.clearTimeout(this.groupingPersistTimer);
+    // Capture the owner so a following Graph Tab cannot write into the next note.
+    this.pendingGroupingWrite = async () => {
+      try {
+        if (this.graphState === state) this.suppressGraphFileReloadUntil = Date.now() + 2000;
+        const wrote = await store.writeState(state, { reason: "graph-settings" });
+        if (wrote) state.loadedFromGraphStateBlock = true;
+      } catch (error) {
+        console.error("Failed to write graph grouping rules:", error);
+      }
+    };
+    this.groupingPersistTimer = window.setTimeout(() => {
+      void this.flushGroupingStateWrite();
+    }, 250);
+  }
+
+  private async flushGroupingStateWrite(): Promise<void> {
+    if (this.groupingPersistTimer !== null) {
+      window.clearTimeout(this.groupingPersistTimer);
+      this.groupingPersistTimer = null;
+    }
+    const write = this.pendingGroupingWrite;
+    this.pendingGroupingWrite = null;
+    if (write) await write();
   }
 
   private async handleGraphSettingsChanged(settings: GraphSimulationSettings): Promise<void> {
@@ -4596,6 +5068,12 @@ export class BasesGraphView extends FileView {
     if (this.isClosingOrUnloadingGraphView) return;
     if (this.isHydratingGraphRuntime) return;
     if (!this.graphState || !this.graphDocumentStore) return;
+    if (!this.graphNotePersistenceEnabled && reason !== "manual-migration" && reason !== "clear-graph-data") {
+      return;
+    }
+    if (!this.graphState.loadedFromGraphStateBlock && reason === "note-truth-reconciliation") {
+      return;
+    }
     if (
       this.file
       && !await this.isPersistentGraphNotePath(this.file.path)
@@ -4615,9 +5093,14 @@ export class BasesGraphView extends FileView {
         this.graphState.migrateToCurrentLayout();
       }
       this.suppressGraphFileReloadUntil = Date.now() + 2000;
+      const wasNewGraphNoteState = !this.graphState.loadedFromGraphStateBlock;
       const wrote = await this.graphDocumentStore.writeState(this.graphState, { reason });
       if (wrote) {
+        this.graphState.loadedFromGraphStateBlock = true;
         this.suppressGraphFileReloadUntil = Date.now() + 1500;
+        if (wasNewGraphNoteState && this.graphNotePersistenceEnabled) {
+          new Notice("Graph note state block created.");
+        }
       }
     } catch (e) {
       console.error("Failed to write graph state:", e);
@@ -4626,6 +5109,12 @@ export class BasesGraphView extends FileView {
 
   private canWriteGraphState(reason: O3GraphDocumentWriteReason): boolean {
     if (!this.graphState || !this.graphDocumentStore) return false;
+    if (!this.graphNotePersistenceEnabled && reason !== "manual-migration" && reason !== "clear-graph-data") {
+      return false;
+    }
+    if (!this.graphState.loadedFromGraphStateBlock && reason === "note-truth-reconciliation") {
+      return false;
+    }
     if (reason === "manual-migration") return true;
     if (!this.hasCompletedInitialGraphRuntimeHydration) {
       if (this.debugEnabled) {
@@ -4636,7 +5125,7 @@ export class BasesGraphView extends FileView {
       }
       return false;
     }
-    if (!this.graphState.loadedFromGraphStateBlock && reason !== "badge-expansion" && reason !== "lens-state") {
+    if (!this.graphState.loadedFromGraphStateBlock && !this.graphNotePersistenceEnabled && reason !== "badge-expansion" && reason !== "lens-state") {
       console.warn("[GraphView] Blocked automatic graph-state write because no readable o3graph block was loaded.", {
         graphFile: this.file?.path ?? null,
         reason
@@ -4644,6 +5133,17 @@ export class BasesGraphView extends FileView {
       return false;
     }
     return true;
+  }
+
+  private hasGraphNoteIdentifier(file: TFile): boolean {
+    return frontmatterMatchesIdentifier(
+      this.app.metadataCache.getFileCache(file)?.frontmatter,
+      this.noteTypeIdentifiers.graph
+    );
+  }
+
+  private isActiveGraphViewForPersistence(): boolean {
+    return this.app.workspace.getMostRecentLeaf() === this.leaf;
   }
 
   private shouldWriteGraphStateSnapshots(snapshots: O3GraphRuntimeNodeSnapshot[]): boolean {
@@ -4744,15 +5244,6 @@ export class BasesGraphView extends FileView {
       return;
     }
     this.updateCachedLinkTypes(file.path);
-  }
-
-  private isLinkTypeDefinitionFile(path: string): boolean {
-    const filePath = String(path ?? "").trim();
-    if (!filePath) return false;
-    const folder = String(this.linkTypeFolder ?? "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-    if (!folder) return false;
-    const normalizedFilePath = filePath.replace(/\\/g, "/");
-    return normalizedFilePath.startsWith(`${folder}/`);
   }
 
   private updateCachedLinkTypes(filePath: string): void {
@@ -5537,34 +6028,7 @@ export class BasesGraphView extends FileView {
   }
 
   private normalizeGroupingRules(raw: unknown): GroupRule[] {
-    if (!Array.isArray(raw)) return [];
-    const out: GroupRule[] = [];
-    for (const item of raw) {
-      if (!item || typeof item !== "object") continue;
-      const obj = item as Record<string, unknown>;
-      const property = String(obj.property ?? "").trim();
-      if (!property) continue;
-      const operator = obj.operator === "contains" || obj.operator === "exists"
-        ? obj.operator
-        : "equals";
-      const color = String(obj.color ?? "#4caf50").trim() || "#4caf50";
-      const colorExplicit = typeof obj.colorExplicit === "boolean"
-        ? obj.colorExplicit
-        : Object.prototype.hasOwnProperty.call(obj, "color");
-      const value = String(obj.value ?? "").trim();
-      const icon = String(obj.icon ?? "").trim();
-      const iconSourcePath = String(obj.iconSourcePath ?? "").trim();
-      out.push({
-        property,
-        operator,
-        color,
-        colorExplicit,
-        ...(icon ? { icon } : {}),
-        ...(iconSourcePath ? { iconSourcePath } : {}),
-        ...(operator === "exists" ? {} : { value })
-      });
-    }
-    return out;
+    return normalizeGraphGroupingRules(raw);
   }
 
   private normalizeActiveGroupRules(): GroupRule[] {
@@ -6440,6 +6904,20 @@ export class BasesGraphView extends FileView {
     }
 
     this.errorEl.setText(`Graph View error:\n${message}`);
+  }
+
+  private normalizeBadgeFarViewThreshold(value: unknown): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed)
+      ? Math.max(0.1, Math.min(5, parsed))
+      : DEFAULT_BADGE_FAR_VIEW_THRESHOLD;
+  }
+
+  private hasGraphBadgeFarViewThresholdOverride(): boolean {
+    if (!this.file) return false;
+    const frontmatter = this.app.metadataCache.getFileCache(this.file)?.frontmatter as Record<string, unknown> | undefined;
+    const value = readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "graphBadgeFarViewThreshold");
+    return Number.isFinite(Number(value));
   }
 
   private readGraphSettingsFromConfig(): GraphSimulationSettings {

@@ -88,4 +88,26 @@ describe("GraphRenderer", () => {
     expect(renderer.hitTestNode({ x: 100, y: 100 })).toBe("node:A");
     expect(renderer.getRenderedNodeIds()).toEqual(["node:A"]);
   });
+
+  it("keeps ordinary badges selected-only while exposing eligible Lens badges", () => {
+    const initial = snapshot();
+    const renderer = new GraphRenderer();
+    renderer.render({
+      ...initial,
+      nodes: initial.nodes.map((node) => ({ ...node, selected: false })),
+      badges: [
+        ...initial.badges,
+        {
+          ...initial.badges[0],
+          id: "node:A::LinkTypes/Client Lens.md",
+          linkTypeId: "LinkTypes/Client Lens.md",
+          semantic: "lens",
+          hasRelationships: true,
+          label: "Client"
+        }
+      ]
+    });
+
+    expect(renderer.getRenderedBadgeIds()).toEqual(["node:A::LinkTypes/Client Lens.md"]);
+  });
 });

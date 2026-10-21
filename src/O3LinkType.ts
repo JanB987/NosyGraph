@@ -9,12 +9,19 @@ import {
 
 export class O3LinkType {
   file: TFile;
+  /** Canonical runtime identity; never serialized as the user's LinkType link. */
+  definitionId: string;
   key: string;
   property: string;
   properties: string[];
   writeProperty: string;
-  semantic: "link" | "parent";
-  linkType: "Force Based" | "Direction Based";
+  semantic: "link" | "parent" | "lens";
+  /** Canonical supported mode or the original unknown frontmatter value. */
+  linkType: string;
+  rawLinkType: string;
+  isSupportedLinkType: boolean;
+  isValid: boolean;
+  validationErrors: string[];
   direction: "incoming" | "outgoing" | "both" | "none";
   linkDiscoveryDirection: "incoming" | "outgoing" | "both";
   pointerDirection: "incoming" | "outgoing" | "none";
@@ -35,13 +42,41 @@ export class O3LinkType {
     const read = (key: keyof LinkTypePropertyKeys): unknown =>
       readConfiguredProperty(fm, keys, DEFAULT_LINK_TYPE_PROPERTY_KEYS, key);
     this.file = file;
+    this.definitionId = String(file.path ?? "").trim();
     this.key = String(read("key") ?? file.basename).trim();
     this.properties = O3LinkType.normalizeProperties(read("property"), read("properties"));
-    this.writeProperty = this.properties[0] ?? "";
+    const explicitWriteProperty = String(read("writeProperty") ?? "").trim().toLowerCase();
+    this.validationErrors = [];
+    this.writeProperty = explicitWriteProperty || this.properties[0] || "";
+    if (explicitWriteProperty && !this.properties.includes(explicitWriteProperty)) {
+      this.validationErrors.push("writeProperty must be one of the configured read properties.");
+    }
+    if (this.properties.length === 0) {
+      this.validationErrors.push("At least one LinkType read property is required.");
+    }
+    this.isValid = this.validationErrors.length === 0;
     this.property = this.resolveBadgeIdentity(file, this.key, this.properties);
     const linkTypeRaw = String(read("linkType") ?? "").trim();
-    this.semantic = linkTypeRaw.toLowerCase() === "parent" ? "parent" : "link";
-    this.linkType = linkTypeRaw === "Direction Based" ? "Direction Based" : "Force Based";
+    const normalizedLinkType = linkTypeRaw.toLowerCase();
+    this.rawLinkType = linkTypeRaw;
+    this.semantic = normalizedLinkType === "parent"
+      ? "parent"
+      : normalizedLinkType === "lens"
+        ? "lens"
+        : "link";
+    this.linkType = normalizedLinkType === "direction based"
+      ? "Direction Based"
+      : normalizedLinkType === "force based" || !linkTypeRaw
+        ? "Force Based"
+        : normalizedLinkType === "lens"
+          ? "lens"
+          : normalizedLinkType === "parent"
+            ? "Force Based"
+            : linkTypeRaw;
+    this.isSupportedLinkType = this.linkType === "Force Based"
+      || this.linkType === "Direction Based"
+      || this.linkType === "lens"
+      || normalizedLinkType === "parent";
     const direction = String(read("direction") ?? "outgoing").trim().toLowerCase();
     this.direction = direction === "incoming" || direction === "both" || direction === "none" ? direction : "outgoing";
     const linkDiscoveryDirection = String(read("linkDiscoveryDirection") ?? "outgoing").trim().toLowerCase();

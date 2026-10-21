@@ -82,6 +82,34 @@ describe("GraphRenderVisibilityPolicy", () => {
     })).toBe(false);
   });
 
+  it("shows eligible Lens badges on unselected nodes without exposing ordinary badges", () => {
+    const base = {
+      marqueeSelectionActive: false,
+      dragging: false,
+      draggedNode: false,
+      showAll: false,
+      selected: false,
+      dragRevealTarget: false,
+      hasRelationships: true
+    };
+    expect(policy.shouldShowBadge({ ...base, semantic: "lens" })).toBe(true);
+    expect(policy.shouldShowBadge({ ...base, semantic: "link" })).toBe(false);
+    expect(policy.shouldShowBadge({ ...base, semantic: "parent" })).toBe(false);
+  });
+
+  it("shows an empty Lens badge when its node is selected", () => {
+    expect(policy.shouldShowBadge({
+      marqueeSelectionActive: false,
+      dragging: false,
+      draggedNode: false,
+      showAll: false,
+      selected: true,
+      dragRevealTarget: false,
+      semantic: "lens",
+      hasRelationships: false
+    })).toBe(true);
+  });
+
   it("keeps ordinary edges at least one screen pixel wide at far zoom", () => {
     expect(policy.getEdgeLineWidth({
       baseWidth: 2,

@@ -33,6 +33,13 @@ function definition(path: string, property: string, valid = true): FixtureDefini
   };
 }
 
+function lensDefinition(path: string, property: string): FixtureDefinition {
+  const result = definition(path, property);
+  result.frontmatter.linkType = "lens";
+  result.frontmatter.properties = [property, "deliverables"];
+  return result;
+}
+
 describe("LinkTypeRegistry explicit graph references", () => {
   let inFolder: FixtureDefinition;
   let referenced: FixtureDefinition;
@@ -77,6 +84,7 @@ describe("LinkTypeRegistry explicit graph references", () => {
       "System/LinkTypes/Parts.md"
     ]);
     expect(registry.getByProperty("parts")?.file.path).toBe("System/LinkTypes/Parts.md");
+    expect(registry.getById("O3/LinkTypes/Client.md")?.file.path).toBe("O3/LinkTypes/Client.md");
   });
 
   it("does not duplicate a referenced definition across repeated graph hydration", async () => {
@@ -86,5 +94,36 @@ describe("LinkTypeRegistry explicit graph references", () => {
 
     expect(registry.getAll().filter((linkType) => linkType.file.path === referenced.file.path))
       .toHaveLength(1);
+  });
+
+  it("indexes every read property and keeps same-property Lens definitions distinct", async () => {
+    const firstLens = lensDefinition("System/LinkTypes/First Lens.md", "parts");
+    const secondLens = lensDefinition("System/LinkTypes/Second Lens.md", "parts");
+    const files = [firstLens.file, secondLens.file];
+    const records = new Map(
+      [firstLens, secondLens].map((entry) => [entry.file.path, entry])
+    );
+    const app = {
+      vault: {
+        getFiles: () => files,
+        cachedRead: async () => ""
+      },
+      metadataCache: {
+        getFileCache: (file: TFile) => ({
+          frontmatter: records.get(file.path)?.frontmatter
+        })
+      }
+    } as unknown as App;
+    const lensRegistry = new LinkTypeRegistry(
+      app,
+      "System/LinkTypes",
+      { linkType: { property: "type", value: "Graph Link" } }
+    );
+
+    await lensRegistry.load();
+
+    expect(lensRegistry.getByProperties("parts")).toHaveLength(2);
+    expect(lensRegistry.getByProperties("deliverables")).toHaveLength(2);
+    expect(lensRegistry.getByProperty("parts")?.semantic).toBe("lens");
   });
 });

@@ -11,6 +11,8 @@ import { ObsidianGraphNodeOpenHandler } from "./ObsidianGraphNodeOpenHandler";
 import { ObsidianGraphRootInputHandler } from "./ObsidianGraphRootInputHandler";
 import { ObsidianGraphRootPropertyMutationHandler } from "./ObsidianGraphRootPropertyMutationHandler";
 import { ExportGraphImageModal } from "./ExportGraphImageModal";
+import { ObsidianTemplaterAdapter } from "./ObsidianTemplaterAdapter";
+import { TemplaterBatchService, type TemplaterBatchTarget } from "./TemplaterBatchService";
 import { setStyle } from "./domStyle";
 import {
   DEFAULT_GRAPH_PROPERTY_KEYS,
@@ -46,6 +48,7 @@ interface BasesGraphPluginSettings {
   defaultActiveGroups: string[];
   defaultVisibleLinkTypes: string[];
   defaultAutoExpandDroppedLinkTypes: boolean;
+  defaultBadgeFarViewThreshold: number;
   linkTypeFolder: string;
   rootNodeRingColor: string;
   activeNodeRingColor: string;
@@ -72,6 +75,7 @@ const DEFAULT_SETTINGS: BasesGraphPluginSettings = {
   defaultActiveGroups: [],
   defaultVisibleLinkTypes: [],
   defaultAutoExpandDroppedLinkTypes: true,
+  defaultBadgeFarViewThreshold: 0.55,
   linkTypeFolder: "O3/LinkTypes",
   rootNodeRingColor: "#6eaaff",
   activeNodeRingColor: "#ff6b6b",
@@ -134,12 +138,17 @@ export default class BasesGraphPlugin extends Plugin {
           this.settings.linkTypePropertyKeys,
           this.settings.groupPropertyKeys,
           (paths, clipboardText) => this.rememberCopiedGraphNodeLinks(paths, clipboardText),
-          (graphLeaf, path) => this.zoomGraphTabIntoNode(graphLeaf, path)
+          (graphLeaf, path) => this.openGraphTabNodeInMarkdown(graphLeaf, path),
+          this.settings.defaultBadgeFarViewThreshold
         )
     );
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, info) => {
       if (event.defaultPrevented) return;
       this.handleGraphNodeLinksFrontmatterPaste(event, editor, info);
+    }));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      if (!(file instanceof TFile)) return;
+      void this.reconcileRenamedLinkTypeReference(file, oldPath);
     }));
     this.registerDomEvent(document, "paste", (event) => {
       this.handleGraphNodeLinksPropertiesPaste(event);
@@ -235,6 +244,25 @@ export default class BasesGraphPlugin extends Plugin {
         if (!view) return false;
         if (!checking) {
           void view.copySelectedNodeLinksToClipboard();
+        }
+        return true;
+      }
+    });
+
+    this.addCommand({
+      id: "apply-templater-to-selected-graph-nodes",
+      name: "Apply template to selected nodes",
+      checkCallback: (checking: boolean) => {
+        const view = this.findFocusedGraphView() ?? this.findActiveGraphView();
+        const refs = view && typeof (view as { getSelectedGraphNodeRefs?: unknown }).getSelectedGraphNodeRefs === "function"
+          ? view.getSelectedGraphNodeRefs()
+          : [];
+        const selectedCount = view && typeof (view as { getSelectedGraphNodeCount?: unknown }).getSelectedGraphNodeCount === "function"
+          ? view.getSelectedGraphNodeCount()
+          : refs.length;
+        if (!view || selectedCount === 0) return false;
+        if (!checking) {
+          void this.applyTemplaterToSelectedNodes(refs);
         }
         return true;
       }
@@ -571,6 +599,65 @@ export default class BasesGraphPlugin extends Plugin {
     return null;
   }
 
+  private async applyTemplaterToSelectedNodes(
+    refs: Array<{ nodeId: string; path: string }>
+  ): Promise<void> {
+    const adapter = new ObsidianTemplaterAdapter(this.app);
+    if (!adapter.isAvailable()) {
+      adapter.showUnavailableNotice();
+      return;
+    }
+    if (refs.length > 1 && !window.confirm(`Apply one Templater template to ${refs.length} selected node instances?`)) {
+      return;
+    }
+    if (refs.length === 0) {
+      new Notice("The selected graph node could not be resolved to a vault note.");
+      return;
+    }
+
+    const targets: TemplaterBatchTarget[] = [];
+    const missing: string[] = [];
+    for (const ref of [...refs].sort((a, b) => a.path.localeCompare(b.path) || a.nodeId.localeCompare(b.nodeId))) {
+      const file = this.app.vault.getAbstractFileByPath(ref.path);
+      if (!(file instanceof TFile) || file.extension.toLowerCase() !== "md") {
+        missing.push(ref.path);
+        continue;
+      }
+      targets.push({ nodeId: ref.nodeId, path: file.path });
+    }
+    if (missing.length > 0) {
+      new Notice(`Skipped ${missing.length} unresolved or non-Markdown selected node${missing.length === 1 ? "" : "s"}.`);
+    }
+    if (targets.length === 0) {
+      new Notice("No selected graph nodes resolve to Markdown notes.");
+      return;
+    }
+
+    const template = await adapter.chooseTemplate();
+    if (!template) {
+      new Notice("No Templater template was selected.");
+      return;
+    }
+    const batch = await new TemplaterBatchService().execute(
+      targets,
+      async (target) => {
+        const file = this.app.vault.getAbstractFileByPath(target.path);
+        if (!(file instanceof TFile)) throw new Error(`Target note no longer exists: ${target.path}`);
+        await adapter.applyTemplate(template, file);
+      },
+      async (target) => {
+        this.refreshGraphViewsAfterFrontmatterMutation(target.path);
+      }
+    );
+    if (batch.failed) {
+      const detail = batch.failed.error instanceof Error ? batch.failed.error.message : String(batch.failed.error);
+      new Notice(`Template stopped after ${batch.succeeded.length} note${batch.succeeded.length === 1 ? "" : "s"}; failed for ${batch.failed.target.path}: ${detail}`);
+      console.error("Templater batch failed:", batch.failed.error);
+      return;
+    }
+    new Notice(`Applied template to ${batch.succeeded.length} selected note${batch.succeeded.length === 1 ? "" : "s"}.`);
+  }
+
   async onunload() {
     for (const action of this.markdownGraphSwitchActions.values()) {
       action.remove();
@@ -597,6 +684,10 @@ export default class BasesGraphPlugin extends Plugin {
     this.settings.defaultActiveGroups = this.normalizeSettingStringArray(merged.defaultActiveGroups);
     this.settings.defaultVisibleLinkTypes = this.normalizeVisibleLinkTypeSettingArray(merged.defaultVisibleLinkTypes);
     this.settings.defaultAutoExpandDroppedLinkTypes = merged.defaultAutoExpandDroppedLinkTypes !== false;
+    const defaultBadgeFarViewThreshold = Number(merged.defaultBadgeFarViewThreshold);
+    this.settings.defaultBadgeFarViewThreshold = Number.isFinite(defaultBadgeFarViewThreshold)
+      ? Math.max(0.1, Math.min(5, defaultBadgeFarViewThreshold))
+      : DEFAULT_SETTINGS.defaultBadgeFarViewThreshold;
     const linkTypeFolder = this.normalizeFolderPath(merged.linkTypeFolder);
     this.settings.linkTypeFolder = linkTypeFolder || DEFAULT_SETTINGS.linkTypeFolder;
     const rootNodeRingColor = String(merged.rootNodeRingColor ?? "").trim();
@@ -969,7 +1060,7 @@ export default class BasesGraphPlugin extends Plugin {
     }
   }
 
-  private async zoomGraphTabIntoNode(graphLeaf: WorkspaceLeaf, pathRaw: string): Promise<void> {
+  private async openGraphTabNodeInMarkdown(graphLeaf: WorkspaceLeaf, pathRaw: string): Promise<void> {
     const path = String(pathRaw ?? "").trim();
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!(file instanceof TFile) || file.extension !== "md") return;
@@ -1001,8 +1092,6 @@ export default class BasesGraphPlugin extends Plugin {
     const sourceFile = this.resolveLeafFile(sourceLeaf);
     if (!(sourceFile instanceof TFile) || sourceFile.extension !== "md") return;
 
-    const sequence = ++this.graphTabFollowSequence;
-    this.lastGraphCapableFilePath = sourceFile.path;
     const sourceGroup = this.readLeafGroup(sourceLeaf);
     const targets = this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW)
       .filter((leaf) => leaf !== sourceLeaf && this.isGraphTabLeaf(leaf))
@@ -1011,6 +1100,14 @@ export default class BasesGraphPlugin extends Plugin {
         return !graphTabGroup || graphTabGroup === sourceGroup;
       });
     if (targets.length === 0) return;
+    const graphCapable = targets.some((leaf) => (
+      leaf.view instanceof BasesGraphView
+      && leaf.view.isGraphCapablePath(sourceFile.path)
+    ));
+    if (!graphCapable) return;
+
+    const sequence = ++this.graphTabFollowSequence;
+    this.lastGraphCapableFilePath = sourceFile.path;
 
     this.graphTabSyncInProgress = true;
     try {
@@ -1263,6 +1360,60 @@ export default class BasesGraphPlugin extends Plugin {
   private shouldOpenGraphActionInNewTab(event: MouseEvent): boolean {
     return event.button === 1 || event.ctrlKey || event.metaKey;
   }
+
+  applyDefaultBadgeFarViewThresholdToOpenViews(): void {
+    const threshold = this.settings.defaultBadgeFarViewThreshold;
+    for (const leaf of this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW)) {
+      const view = leaf.view;
+      if (view instanceof BasesGraphView) {
+        view.setDefaultBadgeFarViewThreshold(threshold);
+      }
+    }
+  }
+
+  private async reconcileRenamedLinkTypeReference(file: TFile, oldPath: string): Promise<void> {
+    const cache = this.app.metadataCache.getFileCache(file);
+    const inConfiguredFolder = this.normalizeFolderPath(oldPath).startsWith(`${this.normalizeFolderPath(this.settings.linkTypeFolder)}/`)
+      || this.normalizeFolderPath(file.path).startsWith(`${this.normalizeFolderPath(this.settings.linkTypeFolder)}/`);
+    const isLinkType = inConfiguredFolder || frontmatterMatchesIdentifier(
+      cache?.frontmatter,
+      this.settings.noteTypeIdentifiers.linkType
+    );
+    if (!isLinkType) return;
+
+    const oldNormalized = String(oldPath ?? "").trim().replace(/\\/g, "/").replace(/\.md$/i, "");
+    const oldBasename = oldNormalized.split("/").pop()?.toLowerCase() ?? "";
+    const replacement = this.app.fileManager.generateMarkdownLink(file, "");
+    let changed = false;
+    const nextVisible = this.settings.defaultVisibleLinkTypes.map((value) => {
+      const raw = String(value ?? "").trim();
+      const linkpath = this.extractConfiguredLinkpath(raw).toLowerCase();
+      const normalizedLinkpath = linkpath.replace(/^\//, "").replace(/\.md$/i, "");
+      if (!normalizedLinkpath || (
+        normalizedLinkpath !== oldNormalized.toLowerCase()
+        && normalizedLinkpath !== oldBasename
+      )) {
+        return value;
+      }
+      changed = true;
+      return replacement;
+    });
+    if (!changed) return;
+    this.settings.defaultVisibleLinkTypes = nextVisible;
+    await this.savePluginSettings();
+  }
+
+  private extractConfiguredLinkpath(rawValue: string): string {
+    const raw = String(rawValue ?? "").trim();
+    const wikiMatch = raw.match(/^\[\[([^|\]#]+)(?:#[^|\]]+)?(?:\|[^\]]+)?\]\]$/);
+    const markdownMatch = raw.match(/^\[[^\]]*\]\(([^)#]+)(?:#[^)]*)?\)$/);
+    const linkpath = String(wikiMatch?.[1] ?? markdownMatch?.[1] ?? raw).trim().replace(/^<|>$/g, "");
+    try {
+      return decodeURIComponent(linkpath);
+    } catch {
+      return linkpath;
+    }
+  }
 }
 
 class O3GraphEmbedRenderChild extends MarkdownRenderChild {
@@ -1399,6 +1550,13 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
       },
       isGraphNote: (path) => this.isLensExpandablePath(path),
       onEmbeddedGraphExpansionRequested: (payload) => {
+        if (payload.linkTypeId) {
+          return this.engine?.getLensEmbeddedGraphDefinition(
+            payload.originNodeId,
+            payload.linkTypeId,
+            payload.ancestry
+          ) ?? null;
+        }
         return this.loadEmbeddedGraphDefinition(payload.graphPath, payload.ancestry);
       },
       onBadgeExpansionToggled: (sourceNodeId, sourcePath, linkType, expanded, _expansionId, parentExpansionId) => {
@@ -1502,6 +1660,15 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
 
   private resolveVisibleLinkTypeDefinitions(values: string[]): O3LinkType[] {
     const candidates = this.collectLinkTypeDefinitions();
+    const knownPaths = new Set(candidates.map((linkType) => linkType.file.path));
+    for (const value of values ?? []) {
+      const linkedFile = this.resolveFilesFromGraphValue([value])[0];
+      if (!linkedFile || knownPaths.has(linkedFile.path)) continue;
+      const frontmatter = this.readFrontmatter(linkedFile);
+      if (!frontmatterMatchesIdentifier(frontmatter, this.settings.noteTypeIdentifiers.linkType)) continue;
+      candidates.push(new O3LinkType(linkedFile, frontmatter, this.settings.linkTypePropertyKeys));
+      knownPaths.add(linkedFile.path);
+    }
     const out: O3LinkType[] = [];
     const seen = new Set<string>();
     for (const valueRaw of values ?? []) {
@@ -1688,7 +1855,11 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
       embeddedGraphs: state.listExpandedEmbeddedGraphs().map((entry) => ({
         originNodeId: entry.originNodeId,
         graphPath: entry.graphPath,
+        expanded: true,
         ...(entry.lens ? { lens: entry.lens } : {}),
+        ...(entry.snapshots && entry.snapshots.length > 0
+          ? { snapshots: entry.snapshots }
+          : {}),
         ...(entry.embeddedGraphs && entry.embeddedGraphs.length > 0
           ? { embeddedGraphs: entry.embeddedGraphs }
           : {})
@@ -2372,6 +2543,21 @@ class BasesGraphSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.defaultAutoExpandDroppedLinkTypes = Boolean(value);
             this.plugin.applyDefaultAutoExpandDroppedLinkTypesToOpenViews();
+          await this.plugin.savePluginSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Far-view badge and pin threshold")
+      .setDesc("Camera zoom below this value uses compact badges with label initials and compact pins. A graph can override this value in the graph settings panel or with its graphBadge_FarViewThreshold property.")
+      .addSlider((slider) => {
+        slider
+          .setLimits(0.1, 5, 0.05)
+          .setDynamicTooltip()
+          .setValue(this.plugin.settings.defaultBadgeFarViewThreshold)
+          .onChange(async (value) => {
+            this.plugin.settings.defaultBadgeFarViewThreshold = Math.max(0.1, Math.min(5, Number(value)));
+            this.plugin.applyDefaultBadgeFarViewThresholdToOpenViews();
             await this.plugin.savePluginSettings();
           });
       });
@@ -2407,7 +2593,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
     this.addGraphPropertySetting(containerEl, "Auto-expand dropped LinkTypes", "Graph-note boolean that controls whether dropping a node onto a badge automatically expands that badge after the YAML mutation.", "autoExpandDroppedLinkTypes");
     this.addGraphPropertySetting(containerEl, "Groups", "Graph-note list of active group notes.", "activeGroups");
     this.addGraphPropertySetting(containerEl, "Filters", "Graph-note list of active filter notes reserved for filter-based sources.", "activeFilters");
-    this.addGraphPropertySetting(containerEl, "Connected Base filter", "Graph-note Base view link used as a filter source.", "connectedBaseFilter");
+    this.addGraphPropertySetting(containerEl, "Connected Base filters", "Graph-note Base view link or list of links. Matching notes from all connected views are combined.", "connectedBaseFilter");
     this.addGraphPropertySetting(containerEl, "Gravity", "Graph-note force gravity setting.", "graphForceGravity");
     this.addGraphPropertySetting(containerEl, "Repellent", "Graph-note force repellent setting.", "graphForceRepellent");
     this.addGraphPropertySetting(containerEl, "Default node size", "Graph-note default node radius setting.", "graphNodeSize");
@@ -2430,7 +2616,8 @@ class BasesGraphSettingTab extends PluginSettingTab {
     });
     this.addLinkTypePropertySetting(containerEl, "Label", "Display label/key of the LinkType.", "key");
     this.addLinkTypePropertySetting(containerEl, "Linked property", "YAML property or property list this LinkType reads on regular notes.", "property");
-    this.addLinkTypePropertySetting(containerEl, "Link type", "Force Based, Direction Based, or parent container behavior.", "linkType");
+    this.addLinkTypePropertySetting(containerEl, "Write property", "Lens property receiving relationship mutations; if omitted, the first read property is used.", "writeProperty");
+    this.addLinkTypePropertySetting(containerEl, "Link type", "Force Based, Direction Based, parent container, or lens behavior.", "linkType");
     this.addLinkTypePropertySetting(containerEl, "Relationship direction", "Outgoing, incoming, or both for YAML relationship reads.", "direction");
     this.addLinkTypePropertySetting(containerEl, "Discovery direction", "Outgoing reads the current note; incoming finds notes whose configured property points to it.", "linkDiscoveryDirection");
     this.addLinkTypePropertySetting(containerEl, "Arrow direction", "Pointer direction used by rendered link arrows.", "pointerDirection");

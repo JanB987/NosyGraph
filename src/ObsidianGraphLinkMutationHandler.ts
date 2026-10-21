@@ -61,10 +61,23 @@ export class ObsidianGraphLinkMutationHandler {
           continue;
         }
 
-        const exists = this.frontmatterValueContainsLink(frontmatter[propertyKey], sourceFile.path, targetFile.path);
+        const readProperties = this.getReadProperties(request);
+        const matchingPropertyKeys = request.semantic === "lens" && mode === "toggle"
+          ? this.findMatchingPropertyKeys(frontmatter, readProperties, sourceFile.path, targetFile.path)
+          : (this.frontmatterValueContainsLink(frontmatter[propertyKey], sourceFile.path, targetFile.path)
+            ? [propertyKey]
+            : []);
+        const exists = matchingPropertyKeys.length > 0;
         if (exists) {
           if (mode === "toggle") {
-            this.removeFrontmatterLinkValue(frontmatter, propertyKey, sourceFile.path, targetFile.path);
+            for (const matchingPropertyKey of matchingPropertyKeys) {
+              this.removeFrontmatterLinkValue(
+                frontmatter,
+                matchingPropertyKey,
+                sourceFile.path,
+                targetFile.path
+              );
+            }
             result.removed.push(sourceFile.path);
           } else {
             result.skipped.push(sourceFile.path);
@@ -155,6 +168,37 @@ export class ObsidianGraphLinkMutationHandler {
   private findFrontmatterPropertyKey(frontmatter: Record<string, unknown>, property: string): string | null {
     const normalizedProperty = this.normalizeProperty(property);
     return Object.keys(frontmatter).find((key) => this.normalizeProperty(key) === normalizedProperty) ?? null;
+  }
+
+  private getReadProperties(request: GraphLinkBadgeDropMutationRequest): string[] {
+    const properties = [request.property, ...(request.readProperties ?? [])]
+      .map((property) => String(property ?? "").trim())
+      .filter(Boolean);
+    const seen = new Set<string>();
+    return properties.filter((property) => {
+      const normalized = this.normalizeProperty(property);
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+  }
+
+  private findMatchingPropertyKeys(
+    frontmatter: Record<string, unknown>,
+    properties: string[],
+    targetPath: string,
+    sourcePath: string
+  ): string[] {
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    for (const property of properties) {
+      const key = this.findFrontmatterPropertyKey(frontmatter, property);
+      if (!key || seen.has(key)) continue;
+      if (!this.frontmatterValueContainsLink(frontmatter[key], targetPath, sourcePath)) continue;
+      seen.add(key);
+      keys.push(key);
+    }
+    return keys;
   }
 
   private addFrontmatterLinkValue(

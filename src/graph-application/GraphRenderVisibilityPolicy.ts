@@ -15,6 +15,11 @@ export interface GraphNodeBadgeVisibilityInput {
   dragRevealTarget: boolean;
 }
 
+export interface GraphBadgeDefinitionVisibilityInput extends GraphNodeBadgeVisibilityInput {
+  semantic: "link" | "parent" | "lens";
+  hasRelationships: boolean;
+}
+
 export interface GraphEdgeLineWidthInput {
   baseWidth: number;
   zoom: number;
@@ -46,6 +51,19 @@ export class GraphRenderVisibilityPolicy {
     return input.showAll
       || input.selected
       || input.dragRevealTarget;
+  }
+
+  /**
+   * Ordinary badges retain the selected-node rule. Lens badges are the only
+   * exception: an eligible unselected node may expose a compact badge, while
+   * selection/show-all/drag reveal still exposes empty Lens definitions.
+   */
+  shouldShowBadge(input: GraphBadgeDefinitionVisibilityInput): boolean {
+    if (input.marqueeSelectionActive) return false;
+    const selectedContext = input.showAll || input.selected || input.dragRevealTarget;
+    if (input.dragging && input.draggedNode) return false;
+    if (selectedContext) return true;
+    return input.semantic === "lens" && input.hasRelationships;
   }
 
   getEdgeLineWidth(input: GraphEdgeLineWidthInput): number {

@@ -23,6 +23,7 @@ describe("O3LinkType baseline characterization", () => {
     });
 
     expect(definition.key).toBe("Client");
+    expect(definition.definitionId).toBe("LinkTypes/Client.md");
     expect(definition.property).toBe("client");
     expect(definition.properties).toEqual(["client"]);
     expect(definition.writeProperty).toBe("client");
@@ -79,16 +80,45 @@ describe("O3LinkType baseline characterization", () => {
     expect(definition.property).toBe("scope");
   });
 
-  it("documents that lens is not a distinct runtime mode before Iteration 2", () => {
+  it("parses Lens as a distinct mode with an explicit write property", () => {
     const definition = new O3LinkType(file("LinkTypes/Scope lens.md"), {
       key: "Scope lens",
       property: ["parts", "deliverables"],
-      linkType: "lens"
+      linkType: "lens",
+      writeProperty: "deliverables"
     });
 
-    expect(definition.linkType).toBe("Force Based");
-    expect(definition.semantic).toBe("link");
+    expect(definition.linkType).toBe("lens");
+    expect(definition.semantic).toBe("lens");
     expect(definition.properties).toEqual(["parts", "deliverables"]);
-    expect(definition.writeProperty).toBe("parts");
+    expect(definition.writeProperty).toBe("deliverables");
+    expect(definition.isSupportedLinkType).toBe(true);
+  });
+
+  it("preserves unknown linkType values instead of rewriting them as Force Based", () => {
+    const definition = new O3LinkType(file("LinkTypes/Unknown.md"), {
+      key: "Unknown",
+      property: "related",
+      linkType: "Experimental Layout"
+    });
+
+    expect(definition.linkType).toBe("Experimental Layout");
+    expect(definition.rawLinkType).toBe("Experimental Layout");
+    expect(definition.isSupportedLinkType).toBe(false);
+    expect(definition.semantic).toBe("link");
+  });
+
+  it("reports an invalid explicit write property", () => {
+    const definition = new O3LinkType(file("LinkTypes/Invalid.md"), {
+      property: ["parts", "deliverables"],
+      linkType: "lens",
+      writeProperty: "status"
+    });
+
+    expect(definition.writeProperty).toBe("status");
+    expect(definition.isValid).toBe(false);
+    expect(definition.validationErrors).toEqual([
+      "writeProperty must be one of the configured read properties."
+    ]);
   });
 });

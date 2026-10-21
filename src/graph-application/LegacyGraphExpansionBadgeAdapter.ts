@@ -11,6 +11,7 @@ import type {
 
 export interface GraphExpansionBadgeDefinition {
   linkTypeId: LinkTypeId;
+  legacyLinkTypeId?: LinkTypeId;
   label: string;
   color: string;
   semantic: GraphBadgeSemantic;
@@ -49,7 +50,7 @@ export class LegacyGraphExpansionBadgeAdapter
         semantic: definition.semantic,
         hasRelationships: this.options.hasRelationships(
           input.targetNote.id,
-          linkTypeId
+          definition.legacyLinkTypeId ?? linkTypeId
         ),
         duplicateNodes: definition.duplicateNodes
       });

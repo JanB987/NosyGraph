@@ -4,7 +4,7 @@ import { App, TFile } from "obsidian";
 export const NONE_LINK_TYPE = "None-type links";
 
 /**
- * Extracts link path from a string like "[[Note Name]]".
+ * Extracts a note path from a wiki or Markdown internal link.
  * Returns null if format is invalid.
  */
 export function extractLinkPath(linkText: string): string | null {
@@ -12,6 +12,10 @@ export function extractLinkPath(linkText: string): string | null {
 
   const text = linkText.trim();
   const match = text.match(/^\[\[(.+?)\]\]$/);
+  const markdownMatch = text.match(/^\[[^\]]*\]\(([^)#]+)(?:#[^)]*)?\)$/);
+  if (markdownMatch) {
+    return decodeLinkPath(String(markdownMatch[1] ?? "").trim()) || null;
+  }
   if (!match) return null;
 
   const raw = String(match[1] ?? "").trim();
@@ -61,7 +65,8 @@ export function resolveWikiLinkArray(app: App, values: unknown): TFile[] {
     if (!raw) continue;
 
     const match = raw.match(/^\[\[([^|\]]+)/);
-    const linkPath = (match ? match[1] : raw)?.trim();
+    const markdownMatch = raw.match(/^\[[^\]]*\]\(([^)#]+)(?:#[^)]*)?\)$/);
+    const linkPath = decodeLinkPath((match?.[1] ?? markdownMatch?.[1] ?? raw)?.trim());
     if (!linkPath) continue;
 
     const file = app.metadataCache.getFirstLinkpathDest(linkPath, "");
@@ -74,6 +79,14 @@ export function resolveWikiLinkArray(app: App, values: unknown): TFile[] {
   }
 
   return results;
+}
+
+function decodeLinkPath(value: string): string {
+  try {
+    return decodeURIComponent(String(value ?? ""));
+  } catch {
+    return String(value ?? "");
+  }
 }
 
 export function extractInternalLinkCandidates(value: unknown): string[] {

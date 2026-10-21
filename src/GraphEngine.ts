@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
-import { App, Component, EventRef, Menu, TFile } from "obsidian";
+import { App, Component, EventRef, Menu, TFile, setIcon } from "obsidian";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE } from "./linkResolver";
 import { type GraphPropertyKeys, normalizeGraphPropertyKeys, readFrontmatterPropertyByKey } from "./GraphPropertyKeys";
 import { createGraphBadgeId } from "./graph-domain/GraphBadge";
@@ -96,12 +96,15 @@ interface GraphNode {
     origin: string;
   }>;
   stateOwnerPath?: string;
+  /** Graph-capable note whose frontmatter defines this embedded runtime. */
+  embeddedDefinitionPath?: string;
   embeddedInstanceId?: string;
   embeddedSourceNodeId?: string;
   embeddedRoot?: boolean;
   embeddedOrigin?: O3GraphNodeOrigin;
   embeddedAncestry?: string[];
   isMissingFile?: boolean;
+  relationshipProperties?: string[];
 }
 
 type GraphNodeExpansionRef = NonNullable<GraphNode["expandedVia"]>[number];
@@ -118,6 +121,11 @@ interface Edge {
 }
 
 type GraphLinkTarget = ObsidianGraphLinkTarget;
+
+interface LensResolvedTarget {
+  target: GraphLinkTarget;
+  properties: string[];
+}
 
 interface BadgeDropTarget {
   nodeId: string;
@@ -155,6 +163,12 @@ interface ParentContainerState {
 
 export interface EmbeddedGraphDefinition {
   graphPath: string;
+  /** Graph note that owns runtime state; may differ from the definition path. */
+  persistenceOwnerPath?: string;
+  /** Lens LinkType viewports use a definition identity for restoration. */
+  runtimeOnly?: boolean;
+  /** Canonical Lens LinkType note identity for definition-keyed restoration. */
+  linkTypeId?: string;
   color: string;
   colorSource?: "explicit" | "group" | "default";
   linkForce: number;
@@ -172,6 +186,9 @@ interface EmbeddedGraphContainerState {
   origin: string;
   originSourcePath: string;
   graphPath: string;
+  persistenceOwnerPath: string;
+  runtimeOnly?: boolean;
+  linkTypeId?: string;
   memberIds: Set<string>;
   interactionLocked?: boolean;
   color: string;
@@ -232,6 +249,10 @@ export interface GraphLinkBadgeDropMutationRequest {
   sources: GraphLinkMutationNodeRef[];
   property: string;
   discoveryDirection: "incoming" | "outgoing" | "both";
+  /** All read properties belonging to a Lens definition. */
+  readProperties?: string[];
+  semantic?: "link" | "parent" | "lens";
+  definitionId?: string;
 }
 
 export interface GraphLinkBadgeDropMutationResult {
@@ -307,6 +328,7 @@ export interface GraphEngineMenuOptions {
   onSelectedLinkTypesChange?: (types: string[]) => void;
   onLinkTypeSemanticsChange?: (semantics: Record<string, "link" | "parent">) => void;
   onLinkTypePhysicsChange?: (physics: Record<string, { preferredDistance?: number; strength?: number }>) => void;
+  onBadgeFarViewThresholdChange?: (threshold: number) => void | Promise<void>;
   onParentExpansionRequested?: (payload: {
     sourceNodeId: string;
     sourcePath: string;
@@ -368,6 +390,8 @@ export interface GraphEngineMenuOptions {
     originNodeId: string;
     graphPath: string;
     ancestry: string[];
+    ownerGraphPath?: string;
+    linkTypeId?: string;
   }) => Promise<EmbeddedGraphDefinition | null> | EmbeddedGraphDefinition | null;
   onEmbeddedGraphExpansionChanged?: (
     originNodeId: string,
@@ -375,7 +399,9 @@ export interface GraphEngineMenuOptions {
     expanded: boolean,
     ownerGraphPath?: string,
     lens?: O3GraphEmbeddedLensState,
-    parentChain?: O3GraphEmbeddedGraphState[]
+    parentChain?: O3GraphEmbeddedGraphState[],
+    linkTypeId?: string,
+    instanceId?: string
   ) => void;
   onEmbeddedNodePositionChanged?: (payload: {
     ownerGraphPath: string;
@@ -457,7 +483,7 @@ interface LinkTypeVisualConfig {
   pointerDirection: LinkPointerDirection;
 }
 
-type SettingKey = keyof GraphSimulationSettings;
+type SettingKey = keyof GraphSimulationSettings | "badgeFarViewThreshold";
 
 export class GraphEngine {
   onNodePositionChanged?: (path: string, x?: number, y?: number) => void;
@@ -673,6 +699,7 @@ export class GraphEngine {
   private nearRestVelocityThreshold: number;
   private restVelocityThreshold: number;
   private textFadeThreshold: number;
+  private badgeFarViewThreshold = 0.55;
   private damping = 0.85;
   private linkDistance = 120;
   private debugEnabled = false;
@@ -715,13 +742,7 @@ export class GraphEngine {
       expandParent: (node, property) => this.triggerParentExpansion(node, property),
       toggleLinkType: (file, property, sourceNodeId) => this.toggleExpansion(file, property, { sourceNodeId })
     }, (value) => this.normalizeLinkType(value));
-    this.linkResolver = new ObsidianGraphLinkResolver(this.app, {
-      isFile: (value): value is TFile => value instanceof TFile,
-      getLabels: () => this.lastLabels,
-      getExpansionPropertyAliases: () => this.activeLinkTypeExpansionPropertiesByProperty,
-      getDiscoveryDirections: () => this.activeLinkTypeDiscoveryDirectionByProperty,
-      normalizeType: (value) => this.normalizeLinkType(value)
-    });
+    this.linkResolver = this.createLinkResolver();
     this.legacyExpansionService = new GraphLegacyExpansionService<GraphNode, TFile>({
       expandedByBadge: this.expandedByBadge,
       expansionNodes: this.expansionNodes,
@@ -872,19 +893,25 @@ export class GraphEngine {
       },
       getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
       normalizeLinkType: (value) => this.normalizeLinkType(value),
-      isExpanded: (expansionId) => this.expandedByBadge.has(expansionId),
+      isExpanded: (expansionId) => this.isBadgeExpansionExpanded(expansionId),
       toggle: ({ node, file, linkType }) => this.badgeExpansionCoordinator.expandFromNode(file, linkType, node.id)
     });
     const expansionBadgeReader = new LegacyGraphExpansionBadgeAdapter({
       getDefinitions: (contextId) => this.getPersistableBadgeLinkTypesForContext(contextId)
         .flatMap((linkType) => {
-          const linkTypeId = this.normalizeLinkType(String(linkType.property ?? ""));
-          if (!linkTypeId) return [];
+          const legacyLinkTypeId = this.linkTypeLegacyId(linkType);
+          const linkTypeId = this.linkTypeBadgeId(linkType);
+          if (!legacyLinkTypeId || !linkTypeId) return [];
           return [{
             linkTypeId,
+            legacyLinkTypeId,
             label: String(linkType.key ?? linkType.property ?? "").trim() || linkTypeId,
-            color: this.getBadgeBaseColor(linkTypeId, linkType.color),
-            semantic: linkType.semantic === "parent" ? "parent" as const : "link" as const,
+            color: this.getBadgeBaseColor(legacyLinkTypeId, linkType.color),
+            semantic: linkType.semantic === "parent"
+              ? "parent" as const
+              : linkType.semantic === "lens"
+                ? "lens" as const
+                : "link" as const,
             duplicateNodes: linkType.linkDuplicateNodes === true
           }];
         }),
@@ -931,6 +958,7 @@ export class GraphEngine {
       getLinkTypes: (node) => this.getPersistableBadgeLinkTypesForNode(node),
       normalizeLinkType: (value) => this.normalizeLinkType(value),
       handleNormalToggle: async (request) => { await toggleHandler.handle(request); },
+      toggleLens: ({ node, linkType }) => this.toggleLensLinkType(node, linkType),
       toggle: ({ node, file, linkType }) => this.badgeExpansionCoordinator.expandFromNode(file, linkType, node.id),
       openInput: ({ node, linkType }) => this.requestBadgeLinkInput(node.id, linkType),
       expandChain: ({ node, file, linkType }) => this.expandLinkTypeChainFromNode(file, linkType, node.id)
@@ -1945,6 +1973,9 @@ export class GraphEngine {
         if (!property) return "";
         const expansionProperties = this.getLinkTypeExpansionProperties(lt).join(",");
         return [
+          String(lt.definitionId ?? ""),
+          String(lt.semantic ?? "link"),
+          String(lt.key ?? ""),
           property,
           expansionProperties,
           String(lt.linkType ?? ""),
@@ -2573,6 +2604,15 @@ export class GraphEngine {
     return refreshed;
   }
 
+  private createLinkResolver(): ObsidianGraphLinkResolver {
+    return new ObsidianGraphLinkResolver(this.app, {
+      isFile: (value): value is TFile => value instanceof TFile,
+      getLabels: () => this.lastLabels,
+      getExpansionPropertyAliases: () => this.activeLinkTypeExpansionPropertiesByProperty,
+      getDiscoveryDirections: () => this.activeLinkTypeDiscoveryDirectionByProperty
+    });
+  }
+
   private normalizeLinkType(type: string): string {
     return String(type ?? "").trim();
   }
@@ -2772,10 +2812,58 @@ export class GraphEngine {
     return createGraphBadgeId(nodeId, linkType);
   }
 
-  private isBadgeExpanded(sourcePath: string, linkType: string): boolean {
+  /** Canonical badge identity; property keys remain a legacy lookup alias. */
+  private linkTypeBadgeId(linkType: Pick<O3LinkType, "property"> & Partial<Pick<O3LinkType, "definitionId">>): string {
+    const definitionId = String(linkType.definitionId ?? "").trim();
+    return definitionId || this.normalizeLinkType(String(linkType.property ?? ""));
+  }
+
+  private linkTypeLegacyId(linkType: Pick<O3LinkType, "property">): string {
+    return this.normalizeLinkType(String(linkType.property ?? ""));
+  }
+
+  private isBadgeExpansionExpanded(expansionId: string): boolean {
+    const raw = String(expansionId ?? "").trim();
+    if (this.expandedByBadge.has(raw)) return true;
+    const separator = raw.lastIndexOf("::");
+    if (separator <= 0) return false;
+    const nodeId = raw.slice(0, separator);
+    const definitionId = raw.slice(separator + 2);
+    const definition = this.findRuntimeLinkTypeById(definitionId);
+    if (definition?.semantic === "lens") {
+      const graphPath = this.lensRuntimeGraphPath(this.linkTypeBadgeId(definition));
+      return this.embeddedGraphContainers.has(this.embeddedGraphKey(nodeId, graphPath))
+        || this.expandedByBadge.has(this.badgeKey(nodeId, this.linkTypeLegacyId(definition)));
+    }
+    return Boolean(definition && this.expandedByBadge.has(
+      this.badgeKey(nodeId, this.linkTypeLegacyId(definition))
+    ));
+  }
+
+  private findRuntimeLinkTypeById(definitionId: string): O3LinkType | undefined {
+    const normalized = String(definitionId ?? "").trim();
+    if (!normalized) return undefined;
+    const candidates = [
+      ...this.activeNodeBadgeLinkTypes,
+      ...this.visibleNodeBadgeLinkTypes,
+      ...Array.from(this.embeddedGraphContainers.values()).flatMap((container) => [
+        ...container.linkTypes,
+        ...(container.visibleLinkTypeDefinitions ?? [])
+      ])
+    ];
+    return candidates.find((candidate) => String(candidate.definitionId ?? "").trim() === normalized);
+  }
+
+  private isBadgeExpanded(sourcePath: string, linkType: string, definition?: O3LinkType): boolean {
     const source = String(sourcePath ?? "").trim();
     const type = String(linkType ?? "").trim().toLowerCase();
     if (!source || !type) return false;
+    const resolvedDefinition = definition ?? this.findRuntimeLinkTypeById(type);
+    if (resolvedDefinition?.semantic === "lens") {
+      const graphPath = this.lensRuntimeGraphPath(this.linkTypeBadgeId(resolvedDefinition));
+      return this.embeddedGraphContainers.has(this.embeddedGraphKey(source, graphPath))
+        || this.expandedByBadge.has(this.badgeKey(source, this.linkTypeLegacyId(resolvedDefinition)));
+    }
     return this.expandedByBadge.has(this.badgeKey(source, type));
   }
 
@@ -2784,43 +2872,42 @@ export class GraphEngine {
     sourcePath: string,
     linkType: string,
     baseLabel: string,
-    options: { hasYamlLinks: boolean; color?: string } = { hasYamlLinks: false }
+    options: { hasYamlLinks: boolean; color?: string; definition?: O3LinkType } = { hasYamlLinks: false }
   ): void {
     const label = String(baseLabel ?? "").trim();
-    const expanded = this.isBadgeExpanded(sourcePath, linkType);
+    const expanded = this.isBadgeExpanded(sourcePath, linkType, options.definition);
     const hasYamlLinks = options.hasYamlLinks === true;
     const baseColor = this.getBadgeBaseColor(linkType, options.color);
-    const background = hasYamlLinks
-      ? (expanded
-        ? this.mixHexColors(baseColor, "#ffffff", 0.18)
-        : this.mixHexColors(baseColor, "#000000", 0.28))
-      : (expanded
-        ? this.hexToRgba(this.mixHexColors(baseColor, "#ffffff", 0.12), 0.58)
-        : this.hexToRgba(this.mixHexColors(baseColor, "#000000", 0.32), 0.42));
-    const borderColor = hasYamlLinks || expanded
-      ? (expanded
-        ? this.mixHexColors(baseColor, "#ffffff", 0.05)
-        : this.mixHexColors(baseColor, "#000000", 0.05))
-      : this.hexToRgba(baseColor, 0.5);
     const symbol = expanded ? "-" : "+";
-    badge.textContent = label ? `${symbol} ${label}` : symbol;
+    const compact = this.camera.zoom < this.badgeFarViewThreshold;
+    const displayedLabel = compact ? this.getCompactBadgeLabel(label) : label;
+    const labelElement = badge.querySelector<HTMLElement>(".o3-node-badge-label");
+    if (labelElement) {
+      labelElement.textContent = displayedLabel ? `${symbol} ${displayedLabel}` : symbol;
+    } else {
+      badge.textContent = displayedLabel ? `${symbol} ${displayedLabel}` : symbol;
+    }
     badge.title = `${expanded ? "Collapse" : "Expand"} ${label || linkType}${hasYamlLinks ? "" : " (no YAML links)"}`;
     badge.setAttribute("aria-label", badge.title);
     badge.dataset.o3ExpansionState = expanded ? "expanded" : "collapsed";
+    badge.dataset.o3BadgeCompact = compact ? "true" : "false";
     badge.dataset.o3BadgePopulated = hasYamlLinks ? "true" : "false";
-    setStyle(badge, "background", background);
-    setStyle(badge, "color", this.getBadgeTextColor(baseColor, hasYamlLinks || expanded ? 1 : 0.86));
-    setStyle(badge, "border", `1px solid ${borderColor}`);
-    setStyle(badge, "boxShadow", expanded
-      ? (hasYamlLinks
-        ? `0 0 0 1px ${this.hexToRgba(baseColor, 0.28)}, 0 2px 10px ${this.hexToRgba(baseColor, 0.32)}`
-        : `0 0 0 1px ${this.hexToRgba(baseColor, 0.14)}, 0 2px 8px rgba(0,0,0,0.18)`)
-      : `0 2px 8px rgba(0,0,0,0.25), inset 0 0 0 1px ${this.hexToRgba(baseColor, 0.12)}`);
-    setStyle(badge, "opacity", hasYamlLinks ? "1" : "0.72");
-    setStyle(badge, "display", "inline-flex");
-    setStyle(badge, "alignItems", "center");
-    setStyle(badge, "whiteSpace", "nowrap");
-    setStyle(badge, "lineHeight", "1.2");
+    badge.classList.toggle("o3-node-badge--expanded", expanded);
+    badge.classList.toggle("o3-node-badge--empty", !hasYamlLinks);
+    badge.classList.toggle("o3-node-badge--populated", hasYamlLinks);
+    setStyle(badge, "--o3-badge-color", baseColor);
+    setStyle(badge, "--o3-badge-text-color", this.getBadgeTextColor(baseColor, hasYamlLinks || expanded ? 1 : 0.86));
+  }
+
+  private getCompactBadgeLabel(labelRaw: string): string {
+    const label = String(labelRaw ?? "").trim();
+    if (!label) return "";
+    const words = label
+      .split(/[\s_\-/\\.:]+/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+    const initials = words.map((word) => word.charAt(0)).join("").toUpperCase();
+    return initials || label.charAt(0).toUpperCase();
   }
 
   private hasBadgeYamlLinks(sourcePath: string, linkType: string): boolean {
@@ -2835,6 +2922,19 @@ export class GraphEngine {
     const hasLinks = this.linkResolver.resolveLinkedTargets(file, { property: normalizedType } as O3LinkType).length > 0;
     this.badgeYamlLinkPresenceCache.set(cacheKey, hasLinks);
     return hasLinks;
+  }
+
+  private hasBadgeYamlLinksForLinkType(sourcePath: string, linkType: O3LinkType): boolean {
+    const path = String(sourcePath ?? "").trim();
+    if (!path) return false;
+    const properties = this.getLinkTypeExpansionProperties(linkType);
+    return properties.some((property) => this.hasBadgeYamlLinks(path, property));
+  }
+
+  private getLinkTypeIconKind(linkType: Pick<O3LinkType, "semantic" | "linkType">): "force" | "direction" | "parent" | "lens" {
+    if (linkType.semantic === "lens") return "lens";
+    if (linkType.semantic === "parent") return "parent";
+    return linkType.linkType === "Direction Based" ? "direction" : "force";
   }
 
   private normalizeBadgeColor(color: unknown): string {
@@ -2854,7 +2954,7 @@ export class GraphEngine {
     const visualColor = normalizedType
       ? this.activeLinkTypeVisualByProperty.get(normalizedType)?.color
       : undefined;
-    return this.normalizeBadgeColor(visualColor ?? fallbackColor);
+    return this.normalizeBadgeColor(fallbackColor ?? visualColor);
   }
 
   private getBadgeTextColor(baseColor: string, alpha = 1): string {
@@ -3257,12 +3357,20 @@ export class GraphEngine {
         .filter(type => type.length > 0)
         .filter(type => this.getLinkTypeSemantic(type) === "parent"));
 
-    if (availableParentTypes.size === 0) {
+    const visibleTypes = this.visibleNodeBadgeLinkTypes
+      .map((linkType) => this.linkTypeBadgeId(linkType))
+      .map((type) => this.normalizeLinkType(type))
+      .filter(Boolean);
+
+    if (availableParentTypes.size === 0 && visibleTypes.length === 0) {
       this.badgesDirty = false;
       return;
     }
 
-    const badgeTypes = Array.from(availableParentTypes).sort((a, b) => a.localeCompare(b));
+    const badgeTypes = Array.from(new Set([
+      ...availableParentTypes,
+      ...visibleTypes
+    ])).sort((a, b) => a.localeCompare(b));
     for (const node of this.nodes) {
       const sourcePath = String(node.sourcePath ?? "").trim();
       if (!sourcePath) continue;
@@ -3280,31 +3388,32 @@ export class GraphEngine {
     );
     const hasYamlLinks = this.hasBadgeYamlLinks(sourcePath, linkType);
     const baseColor = this.getBadgeBaseColor(linkType, linkTypeConfig?.color);
-    const background = hasYamlLinks
-      ? (active
-        ? this.mixHexColors(baseColor, "#ffffff", 0.18)
-        : this.mixHexColors(baseColor, "#000000", 0.28))
-      : (active
-        ? this.hexToRgba(this.mixHexColors(baseColor, "#ffffff", 0.12), 0.58)
-        : this.hexToRgba(this.mixHexColors(baseColor, "#000000", 0.32), 0.42));
-    button.textContent = `${active ? "-" : "+"} ${linkType}`;
+    const semantic = linkTypeConfig?.semantic ?? "parent";
+    const iconKind = this.getLinkTypeIconKind(linkTypeConfig ?? {
+      semantic: "parent",
+      linkType: "Force Based"
+    } as O3LinkType);
+    let iconElement = button.querySelector<HTMLElement>(".o3-node-badge-icon");
+    if (!iconElement) {
+      iconElement = button.createSpan({ cls: "o3-node-badge-icon" });
+      button.createSpan({ cls: "o3-node-badge-label" });
+    }
+    setIcon(iconElement, iconNameForBadgeKind(iconKind));
+    const labelElement = button.querySelector<HTMLElement>(".o3-node-badge-label");
+    const compact = this.camera.zoom < this.badgeFarViewThreshold;
+    const displayedLabel = compact ? this.getCompactBadgeLabel(linkType) : linkType;
+    if (labelElement) labelElement.textContent = `${active ? "-" : "+"} ${displayedLabel}`;
+    button.classList.add(`o3-node-badge--${iconKind}`);
+    button.classList.toggle("o3-node-badge--expanded", active);
+    button.classList.toggle("o3-node-badge--empty", !hasYamlLinks);
+    button.dataset.o3BadgeSemantic = semantic;
+    button.dataset.o3BadgeIcon = iconKind;
+    button.dataset.o3BadgeCompact = compact ? "true" : "false";
     button.title = `${active ? "Collapse" : "Expand"} ${linkType}${hasYamlLinks ? "" : " (no YAML links)"}`;
     button.setAttribute("aria-label", button.title);
     button.dataset.o3BadgePopulated = hasYamlLinks ? "true" : "false";
-    setStyle(button, "background", background);
-    setStyle(button, "color", this.getBadgeTextColor(baseColor, hasYamlLinks || active ? 1 : 0.86));
-    setStyle(button, "border", `1px solid ${hasYamlLinks || active ? baseColor : this.hexToRgba(baseColor, 0.5)}`);
-    setStyle(button, "boxShadow", active
-      ? (hasYamlLinks
-        ? `0 0 0 1px ${this.hexToRgba(baseColor, 0.28)}, 0 2px 10px ${this.hexToRgba(baseColor, 0.32)}`
-        : `0 0 0 1px ${this.hexToRgba(baseColor, 0.14)}, 0 2px 8px rgba(0,0,0,0.18)`)
-      : `0 2px 8px rgba(0,0,0,0.25), inset 0 0 0 1px ${this.hexToRgba(baseColor, 0.12)}`);
-    setStyle(button, "opacity", hasYamlLinks ? "1" : "0.72");
-    setStyle(button, "padding", "0 8px");
-    setStyle(button, "height", "18px");
-    setStyle(button, "minHeight", "18px");
-    setStyle(button, "fontSize", "10px");
-    setStyle(button, "lineHeight", "16px");
+    setStyle(button, "--o3-badge-color", baseColor);
+    setStyle(button, "--o3-badge-text-color", this.getBadgeTextColor(baseColor, hasYamlLinks || active ? 1 : 0.86));
   }
 
   private clearCollapsePreview(): void {
@@ -3400,24 +3509,16 @@ export class GraphEngine {
 
     const button = this.createElement("button");
     button.type = "button";
+    button.classList.add("o3-node-badge");
     setStyle(button, "position", "absolute");
     setStyle(button, "transform", "translate(-50%, -50%)");
     setStyle(button, "pointerEvents", "auto");
-    setStyle(button, "padding", "0 8px");
-    setStyle(button, "borderRadius", "999px");
-    setStyle(button, "display", "inline-flex");
-    setStyle(button, "alignItems", "center");
-    setStyle(button, "justifyContent", "center");
-    setStyle(button, "fontWeight", "700");
-    setStyle(button, "whiteSpace", "nowrap");
-    setStyle(button, "cursor", "pointer");
-    setStyle(button, "transition", "filter 80ms ease");
     button.addEventListener("mouseenter", () => {
-      setStyle(button, "filter", "brightness(1.1)");
+      button.classList.add("o3-node-badge--hover");
       this.updateCollapsePreviewForBadge(node.id, linkType);
     });
     button.addEventListener("mouseleave", () => {
-      setStyle(button, "filter", "");
+      button.classList.remove("o3-node-badge--hover");
       this.clearCollapsePreview();
     });
     ["mousedown", "mouseup", "click"].forEach(evt => {
@@ -3450,6 +3551,7 @@ export class GraphEngine {
 
     const pin = this.createElement("button");
     pin.type = "button";
+    pin.classList.add("o3-node-pin");
     pin.textContent = "📌";
     pin.title = "Unpin node";
     setStyle(pin, "position", "absolute");
@@ -3494,6 +3596,7 @@ export class GraphEngine {
     const radius = this.getRenderedNodeRadius(node) * this.camera.zoom;
     setStyle(pin, "left", `${sx + radius + 7}px`);
     setStyle(pin, "top", `${sy - radius - 7}px`);
+    pin.dataset.o3BadgeCompact = this.camera.zoom < this.badgeFarViewThreshold ? "true" : "false";
     setStyle(pin, "display", "block");
   }
 
@@ -3964,14 +4067,22 @@ export class GraphEngine {
       && this.draggedNode
       && (this.draggedNodeOriginPositions.has(node.id) || node.id === this.draggedNode.id)
     );
-    return this.renderVisibilityPolicy.shouldShowNodeBadges({
+    const context = {
       marqueeSelectionActive: Boolean(this.marqueeSelection),
       dragging: Boolean(this.isDraggingNode && this.draggedNode),
       draggedNode,
       showAll: this.showAllLinkTypeBadgesHeld,
       selected: this.graphStore.isNodeSelected(node.id),
       dragRevealTarget: this.dragBadgeRevealNodeId === node.id
-    });
+    };
+    if (this.renderVisibilityPolicy.shouldShowNodeBadges(context)) return true;
+    return this.getBadgeLinkTypesForNode(node).some((linkType) =>
+      this.renderVisibilityPolicy.shouldShowBadge({
+        ...context,
+        semantic: linkType.semantic,
+        hasRelationships: this.hasBadgeYamlLinksForLinkType(node.sourcePath, linkType)
+      })
+    );
   }
 
   private syncNodeBadges(): void {
@@ -3984,6 +4095,11 @@ export class GraphEngine {
 
     for (const node of this.nodes) {
       if (!this.shouldShowNodeBadges(node)) continue;
+      if (!this.graphStore.isNodeSelected(node.id)
+        && !this.showAllLinkTypeBadgesHeld
+        && this.dragBadgeRevealNodeId !== node.id) {
+        continue;
+      }
       const badgeTypes = this.nodeParentBadgeTypes.get(node.id) ?? [];
       if (badgeTypes.length === 0) continue;
 
@@ -4012,10 +4128,6 @@ export class GraphEngine {
         const button = this.ensureBadgeButton(node, linkType);
         setStyle(button, "width", "auto");
         setStyle(button, "minWidth", "unset");
-        setStyle(button, "height", "18px");
-        setStyle(button, "minHeight", "18px");
-        setStyle(button, "fontSize", "10px");
-        setStyle(button, "lineHeight", "16px");
         setStyle(button, "left", `${x}px`);
         setStyle(button, "top", `${y}px`);
         setStyle(button, "display", "block");
@@ -4065,10 +4177,11 @@ export class GraphEngine {
 
       for (let i = 0; i < matchingLinkTypes.length; i++) {
         const linkType = matchingLinkTypes[i];
-        const normalizedProperty = String(linkType.property ?? "").trim().toLowerCase();
-        if (!normalizedProperty) continue;
-        const hasYamlLinks = this.hasBadgeYamlLinks(node.sourcePath, normalizedProperty);
-        const expansionKey = `${node.id}::${normalizedProperty}`;
+        const normalizedProperty = this.linkTypeLegacyId(linkType);
+        const badgeIdentity = this.linkTypeBadgeId(linkType);
+        if (!normalizedProperty || !badgeIdentity) continue;
+        const hasYamlLinks = this.hasBadgeYamlLinksForLinkType(node.sourcePath, linkType);
+        const expansionKey = this.badgeKey(node.id, badgeIdentity);
         const badgeLabel = String(linkType.key ?? linkType.property ?? "").trim() || normalizedProperty;
         const desiredX = sx + radius + 4;
         const desiredY = sy - radius - 4 - (i * 14);
@@ -4091,14 +4204,18 @@ export class GraphEngine {
             return;
           }
           void this.graphController.executeBadge({ type, badgeId: expansionKey });
-        });
+        }, setIcon);
         badge.render();
         const badgeEl = anchor.querySelector(".o3-node-badge") as HTMLElement | null;
         if (badgeEl) {
           badgeEl.dataset.o3ExpansionKey = expansionKey;
+          badgeEl.classList.add(`o3-node-badge--${this.getLinkTypeIconKind(linkType)}`);
+          badgeEl.dataset.o3BadgeDefinitionId = badgeIdentity;
+          badgeEl.dataset.o3BadgeCompact = this.camera.zoom < this.badgeFarViewThreshold ? "true" : "false";
           this.setNodeBadgeVisualState(badgeEl, node.id, normalizedProperty, badgeLabel, {
             hasYamlLinks,
-            color: linkType.color
+            color: linkType.color,
+            definition: linkType
           });
           this.positionNodeBadgeAnchor(anchor, badgeEl, desiredX, desiredY, occupiedRects);
         }
@@ -4109,14 +4226,30 @@ export class GraphEngine {
   private shouldRenderLinkTypeBadge(node: GraphNode, linkType: O3LinkType): boolean {
     const property = this.normalizeLinkType(String(linkType.property ?? "").trim().toLowerCase());
     if (!property) return false;
-    if (linkType.semantic !== "parent" || linkType.linkDiscoveryDirection !== "incoming") {
-      return true;
+    if (linkType.semantic === "parent" && linkType.linkDiscoveryDirection === "incoming") {
+      if (!(this.showAllLinkTypeBadgesHeld || this.dragBadgeRevealNodeId === node.id)) {
+        const selected = this.graphStore.isNodeSelected(node.id);
+        if (!selected && !this.isParentExpansionActive(node.id, property)
+          && !this.hasBadgeYamlLinks(node.sourcePath, property)) {
+          return false;
+        }
+      }
     }
-    if (this.showAllLinkTypeBadgesHeld || this.dragBadgeRevealNodeId === node.id) {
-      return true;
-    }
-    return this.isParentExpansionActive(node.id, property)
-      || this.hasBadgeYamlLinks(node.sourcePath, property);
+    const draggedNode = Boolean(
+      this.isDraggingNode
+      && this.draggedNode
+      && (this.draggedNodeOriginPositions.has(node.id) || node.id === this.draggedNode.id)
+    );
+    return this.renderVisibilityPolicy.shouldShowBadge({
+      marqueeSelectionActive: Boolean(this.marqueeSelection),
+      dragging: Boolean(this.isDraggingNode && this.draggedNode),
+      draggedNode,
+      showAll: this.showAllLinkTypeBadgesHeld,
+      selected: this.graphStore.isNodeSelected(node.id),
+      dragRevealTarget: this.dragBadgeRevealNodeId === node.id,
+      semantic: linkType.semantic,
+      hasRelationships: this.hasBadgeYamlLinksForLinkType(node.sourcePath, linkType)
+    });
   }
 
   private normalizeBadgeLinkTypeDefinitions(linkTypes: O3LinkType[]): O3LinkType[] {
@@ -4125,8 +4258,10 @@ export class GraphEngine {
     for (const linkType of linkTypes ?? []) {
       if (!linkType) continue;
       const property = this.normalizeLinkType(String(linkType.property ?? ""));
-      if (!property || seen.has(property)) continue;
-      seen.add(property);
+      const definitionId = String(linkType.definitionId ?? "").trim();
+      const identity = definitionId || property;
+      if (!property || !identity || seen.has(identity)) continue;
+      seen.add(identity);
       out.push(linkType);
     }
     return out;
@@ -4525,6 +4660,8 @@ export class GraphEngine {
   getEmbeddedGraphInstances(graphPathRaw: string): Array<{
     originNodeId: string;
     ancestry: string[];
+    persistenceOwnerPath: string;
+    instanceId: string;
   }> {
     const graphPath = String(graphPathRaw ?? "").trim();
     if (!graphPath) return [];
@@ -4532,7 +4669,9 @@ export class GraphEngine {
       .filter((container) => container.graphPath === graphPath)
       .map((container) => ({
         originNodeId: container.origin,
-        ancestry: [...container.ancestry]
+        ancestry: [...container.ancestry],
+        persistenceOwnerPath: container.persistenceOwnerPath,
+        instanceId: container.key
       }));
   }
 
@@ -4582,7 +4721,8 @@ export class GraphEngine {
       parentChain.unshift({
         originNodeId: persistedOriginId(parent),
         graphPath: parent.graphPath,
-        expanded: true
+        expanded: true,
+        ...(parent.linkTypeId ? { linkTypeId: parent.linkTypeId } : {})
       });
       cursor = parent;
     }
@@ -4658,6 +4798,9 @@ export class GraphEngine {
   private getEmbeddedGraphDefinitionForContainer(container: EmbeddedGraphContainerState): EmbeddedGraphDefinition {
     return {
       graphPath: container.graphPath,
+      persistenceOwnerPath: container.persistenceOwnerPath,
+      ...(container.runtimeOnly ? { runtimeOnly: true } : {}),
+      ...(container.linkTypeId ? { linkTypeId: container.linkTypeId } : {}),
       color: container.color,
       colorSource: container.colorSource,
       linkForce: container.linkForce,
@@ -4680,7 +4823,9 @@ export class GraphEngine {
         graphPath: child.graphPath,
         originNodeId: String(origin?.embeddedSourceNodeId ?? child.origin ?? "").trim(),
         expanded: true,
+        ...(child.linkTypeId ? { linkTypeId: child.linkTypeId } : {}),
         lens: this.getEmbeddedGraphLensStateForContainer(child),
+        snapshots: this.getEmbeddedGraphSnapshotsForContainer(child),
         embeddedGraphs: this.getEmbeddedGraphChildStates(child)
       };
     }).filter((entry) => entry.originNodeId.length > 0);
@@ -4704,7 +4849,59 @@ export class GraphEngine {
         refreshed = true;
       }
     }
+    if (this.refreshOpenLensDefinitionsForSourcePath(path)) {
+      refreshed = true;
+    }
     return refreshed;
+  }
+
+  /**
+   * Rebuilds open runtime Lens viewports after their source note changes.
+   * Viewport geometry and nested expansions are retained; only the resolved
+   * target snapshots are replaced. Missing definitions are closed in memory,
+   * while the graph-state entry remains available for a later recovery.
+   */
+  refreshOpenLensDefinitionsForSourcePath(pathRaw: string): boolean {
+    const path = String(pathRaw ?? "").trim();
+    if (!path) return false;
+    let refreshed = false;
+    for (const container of Array.from(this.embeddedGraphContainers.values())) {
+      if (!container.runtimeOnly || container.originSourcePath !== path || !container.linkTypeId) continue;
+      if (this.refreshOpenLensContainer(container)) refreshed = true;
+    }
+    return refreshed;
+  }
+
+  /** Refreshes every open runtime Lens after LinkType registry changes. */
+  refreshOpenLensDefinitions(): void {
+    for (const container of Array.from(this.embeddedGraphContainers.values())) {
+      if (!container.runtimeOnly || !container.linkTypeId) continue;
+      this.refreshOpenLensContainer(container);
+    }
+  }
+
+  private refreshOpenLensContainer(container: EmbeddedGraphContainerState): boolean {
+    const origin = this.nodeMap.get(container.origin);
+    const linkType = this.findRuntimeLinkTypeById(container.linkTypeId ?? "");
+    if (!origin || !linkType) {
+      this.collapseEmbeddedGraph(container.origin, container.graphPath);
+      return true;
+    }
+    const previous = this.getEmbeddedGraphDefinitionForContainer(container);
+    const definition = this.buildLensEmbeddedGraphDefinition(origin, linkType, container.ancestry);
+    if (!definition) {
+      this.collapseEmbeddedGraph(container.origin, container.graphPath);
+      return true;
+    }
+    const replaced = this.replaceEmbeddedGraphInstance(container.origin, {
+      ...definition,
+      lens: previous.lens,
+      embeddedGraphs: previous.embeddedGraphs
+    });
+    if (!replaced) return false;
+    const refreshedContainer = this.embeddedGraphContainers.get(container.key);
+    if (refreshedContainer) this.notifyEmbeddedGraphLensChanged(refreshedContainer);
+    return true;
   }
 
   refreshOuterRelationshipsForSourcePath(
@@ -4774,17 +4971,7 @@ export class GraphEngine {
     const key = this.embeddedGraphKey(originNodeId, graphPath);
     const existingContainer = this.embeddedGraphContainers.get(key);
     if (existingContainer) {
-      const context = this.getEmbeddedGraphPersistenceContext(existingContainer);
-      this.collapseEmbeddedGraph(originNodeId, graphPath);
-      this.menuOptions.onEmbeddedGraphExpansionChanged?.(
-        context.originNodeId,
-        graphPath,
-        false,
-        context.ownerGraphPath,
-        undefined,
-        context.parentChain
-      );
-      return true;
+      return this.closeEmbeddedGraph(originNodeId, graphPath);
     }
 
     const ancestry = Array.from(new Set([
@@ -4802,7 +4989,8 @@ export class GraphEngine {
     const definition = await this.menuOptions.onEmbeddedGraphExpansionRequested?.({
       originNodeId,
       graphPath,
-      ancestry
+      ancestry,
+      ...(originNode.stateOwnerPath ? { ownerGraphPath: originNode.stateOwnerPath } : {})
     });
     if (!definition || definition.snapshots.length === 0) {
       console.warn("[GraphEngine] Graph lens did not open: embedded graph definition empty", {
@@ -4830,10 +5018,146 @@ export class GraphEngine {
         true,
         context.ownerGraphPath,
         lens,
-        context.parentChain
+        context.parentChain,
+        undefined,
+        container?.key
       );
     }
     return expanded;
+  }
+
+  /**
+   * Opens a Lens LinkType in the existing embedded viewport runtime. The
+   * pseudo graph path is definition-based so same-property Lens notes remain
+   * independent. The canonical definition identity is carried alongside the
+   * runtime path so the viewport can be restored without replaying a badge
+   * click.
+   */
+  private async toggleLensLinkType(originNode: GraphNode, linkType: O3LinkType): Promise<void> {
+    if (linkType.semantic !== "lens") return;
+    if (linkType.linkDiscoveryDirection !== "outgoing") return;
+    const definitionId = this.linkTypeBadgeId(linkType);
+    const graphPath = this.lensRuntimeGraphPath(definitionId);
+    const key = this.embeddedGraphKey(originNode.id, graphPath);
+    if (this.embeddedGraphContainers.has(key)) {
+      this.closeEmbeddedGraph(originNode.id, graphPath);
+      return;
+    }
+    const ancestry = Array.from(new Set([
+      ...(originNode.embeddedAncestry ?? []),
+      ...(originNode.stateOwnerPath ? [originNode.stateOwnerPath] : [])
+    ].filter(Boolean)));
+    const definition = this.buildLensEmbeddedGraphDefinition(originNode, linkType, ancestry);
+    if (!definition || !this.expandEmbeddedGraph(originNode.id, definition)) return;
+    const container = this.embeddedGraphContainers.get(key);
+    if (!container) return;
+    const context = this.getEmbeddedGraphPersistenceContext(container);
+    this.menuOptions.onEmbeddedGraphExpansionChanged?.(
+      context.originNodeId,
+      graphPath,
+      true,
+      context.ownerGraphPath,
+      this.getEmbeddedGraphLensStateForContainer(container),
+      context.parentChain,
+      definitionId,
+      container.key
+    );
+  }
+
+  /** Builds a definition for restoring or opening a persisted Lens viewport. */
+  getLensEmbeddedGraphDefinition(
+    originNodeIdRaw: string,
+    definitionIdRaw: string,
+    ancestry: string[] = []
+  ): EmbeddedGraphDefinition | null {
+    const originNode = this.nodeMap.get(String(originNodeIdRaw ?? "").trim());
+    const definitionId = String(definitionIdRaw ?? "").trim();
+    const linkType = this.findRuntimeLinkTypeById(definitionId);
+    if (!originNode || !linkType) return null;
+    return this.buildLensEmbeddedGraphDefinition(originNode, linkType, ancestry);
+  }
+
+  private buildLensEmbeddedGraphDefinition(
+    originNode: GraphNode,
+    linkType: O3LinkType,
+    ancestry: string[]
+  ): EmbeddedGraphDefinition | null {
+    if (linkType.semantic !== "lens" || linkType.linkDiscoveryDirection !== "outgoing") return null;
+    const sourceFile = this.app.vault.getAbstractFileByPath(originNode.sourcePath);
+    if (!(sourceFile instanceof TFile)) return null;
+    const definitionId = this.linkTypeBadgeId(linkType);
+    const graphPath = this.lensRuntimeGraphPath(definitionId);
+    const parentContainer = originNode.embeddedInstanceId
+      ? this.embeddedGraphContainers.get(originNode.embeddedInstanceId)
+      : undefined;
+    const visibleLinkTypes = parentContainer?.visibleLinkTypes ?? Array.from(this.visibleLinkTypes);
+    const visibleLinkTypeDefinitions = parentContainer?.visibleLinkTypeDefinitions
+      ?? this.visibleNodeBadgeLinkTypes;
+    const sourceSnapshotId = originNode.sourcePath;
+    const targets = this.resolveLensTargets(sourceFile, linkType);
+    const snapshots: O3GraphRuntimeNodeSnapshot[] = [{
+      nodeId: sourceSnapshotId,
+      path: originNode.sourcePath,
+      x: 0,
+      y: 0,
+      pinned: false,
+      origin: { kind: "root" },
+      badges: { [this.linkTypeLegacyId(linkType)]: "expanded" }
+    }];
+    targets.forEach(({ target, properties }, index) => {
+      const angle = (Math.PI * 2 * index) / Math.max(1, targets.length);
+      const distance = 120;
+      snapshots.push({
+        nodeId: target.path,
+        path: target.path,
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance,
+        pinned: false,
+        origin: {
+          kind: "expansion",
+          sourceNodeId: sourceSnapshotId,
+          linkType: this.linkTypeLegacyId(linkType)
+        },
+        badges: {},
+        ...(properties.length > 0 ? { relationshipProperties: properties } : {})
+      });
+    });
+    return {
+      graphPath,
+      runtimeOnly: true,
+      linkTypeId: definitionId,
+      color: linkType.color ?? "#6e96dc",
+      linkForce: Number(linkType.linkForce) || 0.015,
+      snapshots,
+      ancestry,
+      linkTypes: [linkType],
+      // A Lens viewport inherits the graph view's resolved visibility contract.
+      // This keeps default visible LinkTypes available inside the dedicated
+      // Lens without changing the source graph's activeLinkTypes list.
+      visibleLinkTypes: [...visibleLinkTypes],
+      visibleLinkTypeDefinitions: [...visibleLinkTypeDefinitions]
+    };
+  }
+
+  private resolveLensTargets(sourceFile: TFile, linkType: O3LinkType): LensResolvedTarget[] {
+    const properties = this.getLinkTypeExpansionProperties(linkType);
+    const byPath = new Map<string, LensResolvedTarget>();
+    for (const property of properties) {
+      const configured = { ...linkType, property } as O3LinkType;
+      for (const target of this.linkResolver.resolveLinkedTargets(sourceFile, configured)) {
+        const existing = byPath.get(target.path);
+        if (existing) {
+          if (!existing.properties.includes(property)) existing.properties.push(property);
+          continue;
+        }
+        byPath.set(target.path, { target, properties: [property] });
+      }
+    }
+    return Array.from(byPath.values());
+  }
+
+  private lensRuntimeGraphPath(definitionId: string): string {
+    return `__nosygraph_lens__/${encodeURIComponent(String(definitionId ?? "").trim())}`;
   }
 
   expandEmbeddedGraph(originNodeIdRaw: string, definition: EmbeddedGraphDefinition): boolean {
@@ -4885,12 +5209,18 @@ export class GraphEngine {
         isBase: snapshot.origin.kind === "root",
         depth: 1
       };
-      node.stateOwnerPath = graphPath;
+      node.stateOwnerPath = String(definition.persistenceOwnerPath ?? graphPath).trim() || graphPath;
+      node.embeddedDefinitionPath = graphPath;
       node.embeddedInstanceId = key;
       node.embeddedSourceNodeId = snapshot.nodeId;
       node.embeddedRoot = snapshot.origin.kind === "root";
       node.embeddedOrigin = snapshot.origin;
       node.embeddedAncestry = [...ancestry, graphPath];
+      node.relationshipProperties = Array.from(new Set(
+        (snapshot.relationshipProperties ?? [])
+          .map((property) => this.normalizeLinkType(property))
+          .filter(Boolean)
+      ));
       node.isPinned = snapshot.pinned;
       node.isMissingFile = !(file instanceof TFile);
       addedOrUpdatedNodeIds.push(runtimeId);
@@ -4961,6 +5291,9 @@ export class GraphEngine {
       origin: originNodeId,
       originSourcePath: originNode.sourcePath,
       graphPath,
+      persistenceOwnerPath: String(definition.persistenceOwnerPath ?? graphPath).trim() || graphPath,
+      runtimeOnly: definition.runtimeOnly === true,
+      ...(definition.linkTypeId ? { linkTypeId: definition.linkTypeId } : {}),
       memberIds,
       interactionLocked: this.lockedEmbeddedGraphContainerKeys.has(key),
       color: this.normalizeBadgeColor(definition.color),
@@ -5018,17 +5351,39 @@ export class GraphEngine {
             ancestry: [
               ...(nestedOrigin.embeddedAncestry ?? []),
               ...(nestedOrigin.stateOwnerPath ? [nestedOrigin.stateOwnerPath] : [])
-            ]
+            ],
+            ...(nestedOrigin.stateOwnerPath ? { ownerGraphPath: nestedOrigin.stateOwnerPath } : {}),
+            ...(nested.linkTypeId ? { linkTypeId: nested.linkTypeId } : {})
           });
           if (!nestedDefinition) return;
           this.expandEmbeddedGraph(nestedOriginId, {
             ...nestedDefinition,
+            snapshots: nested.snapshots ?? nestedDefinition.snapshots,
             lens: nested.lens ?? nestedDefinition.lens,
             embeddedGraphs: nested.embeddedGraphs ?? nestedDefinition.embeddedGraphs
           });
         })();
       }, 0);
     }
+    return true;
+  }
+
+  /** User close action. Internal refresh/teardown keeps using collapseEmbeddedGraph. */
+  private closeEmbeddedGraph(originNodeId: string, graphPath: string): boolean {
+    const container = this.embeddedGraphContainers.get(this.embeddedGraphKey(originNodeId, graphPath));
+    if (!container) return false;
+    const context = this.getEmbeddedGraphPersistenceContext(container);
+    if (!this.collapseEmbeddedGraph(originNodeId, graphPath)) return false;
+    this.menuOptions.onEmbeddedGraphExpansionChanged?.(
+      context.originNodeId,
+      graphPath,
+      false,
+      context.ownerGraphPath,
+      undefined,
+      context.parentChain,
+      container.linkTypeId,
+      container.key
+    );
     return true;
   }
 
@@ -5078,6 +5433,26 @@ export class GraphEngine {
     return this.getEmbeddedGraphSnapshotsForContainer(container);
   }
 
+  getEmbeddedGraphPersistenceSnapshot(instanceIdRaw: string): {
+    ownerGraphPath?: string;
+    originNodeId: string;
+    graphPath: string;
+    parentChain: O3GraphEmbeddedGraphState[];
+    snapshots: O3GraphRuntimeNodeSnapshot[];
+  } | null {
+    const instanceId = String(instanceIdRaw ?? "").trim();
+    if (!instanceId) return null;
+    const container = this.embeddedGraphContainers.get(instanceId);
+    if (!container) return null;
+    const context = this.getEmbeddedGraphPersistenceContext(container);
+    return {
+      ...context,
+      ownerGraphPath: container.persistenceOwnerPath,
+      graphPath: container.graphPath,
+      snapshots: this.getEmbeddedGraphSnapshotsForContainer(container)
+    };
+  }
+
   private getEmbeddedGraphSnapshotsForContainer(container: EmbeddedGraphContainerState): O3GraphRuntimeNodeSnapshot[] {
     const centerX = (container.left + container.right) / 2;
     const centerY = (container.top + container.bottom) / 2;
@@ -5091,7 +5466,10 @@ export class GraphEngine {
         y: container.sourceCenterY + (node.y - centerY),
         pinned: Boolean(node.isPinned),
         origin: node.embeddedOrigin ?? (node.embeddedRoot ? { kind: "root" as const } : { kind: "filter" as const }),
-        badges: this.getNodeBadgeSnapshot(node.id)
+        badges: this.getNodeBadgeSnapshot(node.id),
+        ...(node.relationshipProperties && node.relationshipProperties.length > 0
+          ? { relationshipProperties: [...node.relationshipProperties] }
+          : {})
       }];
     });
   }
@@ -6292,6 +6670,20 @@ export class GraphEngine {
       onChange: (v) => {
         this.textFadeThreshold = this.normalizeTextFadeThreshold(v);
         this.emitSettings({ restartSimulation: false });
+      }
+    });
+
+    this.appendSliderSetting({
+      key: "badgeFarViewThreshold",
+      label: "Badge far-view threshold",
+      min: 0.1,
+      max: 5,
+      step: 0.05,
+      value: this.badgeFarViewThreshold,
+      formatter: (v) => v.toFixed(2),
+      onChange: (v) => {
+        this.setBadgeFarViewThreshold(v);
+        void this.menuOptions.onBadgeFarViewThresholdChange?.(this.badgeFarViewThreshold);
       }
     });
 
@@ -8004,7 +8396,9 @@ export class GraphEngine {
       true,
       context.ownerGraphPath,
       this.getEmbeddedGraphLensStateForContainer(container),
-      context.parentChain
+      context.parentChain,
+      container.linkTypeId,
+      container.key
     );
   }
 
@@ -8507,7 +8901,7 @@ export class GraphEngine {
       }
 
       const removableEmbeddedRoots = selectedNodes.filter((node) =>
-        node.embeddedRoot && node.stateOwnerPath
+        node.embeddedRoot && node.embeddedDefinitionPath
       );
       if (removableEmbeddedRoots.length > 0 && this.menuOptions.onEmbeddedRootRemoveRequested) {
         menu.addItem((item) => {
@@ -8518,7 +8912,7 @@ export class GraphEngine {
             .onClick(() => {
               for (const node of removableEmbeddedRoots) {
                 void this.menuOptions.onEmbeddedRootRemoveRequested?.({
-                  ownerGraphPath: node.stateOwnerPath!,
+                  ownerGraphPath: node.embeddedDefinitionPath!,
                   sourcePath: node.sourcePath
                 });
               }
@@ -9148,7 +9542,7 @@ export class GraphEngine {
     const lensButtonTarget = this.findGraphLensButtonAtScreenPosition(e.clientX, e.clientY);
     if (lensButtonTarget) {
       if (lensButtonTarget.action === "close") {
-        this.collapseEmbeddedGraph(lensButtonTarget.container.origin, lensButtonTarget.container.graphPath);
+        this.closeEmbeddedGraph(lensButtonTarget.container.origin, lensButtonTarget.container.graphPath);
       } else if (lensButtonTarget.action === "maximize") {
         this.toggleGraphLensMaximized(lensButtonTarget.container);
       } else {
@@ -9463,8 +9857,11 @@ export class GraphEngine {
         const dragged = this.draggedNode;
         if (dragged) {
           const badgeDropTarget = this.findBadgeDropTargetAtClientPosition(e.clientX, e.clientY, dragged.id);
-          if (badgeDropTarget) {
-            void this.applyNodeDropToBadge(dragged, badgeDropTarget, e.altKey);
+          const lensBodyDropTarget = badgeDropTarget
+            ? null
+            : this.findLensBodyDropTargetAtScreenPosition(e.clientX, e.clientY, dragged.id);
+          if (badgeDropTarget || lensBodyDropTarget) {
+            void this.applyNodeDropToBadge(dragged, badgeDropTarget ?? lensBodyDropTarget!, e.altKey);
           } else {
             this.persistDraggedNodePositions({ excludeNodeIds: this.repositioningPinnedNodeIds });
           }
@@ -9862,6 +10259,27 @@ export class GraphEngine {
     return { nodeId, linkType };
   }
 
+  private findLensBodyDropTargetAtScreenPosition(
+    clientX: number,
+    clientY: number,
+    draggedNodeId: string
+  ): BadgeDropTarget | null {
+    const container = this.findEmbeddedContainerAtScreenPosition(clientX, clientY);
+    if (!container?.runtimeOnly) return null;
+    const world = this.clientToWorld(clientX, clientY);
+    const bounds = this.getGraphLensBounds(container);
+    if (
+      this.isWorldPointInGraphLensTitleBar(world.x, world.y, bounds)
+      || this.isWorldPointInGraphLensButton(world.x, world.y, bounds)
+    ) return null;
+    const lens = container.linkTypes.find((linkType) => linkType.semantic === "lens");
+    if (!lens || container.origin === draggedNodeId) return null;
+    return {
+      nodeId: container.origin,
+      linkType: this.linkTypeBadgeId(lens)
+    };
+  }
+
   private updateDragBadgeRevealTarget(clientX: number, clientY: number): void {
     if (!this.isDraggingNode || !this.draggedNode) {
       this.setDragBadgeRevealNodeId(null);
@@ -9983,28 +10401,32 @@ export class GraphEngine {
     if (!targetRef || sourceRefs.length === 0) return;
 
     const badgeLinkType = target.linkType;
-    const embeddedLinkType = targetNode.embeddedInstanceId
-      ? this.getBadgeLinkTypesForNode(targetNode).find((linkType) =>
-          this.normalizeLinkType(String(linkType.property ?? "")) === badgeLinkType
-        )
-      : undefined;
-    const propertyKey = embeddedLinkType
+    const resolvedLinkType = this.getBadgeLinkTypesForNode(targetNode).find((linkType) =>
+      this.linkTypeBadgeId(linkType) === badgeLinkType
+      || this.normalizeLinkType(String(linkType.property ?? "")) === badgeLinkType
+    );
+    const propertyKey = resolvedLinkType
       ? this.normalizeLinkType(String(
-          embeddedLinkType.writeProperty
-          ?? embeddedLinkType.properties?.[0]
-          ?? embeddedLinkType.property
+          resolvedLinkType.writeProperty
+          ?? resolvedLinkType.properties?.[0]
+          ?? resolvedLinkType.property
           ?? ""
         ))
       : this.getLinkTypeWriteProperty(badgeLinkType);
     if (!propertyKey) return;
-    const discoveryDirection = embeddedLinkType?.linkDiscoveryDirection
+    const discoveryDirection = resolvedLinkType?.linkDiscoveryDirection
       ?? this.activeLinkTypeDiscoveryDirectionByProperty.get(badgeLinkType)
       ?? "outgoing";
     const result = await this.menuOptions.onGraphLinkBadgeDrop?.({
       target: targetRef,
       sources: sourceRefs,
       property: propertyKey,
-      discoveryDirection
+      discoveryDirection,
+      ...(resolvedLinkType ? {
+        readProperties: this.getLinkTypeExpansionProperties(resolvedLinkType),
+        semantic: resolvedLinkType.semantic,
+        definitionId: this.linkTypeBadgeId(resolvedLinkType)
+      } : {})
     });
 
     this.linkResolver.clearIncomingLinkIndex();
@@ -10019,8 +10441,10 @@ export class GraphEngine {
     const changed = !result || (result.added.length + result.removed.length > 0);
     if (changed) {
       const shouldAutoExpand = this.menuOptions.shouldAutoExpandDroppedLinkTypes?.() ?? true;
-      if (shouldAutoExpand && targetNode.embeddedInstanceId && embeddedLinkType) {
-        this.refreshEmbeddedBadgeExpansionAfterMutation(targetNode, embeddedLinkType);
+      if (resolvedLinkType?.semantic === "lens") {
+        this.refreshLensViewportAfterMutation(targetNode, resolvedLinkType);
+      } else if (shouldAutoExpand && targetNode.embeddedInstanceId && resolvedLinkType) {
+        this.refreshEmbeddedBadgeExpansionAfterMutation(targetNode, resolvedLinkType);
       } else if (shouldAutoExpand) {
         this.refreshBadgeExpansionAfterMutation(targetNode.id, targetRef.path, badgeLinkType);
       } else {
@@ -10045,7 +10469,7 @@ export class GraphEngine {
 
     const targetRef = this.getGraphNodeMutationRef(targetNode);
     const badgeLinkType = String(linkType.property ?? linkType.key ?? "").trim().toLowerCase();
-    const propertyKey = targetNode.embeddedInstanceId
+    const propertyKey = targetNode.embeddedInstanceId || linkType.semantic === "lens"
       ? this.normalizeLinkType(String(
           linkType.writeProperty
           ?? linkType.properties?.[0]
@@ -10059,7 +10483,9 @@ export class GraphEngine {
       target: targetRef,
       property: propertyKey,
       discoveryDirection: linkType.linkDiscoveryDirection,
-      ...(targetNode.stateOwnerPath ? { graphCapableOwnerPath: targetNode.stateOwnerPath } : {})
+      ...(targetNode.embeddedDefinitionPath
+        ? { graphCapableOwnerPath: targetNode.embeddedDefinitionPath }
+        : {})
     });
 
     this.linkResolver.clearIncomingLinkIndex();
@@ -10073,13 +10499,29 @@ export class GraphEngine {
     this.badgesDirty = true;
     const changed = !result || (result.added.length + result.removed.length > 0);
     if (changed) {
-      if (targetNode.embeddedInstanceId) {
+      if (linkType.semantic === "lens") {
+        this.refreshLensViewportAfterMutation(targetNode, linkType);
+      } else if (targetNode.embeddedInstanceId) {
         this.refreshEmbeddedBadgeExpansionAfterMutation(targetNode, linkType);
       } else {
         this.refreshBadgeExpansionAfterMutation(targetNode.id, targetRef.path, badgeLinkType);
       }
     }
     this.reheatSimulation(0.2, "badge link input");
+  }
+
+  private refreshLensViewportAfterMutation(sourceNode: GraphNode, linkType: O3LinkType): void {
+    const graphPath = this.lensRuntimeGraphPath(this.linkTypeBadgeId(linkType));
+    const key = this.embeddedGraphKey(sourceNode.id, graphPath);
+    if (!this.embeddedGraphContainers.has(key)) {
+      this.badgesDirty = true;
+      this.requestRender();
+      return;
+    }
+    this.collapseEmbeddedGraph(sourceNode.id, graphPath);
+    window.setTimeout(() => {
+      void this.toggleLensLinkType(sourceNode, linkType);
+    }, 300);
   }
 
   private refreshBadgeExpansionAfterMutation(
@@ -10771,6 +11213,7 @@ export class GraphEngine {
           isBase: false,
           depth: sourceNode.depth + 1,
           stateOwnerPath: ownerPath,
+          embeddedDefinitionPath: sourceNode.embeddedDefinitionPath ?? container.graphPath,
           embeddedInstanceId: instanceId,
           embeddedSourceNodeId: childSourceId,
           embeddedRoot: false,
@@ -11217,6 +11660,12 @@ export class GraphEngine {
 
   private getBadgeLinkTypesForNode(node: GraphNode): O3LinkType[] {
     const activeLinkTypes = this.getLinkTypesForNode(node);
+    if (!node.embeddedInstanceId) {
+      return this.mergeBadgeLinkTypeDefinitions(
+        activeLinkTypes,
+        this.visibleNodeBadgeLinkTypes
+      );
+    }
     const shouldIncludeVisibleLinkTypes =
       node.embeddedInstanceId
       && (this.graphStore.isNodeSelected(node.id) || this.dragBadgeRevealNodeId === node.id);
@@ -11239,7 +11688,12 @@ export class GraphEngine {
 
   private getPersistableBadgeLinkTypesForContext(contextId: string): O3LinkType[] {
     const embeddedPrefix = "embedded:";
-    if (!contextId.startsWith(embeddedPrefix)) return this.activeNodeBadgeLinkTypes;
+    if (!contextId.startsWith(embeddedPrefix)) {
+      return this.mergeBadgeLinkTypeDefinitions(
+        this.activeNodeBadgeLinkTypes,
+        this.visibleNodeBadgeLinkTypes
+      );
+    }
     const container = this.embeddedGraphContainers.get(
       contextId.slice(embeddedPrefix.length)
     );
@@ -11255,8 +11709,9 @@ export class GraphEngine {
     linkTypeIdRaw: string,
     contextIdRaw: string
   ): O3LinkType | undefined {
-    const linkTypeId = this.normalizeLinkType(linkTypeIdRaw);
-    if (!linkTypeId) return undefined;
+    const rawLinkTypeId = String(linkTypeIdRaw ?? "").trim();
+    const linkTypeId = this.normalizeLinkType(rawLinkTypeId);
+    if (!rawLinkTypeId) return undefined;
     const contextId = String(contextIdRaw ?? "").trim();
     const embeddedPrefix = "embedded:";
     const embeddedContainer = contextId.startsWith(embeddedPrefix)
@@ -11269,7 +11724,8 @@ export class GraphEngine {
       ...this.visibleNodeBadgeLinkTypes
     ];
     return candidates.find((candidate) =>
-      this.normalizeLinkType(String(candidate.property ?? "")) === linkTypeId
+      String(candidate.definitionId ?? "").trim() === rawLinkTypeId
+      || this.normalizeLinkType(String(candidate.property ?? "")) === linkTypeId
     );
   }
 
@@ -12048,6 +12504,23 @@ export class GraphEngine {
     return paths;
   }
 
+  /**
+   * Returns one mutation reference for every selected runtime node instance.
+   * Unlike getSelectedNodePaths(), this intentionally preserves duplicate
+   * source paths when the same note is represented by more than one node.
+   */
+  getSelectedNodeRefs(): GraphLinkMutationNodeRef[] {
+    return this.graphStore.getSelectedNodeIds()
+      .map((nodeId) => this.nodeMap.get(nodeId))
+      .filter((node): node is GraphNode => Boolean(node))
+      .map((node) => this.getGraphNodeMutationRef(node))
+      .filter((ref): ref is GraphLinkMutationNodeRef => Boolean(ref));
+  }
+
+  getSelectedNodeCount(): number {
+    return this.graphStore.getSelectedNodeCount();
+  }
+
   private getNode(path: string): GraphNode | undefined {
     return this.nodeMap.get(path);
   }
@@ -12285,6 +12758,14 @@ export class GraphEngine {
       this.freezeExistingNodesForTopologyUpdate(this.getCurrentNodeIdSet());
       this.startSimulation();
     }
+    this.requestRender();
+  }
+
+  setBadgeFarViewThreshold(value: number): void {
+    const next = this.normalizeBadgeFarViewThreshold(value);
+    if (next === this.badgeFarViewThreshold) return;
+    this.badgeFarViewThreshold = next;
+    this.badgesDirty = true;
     this.requestRender();
   }
 
@@ -12567,6 +13048,11 @@ export class GraphEngine {
     return Number.isFinite(parsed) ? this.clamp(parsed, 0, 100) : 97;
   }
 
+  private normalizeBadgeFarViewThreshold(value: unknown): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? this.clamp(parsed, 0.1, 5) : 0.55;
+  }
+
   private normalizeKeyboardKey(key: unknown): string {
     return String(key ?? "").trim().toLowerCase();
   }
@@ -12766,25 +13252,35 @@ export class GraphEngine {
     const badgesById = new Map<string, LegacyGraphReadBadge>();
     for (const node of this.nodes) {
       for (const linkType of this.getPersistableBadgeLinkTypesForNode(node)) {
-        const linkTypeId = this.normalizeLinkType(String(linkType.property ?? ""));
-        if (!linkTypeId) continue;
+        const legacyLinkTypeId = this.linkTypeLegacyId(linkType);
+        const linkTypeId = this.linkTypeBadgeId(linkType);
+        if (!legacyLinkTypeId || !linkTypeId) continue;
         const id = this.badgeKey(node.id, linkTypeId);
-        const semantic = linkType.semantic === "parent" ? "parent" as const : "link" as const;
+        const semantic = linkType.semantic === "parent"
+          ? "parent" as const
+          : linkType.semantic === "lens"
+            ? "lens" as const
+            : "link" as const;
         const expanded = semantic === "parent"
-          ? this.isParentExpansionActive(node.id, linkTypeId)
-          : this.expandedByBadge.has(id);
+          ? this.isParentExpansionActive(node.id, legacyLinkTypeId)
+          : this.isBadgeExpansionExpanded(id);
         badgesById.set(id, {
           id,
           nodeId: node.id,
           linkTypeId,
+          legacyLinkTypeId,
+          definitionReference: linkType.definitionId,
           contextId: contextIdForLegacyNode(node.embeddedInstanceId),
-          label: String(linkType.key ?? linkType.property ?? "").trim() || linkTypeId,
-          color: this.getBadgeBaseColor(linkTypeId, linkType.color),
+          label: String(linkType.key ?? linkType.property ?? "").trim() || legacyLinkTypeId,
+          color: this.getBadgeBaseColor(legacyLinkTypeId, linkType.color),
           state: expanded ? "expanded" : "collapsed",
           semantic,
-          hasRelationships: this.hasBadgeYamlLinks(node.sourcePath, linkTypeId),
+          iconKind: this.getLinkTypeIconKind(linkType),
+          hasRelationships: this.hasBadgeYamlLinksForLinkType(node.sourcePath, linkType),
           duplicateNodes: linkType.linkDuplicateNodes === true,
-          ...(expanded && this.expansionNodes.has(id) ? { expansionId: id } : {})
+          ...(expanded && (this.expansionNodes.has(id) || this.expansionNodes.has(this.badgeKey(node.id, legacyLinkTypeId)))
+            ? { expansionId: id }
+            : {})
         });
       }
     }
@@ -13051,6 +13547,15 @@ export class GraphEngine {
 
   private createElement<K extends keyof HTMLElementTagNameMap>(tagName: K): HTMLElementTagNameMap[K] {
     return createEl(tagName);
+  }
+}
+
+function iconNameForBadgeKind(kind: "force" | "direction" | "parent" | "lens"): string {
+  switch (kind) {
+    case "direction": return "arrow-right";
+    case "parent": return "git-branch";
+    case "lens": return "scan-search";
+    case "force": return "zap";
   }
 }
 

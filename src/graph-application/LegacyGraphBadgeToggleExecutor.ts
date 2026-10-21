@@ -12,6 +12,7 @@ export interface LegacyToggleNode {
 
 export interface LegacyToggleLinkType {
   property?: unknown;
+  definitionId?: unknown;
 }
 
 export interface LegacyGraphBadgeToggleTarget<
@@ -93,7 +94,8 @@ export class LegacyGraphBadgeToggleExecutor<
     const file = this.options.getFile(node.sourcePath);
     if (!file) return undefined;
     const linkType = this.options.getLinkTypes(node).find((candidate) =>
-      this.options.normalizeLinkType(String(candidate.property ?? "")) === plan.linkTypeId
+      String(candidate.definitionId ?? "").trim() === plan.linkTypeId
+      || this.options.normalizeLinkType(String(candidate.property ?? "")) === plan.linkTypeId
     );
     return linkType ? { node, file, linkType } : undefined;
   }

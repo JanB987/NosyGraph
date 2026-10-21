@@ -80,11 +80,63 @@ export class LinkTypeRegistry {
     return [...this.allLinkTypes];
   }
 
+  getById(id: string): O3LinkType | undefined {
+    const normalizedId = String(id ?? "").trim();
+    if (!normalizedId) return undefined;
+    return this.allLinkTypes.find((linkType) => linkType.definitionId === normalizedId);
+  }
+
   getByProperty(property: string): O3LinkType | undefined {
-    const key = String(property ?? "").trim().toLowerCase();
-    if (!key) return undefined;
-    const list = this.byProperty.get(key);
-    return list?.[0];
+    return this.getByProperties(property)[0];
+  }
+
+  /** Returns every definition that reads the property, including Lenses. */
+  getByProperties(...properties: string[]): O3LinkType[] {
+    const keys = new Set(
+      properties
+        .flatMap((value) => String(value ?? "").split(","))
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    );
+    if (keys.size === 0) return [];
+
+    const result: O3LinkType[] = [];
+    const seen = new Set<string>();
+    for (const key of keys) {
+      for (const linkType of this.byProperty.get(key) ?? []) {
+        const path = String(linkType.file?.path ?? "").trim();
+        const identity = path || `${linkType.key}:${linkType.property}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        result.push(linkType);
+      }
+    }
+    return result;
+  }
+
+  /** Returns non-Lens definitions that conflict with a requested definition. */
+  getNonLensConflicts(requested: O3LinkType): O3LinkType[] {
+    if (requested.semantic === "lens") return [];
+    const requestedProperties = new Set(requested.properties);
+    const requestedPath = String(requested.file?.path ?? "").trim();
+    const conflicts: O3LinkType[] = [];
+    const seen = new Set<string>();
+    for (const linkType of this.getByProperties(...requested.properties)) {
+      const path = String(linkType.file?.path ?? "").trim();
+      if (path && path === requestedPath) continue;
+      if (linkType.semantic === "lens") continue;
+      if (!linkType.properties.some((property) => requestedProperties.has(property))) continue;
+      if (seen.has(path)) continue;
+      seen.add(path);
+      conflicts.push(linkType);
+    }
+    return conflicts;
+  }
+
+  getByPath(path: string): O3LinkType | undefined {
+    const normalizedPath = String(path ?? "").trim();
+    if (!normalizedPath) return undefined;
+    return this.allLinkTypes.find((linkType) => linkType.file.path === normalizedPath);
   }
 
   private async loadFiles(files: readonly TFile[]): Promise<void> {
@@ -93,12 +145,16 @@ export class LinkTypeRegistry {
       if (!frontmatterMatchesIdentifier(fm, this.identifiers.linkType)) continue;
 
       const linkType = new O3LinkType(file, fm, this.propertyKeys);
-      const property = String(linkType.property ?? "").trim().toLowerCase();
-      if (!property) continue;
+      const properties = linkType.properties
+        .map((property) => String(property ?? "").trim().toLowerCase())
+        .filter(Boolean);
+      if (properties.length === 0) continue;
       this.allLinkTypes.push(linkType);
-      const list = this.byProperty.get(property) ?? [];
-      list.push(linkType);
-      this.byProperty.set(property, list);
+      for (const property of properties) {
+        const list = this.byProperty.get(property) ?? [];
+        list.push(linkType);
+        this.byProperty.set(property, list);
+      }
     }
   }
 

@@ -19,6 +19,7 @@ export interface GraphPropertyKeys {
   graphVelocityNearRestThreshold: string;
   graphVelocityRestThreshold: string;
   graphTextFadeThreshold: string;
+  graphBadgeFarViewThreshold: string;
   graphBackgroundColor: string;
   graphLayout: string;
   graphContainerColor: string;
@@ -48,6 +49,7 @@ export const DEFAULT_GRAPH_PROPERTY_KEYS: GraphPropertyKeys = {
   graphVelocityNearRestThreshold: "graphVelocity_NearRestThreshold",
   graphVelocityRestThreshold: "graphVelocity_RestThreshold",
   graphTextFadeThreshold: "graphText_FadeThreshold",
+  graphBadgeFarViewThreshold: "graphBadge_FarViewThreshold",
   graphBackgroundColor: "graph_background_color",
   graphLayout: "layoutId",
   graphContainerColor: "graphContainer_Color",

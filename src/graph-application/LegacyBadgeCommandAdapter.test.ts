@@ -13,6 +13,8 @@ interface TestFile {
 
 interface TestLinkType {
   property: string;
+  definitionId?: string;
+  semantic?: "link" | "parent" | "lens";
 }
 
 const request: GraphBadgeRequest = {
@@ -34,6 +36,7 @@ function setup(overrides: {
   file?: TestFile;
   linkTypes?: TestLinkType[];
   handleNormalToggle?: (request: GraphBadgeRequest) => void | Promise<void>;
+  toggleLens?: (target: { node: TestNode; file: TestFile; linkType: TestLinkType }) => void | Promise<void>;
 } = {}) {
   const calls: string[] = [];
   const node = overrides.node ?? { id: "A.md", sourcePath: "A.md" };
@@ -45,6 +48,7 @@ function setup(overrides: {
     getLinkTypes: () => linkTypes,
     normalizeLinkType: (value) => value.trim().toLowerCase(),
     handleNormalToggle: overrides.handleNormalToggle,
+    toggleLens: overrides.toggleLens,
     toggle: (target) => { calls.push(`toggle:${target.node.id}:${target.linkType.property}`); },
     openInput: (target) => { calls.push(`input:${target.file.path}`); },
     expandChain: async (target) => { calls.push(`chain:${target.linkType.property}`); }
@@ -104,5 +108,42 @@ describe("LegacyBadgeCommandAdapter", () => {
     await parent.adapter.executeBadge({ ...request, semantic: "parent" });
     expect(handled).not.toContain("unexpected-parent");
     expect(parent.calls).toEqual(["toggle:A.md: Parts "]);
+  });
+
+  it("resolves a definition identity before falling back to the legacy property key", async () => {
+    const definitionRequest: GraphBadgeRequest = {
+      ...request,
+      badgeId: "A.md::LinkTypes/Client Lens.md",
+      linkTypeId: "LinkTypes/Client Lens.md"
+    };
+    const { adapter, calls } = setup({
+      linkTypes: [
+        { property: "status", definitionId: "LinkTypes/Status Lens.md" },
+        { property: "status", definitionId: "LinkTypes/Client Lens.md" }
+      ]
+    });
+
+    await adapter.executeBadge({ ...definitionRequest, action: "open-badge-input" });
+    expect(calls).toEqual(["input:A.md"]);
+  });
+
+  it("routes Lens toggles by canonical definition identity", async () => {
+    const lensCalls: string[] = [];
+    const { adapter, calls } = setup({
+      linkTypes: [{ property: "status", definitionId: "LinkTypes/Client Lens.md", semantic: "lens" }],
+      toggleLens: ({ node, linkType }) => {
+        lensCalls.push(`${node.id}:${linkType.definitionId}`);
+      }
+    });
+
+    await adapter.executeBadge({
+      ...request,
+      badgeId: "A.md::LinkTypes/Client Lens.md",
+      linkTypeId: "LinkTypes/Client Lens.md",
+      semantic: "lens"
+    });
+
+    expect(lensCalls).toEqual(["A.md:LinkTypes/Client Lens.md"]);
+    expect(calls).toEqual([]);
   });
 });

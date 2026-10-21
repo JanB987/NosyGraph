@@ -2,6 +2,7 @@ import type { GraphBadge } from "../graph-domain/GraphBadge";
 import type { GraphSnapshot } from "../graph-domain/GraphSnapshot";
 import { copyGraphSnapshot } from "../graph-domain/GraphSnapshot";
 import type { BadgeId, NodeInstanceId } from "../graph-domain/graph-identifiers";
+import { GraphRenderVisibilityPolicy } from "./GraphRenderVisibilityPolicy";
 
 export interface GraphRenderViewport {
   x: number;
@@ -77,6 +78,7 @@ export class GraphRenderer {
   private readonly nodeHitRegions = new Map<NodeInstanceId, NodeHitRegion>();
   private readonly badgeHitRegions = new Map<BadgeId, BadgeHitRegion>();
   private readonly intentListeners = new Set<GraphRendererIntentListener>();
+  private readonly visibilityPolicy = new GraphRenderVisibilityPolicy();
   private snapshot?: GraphRenderSnapshot;
   private viewport: GraphRenderViewport = { x: 0, y: 0, zoom: 1 };
   private mountedContainer?: HTMLElement;
@@ -212,7 +214,19 @@ export class GraphRenderer {
 
   private layoutHitRegions(snapshot: GraphRenderSnapshot): void {
     const badgesByNode = new Map<NodeInstanceId, GraphBadge[]>();
+    const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node] as const));
     for (const badge of snapshot.badges) {
+      const node = nodesById.get(badge.nodeId);
+      if (!node || !this.visibilityPolicy.shouldShowBadge({
+        marqueeSelectionActive: false,
+        dragging: false,
+        draggedNode: false,
+        showAll: false,
+        selected: node.selected,
+        dragRevealTarget: false,
+        semantic: badge.semantic,
+        hasRelationships: badge.hasRelationships
+      })) continue;
       const list = badgesByNode.get(badge.nodeId) ?? [];
       list.push(badge);
       badgesByNode.set(badge.nodeId, list);

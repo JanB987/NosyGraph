@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.2.11 - 2026-10-21
+
+### Added
+
+- Lens LinkTypes (`linkType: lens`) with independent viewports, multiple read
+  properties, an optional `writeProperty`, and definition-scoped instance state.
+- Multiple connected Bases/views through a YAML list in `connected_base_filter`;
+  results are combined without duplicate notes and every Base is watched.
+- Apply a Templater template to selected graph nodes using the installed
+  Templater plugin.
+- Configurable far-view Lens badge and pin thresholds, with per-note overrides.
+
+### Fixed
+
+- Persist inline grouping rules in the graph note, including an explicitly
+  empty rule list.
+- Save Lens open/closed state from both node badges and the window close button;
+  serialize Lens writes and finish pending actions before unloading the note.
+- Keep graph-capable Lens targets read-only unless explicitly identified as
+  persistent graph notes; store their instance snapshots in the owning graph.
+- Preserve full paths and extensions in Base file-property comparisons; support
+  unary negation and report unsupported filter syntax.
+- Combine global Base filters with view filters using AND, and apply `not`
+  lists as none-of groups.
+- Match LinkType properties case-insensitively in outgoing and incoming discovery,
+  cached metadata, aliases, and visible relationship edges.
+- Preserve ordinary badge visibility rules while allowing discoverable Lens
+  badges; keep LinkType definition identities and references stable across moves.
+- Route graph-node opening according to graph capability, pinned panes, and
+  Graph Tab behavior. Preserve configured graph state during promotion.
+
+### Validation and limitations
+
+- Scoped architecture typecheck, production build, and 102-file/541-test suite pass.
+- The live composition remains `GraphView -> GraphEngine`. Store runtime and
+  replacement physics remain experimental; the separate 0.3 development plugin
+  is not included.
+- Lens LinkTypes currently support outgoing discovery. The Base evaluator
+  supports a documented subset of expressions and reports unsupported syntax;
+  use YAML `and`/`or` groups for compound conditions.
+- Manual large-vault, nested-Lens, Templater, and clean-install validation remains
+  incomplete. NosyGraph remains beta software.
+
 ## 0.2.10 - 2026-09-19
 
 ### Fixed

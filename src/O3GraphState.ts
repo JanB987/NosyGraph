@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { TFile } from "obsidian";
+import { normalizeGraphGroupingRules, type GraphGroupingRule } from "./GraphGroupingRules";
 
 export interface O3GraphRuntimeExpansion {
   id: string;
@@ -23,6 +24,7 @@ export interface O3GraphRuntimeNode {
   pinned?: boolean;
   origin?: O3GraphNodeOrigin;
   badges?: Record<string, "expanded" | "collapsed">;
+  relationshipProperties?: string[];
 }
 
 export interface O3GraphRuntimeNodeSnapshot {
@@ -33,6 +35,7 @@ export interface O3GraphRuntimeNodeSnapshot {
   pinned: boolean;
   origin: O3GraphNodeOrigin;
   badges: Record<string, "expanded" | "collapsed">;
+  relationshipProperties?: string[];
 }
 
 export interface O3GraphEmbeddedLensState {
@@ -56,7 +59,11 @@ export interface O3GraphEmbeddedGraphState {
   graphPath: string;
   originNodeId: string;
   expanded: boolean;
+  /** Canonical Lens LinkType note identity when this is a Lens viewport. */
+  linkTypeId?: string;
   lens?: O3GraphEmbeddedLensState;
+  /** Instance-scoped runtime owned by the containing graph note. */
+  snapshots?: O3GraphRuntimeNodeSnapshot[];
   embeddedGraphs?: O3GraphEmbeddedGraphState[];
 }
 
@@ -81,6 +88,7 @@ export interface O3GraphRuntimeState {
   };
   settings?: {
     layout?: string;
+    groupingRules?: GraphGroupingRule[];
   };
   notes?: Record<string, { path: string }>;
   nodes?: Record<string, O3GraphRuntimeNode>;
@@ -311,14 +319,34 @@ export class O3GraphState {
 
     const embeddedGraphs = this.state.embeddedGraphs ?? {};
     const renamedEmbeddedGraphs: NonNullable<O3GraphRuntimeState["embeddedGraphs"]> = {};
+    const renameEmbeddedEntry = (entry: O3GraphEmbeddedGraphState): O3GraphEmbeddedGraphState => {
+      const wasGraphRenamed = String(entry.graphPath ?? "").trim() === oldPath;
+      const wasLinkTypeRenamed = String(entry.linkTypeId ?? "").trim() === oldPath;
+      const wasOriginRenamed = String(entry.originNodeId ?? "").trim() === oldPath;
+      return {
+        ...entry,
+        ...(wasGraphRenamed ? { graphPath: newPath } : {}),
+        ...(wasLinkTypeRenamed ? { linkTypeId: newPath } : {}),
+        ...(wasOriginRenamed ? { originNodeId: newPath } : {}),
+        ...(entry.snapshots && entry.snapshots.length > 0
+          ? { snapshots: entry.snapshots.map((snapshot) => this.renameEmbeddedSnapshot(snapshot, oldPath, newPath)) }
+          : {}),
+        ...(entry.embeddedGraphs && entry.embeddedGraphs.length > 0
+          ? { embeddedGraphs: entry.embeddedGraphs.map(renameEmbeddedEntry) }
+          : {})
+      };
+    };
     for (const entry of Object.values(embeddedGraphs)) {
       if (!entry) continue;
-      const wasRenamed = String(entry.graphPath ?? "").trim() === oldPath;
-      const graphPath = wasRenamed ? newPath : entry.graphPath;
-      const next = { ...entry, graphPath };
-      const key = this.embeddedGraphKey(next.originNodeId, graphPath);
+      const wasGraphRenamed = String(entry.graphPath ?? "").trim() === oldPath;
+      const wasLinkTypeRenamed = String(entry.linkTypeId ?? "").trim() === oldPath;
+      const wasOriginRenamed = String(entry.originNodeId ?? "").trim() === oldPath;
+      const next = renameEmbeddedEntry(entry);
+      const key = this.embeddedGraphKey(next.originNodeId, next.graphPath);
       renamedEmbeddedGraphs[key] = next;
-      changed = changed || wasRenamed;
+      changed = changed || wasGraphRenamed || wasLinkTypeRenamed || wasOriginRenamed
+        || JSON.stringify(next.snapshots ?? []) !== JSON.stringify(entry.snapshots ?? [])
+        || JSON.stringify(next.embeddedGraphs ?? []) !== JSON.stringify(entry.embeddedGraphs ?? []);
     }
     if (changed && Object.keys(embeddedGraphs).length > 0) {
       this.state.embeddedGraphs = renamedEmbeddedGraphs;
@@ -468,7 +496,10 @@ export class O3GraphState {
         y: Number(snapshot.y),
         pinned: Boolean(snapshot.pinned),
         origin: this.normalizeRuntimeNodeOrigin(snapshot.origin, runtimeIdToPersistedNodeId) ?? { kind: "root" },
-        ...(Object.keys(badges).length > 0 ? { badges } : {})
+        ...(Object.keys(badges).length > 0 ? { badges } : {}),
+        ...(this.normalizeRelationshipProperties(snapshot.relationshipProperties).length > 0
+          ? { relationshipProperties: this.normalizeRelationshipProperties(snapshot.relationshipProperties) }
+          : {})
       };
       nodes[nodeId] = node;
       if (node.pinned && Number.isFinite(node.x) && Number.isFinite(node.y)) {
@@ -510,6 +541,9 @@ export class O3GraphState {
           graphPath,
           expanded: true,
           ...(previous.entry.lens ? { lens: previous.entry.lens } : {}),
+          ...(previous.entry.snapshots && previous.entry.snapshots.length > 0
+            ? { snapshots: previous.entry.snapshots.map((snapshot) => this.cloneRuntimeSnapshot(snapshot)) }
+            : {}),
           ...(previous.entry.embeddedGraphs && previous.entry.embeddedGraphs.length > 0
             ? { embeddedGraphs: previous.entry.embeddedGraphs.map((child) => this.cloneEmbeddedGraphState(child)) }
             : {})
@@ -673,12 +707,24 @@ export class O3GraphState {
     };
   }
 
+  getGroupingRules(fallback: unknown): GraphGroupingRule[] {
+    return normalizeGraphGroupingRules(this.state.settings?.groupingRules ?? fallback);
+  }
+
+  setGroupingRules(rules: unknown): void {
+    this.state.settings = {
+      ...this.state.settings,
+      groupingRules: normalizeGraphGroupingRules(rules)
+    };
+  }
+
   setEmbeddedGraphExpansion(
     originNodeIdRaw: string,
     graphPathRaw: string,
     expanded: boolean,
     lens?: O3GraphEmbeddedLensState,
-    parentChainRaw: O3GraphEmbeddedGraphState[] = []
+    parentChainRaw: O3GraphEmbeddedGraphState[] = [],
+    linkTypeIdRaw?: string
   ): boolean {
     const originNodeId = String(originNodeIdRaw ?? "").trim();
     const graphPath = String(graphPathRaw ?? "").trim();
@@ -686,8 +732,17 @@ export class O3GraphState {
     const key = this.embeddedGraphKey(originNodeId, graphPath);
     const embeddedGraphs = this.state.embeddedGraphs ?? (this.state.embeddedGraphs = {});
     const parentChain = this.normalizeEmbeddedGraphChain(parentChainRaw);
+    const linkTypeId = String(linkTypeIdRaw ?? "").trim();
     if (parentChain.length > 0) {
-      return this.setNestedEmbeddedGraphExpansion(embeddedGraphs, parentChain, originNodeId, graphPath, expanded, lens);
+      return this.setNestedEmbeddedGraphExpansion(
+        embeddedGraphs,
+        parentChain,
+        originNodeId,
+        graphPath,
+        expanded,
+        lens,
+        linkTypeId
+      );
     }
     if (!expanded) {
       if (!embeddedGraphs[key]) return false;
@@ -700,7 +755,11 @@ export class O3GraphState {
       originNodeId,
       graphPath,
       expanded: true,
+      ...(linkTypeId ? { linkTypeId } : current?.linkTypeId ? { linkTypeId: current.linkTypeId } : {}),
       ...(normalizedLens ? { lens: normalizedLens } : current?.lens ? { lens: current.lens } : {}),
+      ...(current?.snapshots && current.snapshots.length > 0
+        ? { snapshots: current.snapshots.map((snapshot) => this.cloneRuntimeSnapshot(snapshot)) }
+        : {}),
       ...(current?.embeddedGraphs && current.embeddedGraphs.length > 0
         ? { embeddedGraphs: current.embeddedGraphs.map((child) => this.cloneEmbeddedGraphState(child)) }
         : {})
@@ -712,6 +771,40 @@ export class O3GraphState {
     return true;
   }
 
+  setEmbeddedGraphSnapshots(
+    originNodeIdRaw: string,
+    graphPathRaw: string,
+    snapshotsRaw: O3GraphRuntimeNodeSnapshot[],
+    parentChainRaw: O3GraphEmbeddedGraphState[] = []
+  ): boolean {
+    const originNodeId = String(originNodeIdRaw ?? "").trim();
+    const graphPath = String(graphPathRaw ?? "").trim();
+    const snapshots = this.normalizeEmbeddedSnapshots(snapshotsRaw);
+    if (!originNodeId || !graphPath || snapshots.length === 0) return false;
+    const parentChain = this.normalizeEmbeddedGraphChain(parentChainRaw);
+    let entry: O3GraphEmbeddedGraphState | undefined;
+    if (parentChain.length === 0) {
+      entry = this.state.embeddedGraphs?.[this.embeddedGraphKey(originNodeId, graphPath)];
+    } else {
+      let children = Object.values(this.state.embeddedGraphs ?? {});
+      for (const parentEntry of parentChain) {
+        const parent = children.find((candidate) =>
+          candidate.originNodeId === parentEntry.originNodeId
+          && candidate.graphPath === parentEntry.graphPath
+        );
+        if (!parent) return false;
+        children = parent.embeddedGraphs ?? [];
+      }
+      entry = children.find((candidate) =>
+        candidate.originNodeId === originNodeId && candidate.graphPath === graphPath
+      );
+    }
+    if (!entry) return false;
+    if (JSON.stringify(entry.snapshots ?? []) === JSON.stringify(snapshots)) return false;
+    entry.snapshots = snapshots;
+    return true;
+  }
+
   listExpandedEmbeddedGraphs(): O3GraphEmbeddedGraphState[] {
     return Object.values(this.state.embeddedGraphs ?? {})
       .filter((entry) => entry?.expanded === true)
@@ -719,7 +812,11 @@ export class O3GraphState {
         graphPath: String(entry.graphPath ?? "").trim(),
         originNodeId: String(entry.originNodeId ?? "").trim(),
         expanded: true,
+        ...(entry.linkTypeId ? { linkTypeId: entry.linkTypeId } : {}),
         ...(entry.lens ? { lens: entry.lens } : {}),
+        ...(entry.snapshots && entry.snapshots.length > 0
+          ? { snapshots: entry.snapshots.map((snapshot) => this.cloneRuntimeSnapshot(snapshot)) }
+          : {}),
         ...(entry.embeddedGraphs && entry.embeddedGraphs.length > 0
           ? { embeddedGraphs: entry.embeddedGraphs.map((child) => this.cloneEmbeddedGraphState(child)) }
           : {})
@@ -754,7 +851,10 @@ export class O3GraphState {
         y: Number.isFinite(Number(node.y)) ? Number(node.y) : 0,
         pinned: Boolean(node.pinned),
         origin,
-        badges: this.normalizeNodeBadges(node.badges) ?? {}
+        badges: this.normalizeNodeBadges(node.badges) ?? {},
+        ...(this.normalizeRelationshipProperties(node.relationshipProperties).length > 0
+          ? { relationshipProperties: this.normalizeRelationshipProperties(node.relationshipProperties) }
+          : {})
       }];
     });
   }
@@ -839,14 +939,18 @@ export class O3GraphState {
       const entry = value as Record<string, unknown>;
       const graphPath = String(entry.graphPath ?? "").trim();
       const originNodeId = String(entry.originNodeId ?? "").trim();
+      const linkTypeId = String(entry.linkTypeId ?? "").trim();
       if (!graphPath || !originNodeId || entry.expanded === false) continue;
       const key = String(keyRaw ?? "").trim() || this.embeddedGraphKey(originNodeId, graphPath);
       const lens = this.normalizeEmbeddedLens(entry.lens);
+      const snapshots = this.normalizeEmbeddedSnapshots(entry.snapshots);
       out[key] = {
         graphPath,
         originNodeId,
         expanded: true,
+        ...(linkTypeId ? { linkTypeId } : {}),
         ...(lens ? { lens } : {}),
+        ...(snapshots.length > 0 ? { snapshots } : {}),
         ...(Array.isArray(entry.embeddedGraphs)
           ? {
               embeddedGraphs: entry.embeddedGraphs
@@ -867,8 +971,10 @@ export class O3GraphState {
     const entry = raw as Record<string, unknown>;
     const graphPath = String(entry.graphPath ?? "").trim();
     const originNodeId = String(entry.originNodeId ?? "").trim();
+    const linkTypeId = String(entry.linkTypeId ?? "").trim();
     if (!graphPath || !originNodeId || entry.expanded === false) return null;
     const lens = this.normalizeEmbeddedLens(entry.lens);
+    const snapshots = this.normalizeEmbeddedSnapshots(entry.snapshots);
     const children = Array.isArray(entry.embeddedGraphs)
       ? entry.embeddedGraphs
         .map((child) => this.normalizeEmbeddedGraphEntry(child))
@@ -878,7 +984,9 @@ export class O3GraphState {
       graphPath,
       originNodeId,
       expanded: true,
+      ...(linkTypeId ? { linkTypeId } : {}),
       ...(lens ? { lens } : {}),
+      ...(snapshots.length > 0 ? { snapshots } : {}),
       ...(children.length > 0 ? { embeddedGraphs: children } : {})
     };
   }
@@ -894,7 +1002,11 @@ export class O3GraphState {
       graphPath: entry.graphPath,
       originNodeId: entry.originNodeId,
       expanded: true,
+      ...(entry.linkTypeId ? { linkTypeId: entry.linkTypeId } : {}),
       ...(entry.lens ? { lens: { ...entry.lens } } : {}),
+      ...(entry.snapshots && entry.snapshots.length > 0
+        ? { snapshots: entry.snapshots.map((snapshot) => this.cloneRuntimeSnapshot(snapshot)) }
+        : {}),
       ...(entry.embeddedGraphs && entry.embeddedGraphs.length > 0
         ? { embeddedGraphs: entry.embeddedGraphs.map((child) => this.cloneEmbeddedGraphState(child)) }
         : {})
@@ -907,7 +1019,8 @@ export class O3GraphState {
     originNodeId: string,
     graphPath: string,
     expanded: boolean,
-    lens?: O3GraphEmbeddedLensState
+    lens?: O3GraphEmbeddedLensState,
+    linkTypeId = ""
   ): boolean {
     let currentMap = roots;
     let parent: O3GraphEmbeddedGraphState | undefined;
@@ -938,7 +1051,11 @@ export class O3GraphState {
       originNodeId,
       graphPath,
       expanded: true,
+      ...(linkTypeId ? { linkTypeId } : current?.linkTypeId ? { linkTypeId: current.linkTypeId } : {}),
       ...(normalizedLens ? { lens: normalizedLens } : current?.lens ? { lens: current.lens } : {}),
+      ...(current?.snapshots && current.snapshots.length > 0
+        ? { snapshots: current.snapshots.map((snapshot) => this.cloneRuntimeSnapshot(snapshot)) }
+        : {}),
       ...(current?.embeddedGraphs && current.embeddedGraphs.length > 0
         ? { embeddedGraphs: current.embeddedGraphs.map((child) => this.cloneEmbeddedGraphState(child)) }
         : {})
@@ -976,6 +1093,64 @@ export class O3GraphState {
     if (entry.lensMaximized === true) out.lensMaximized = true;
     if (entry.lensRestoreUserPositioned === true) out.lensRestoreUserPositioned = true;
     return Object.keys(out).length > 0 ? out : undefined;
+  }
+
+  private normalizeEmbeddedSnapshots(raw: unknown): O3GraphRuntimeNodeSnapshot[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const snapshot = value as Record<string, unknown>;
+      const nodeId = String(snapshot.nodeId ?? "").trim();
+      const path = String(snapshot.path ?? "").trim();
+      const origin = this.normalizeNodeOrigin(snapshot.origin);
+      if (!nodeId || !path || !origin) return [];
+      const x = Number(snapshot.x);
+      const y = Number(snapshot.y);
+      const badges = this.normalizeNodeBadges(snapshot.badges) ?? {};
+      const relationshipProperties = this.normalizeRelationshipProperties(snapshot.relationshipProperties);
+      return [{
+        nodeId,
+        path,
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0,
+        pinned: snapshot.pinned === true,
+        origin,
+        badges,
+        ...(relationshipProperties.length > 0 ? { relationshipProperties } : {})
+      }];
+    });
+  }
+
+  private cloneRuntimeSnapshot(snapshot: O3GraphRuntimeNodeSnapshot): O3GraphRuntimeNodeSnapshot {
+    return {
+      ...snapshot,
+      origin: { ...snapshot.origin },
+      badges: { ...snapshot.badges },
+      ...(snapshot.relationshipProperties
+        ? { relationshipProperties: [...snapshot.relationshipProperties] }
+        : {})
+    };
+  }
+
+  private renameEmbeddedSnapshot(
+    snapshot: O3GraphRuntimeNodeSnapshot,
+    oldPath: string,
+    newPath: string
+  ): O3GraphRuntimeNodeSnapshot {
+    const origin = snapshot.origin.kind === "expansion"
+      ? {
+          ...snapshot.origin,
+          sourceNodeId: snapshot.origin.sourceNodeId === oldPath
+            ? newPath
+            : snapshot.origin.sourceNodeId
+        }
+      : { ...snapshot.origin };
+    return {
+      ...this.cloneRuntimeSnapshot(snapshot),
+      nodeId: snapshot.nodeId === oldPath ? newPath : snapshot.nodeId,
+      path: snapshot.path === oldPath ? newPath : snapshot.path,
+      origin
+    };
   }
 
   private expansionId(sourceNodeId: string, linkType: string): string {
@@ -1255,7 +1430,12 @@ export class O3GraphState {
     if (!raw || typeof raw !== "object") return null;
     const obj = raw as Record<string, unknown>;
     const layout = String(obj.layout ?? "").trim();
-    return layout ? { layout } : null;
+    const groupingRules = Array.isArray(obj.groupingRules)
+      ? normalizeGraphGroupingRules(obj.groupingRules)
+      : undefined;
+    return layout || groupingRules !== undefined
+      ? { ...(layout ? { layout } : {}), ...(groupingRules !== undefined ? { groupingRules } : {}) }
+      : null;
   }
 
   private normalizeNotes(raw: unknown): O3GraphRuntimeState["notes"] | null {
@@ -1284,13 +1464,15 @@ export class O3GraphState {
       const y = Number(obj.y);
       const origin = this.normalizeNodeOrigin(obj.origin);
       const badges = this.normalizeNodeBadges(obj.badges);
+      const relationshipProperties = this.normalizeRelationshipProperties(obj.relationshipProperties);
       out[id] = {
         noteId,
         ...(Number.isFinite(x) ? { x } : {}),
         ...(Number.isFinite(y) ? { y } : {}),
         ...(typeof obj.pinned === "boolean" ? { pinned: obj.pinned } : {}),
         ...(origin ? { origin } : {}),
-        ...(badges ? { badges } : {})
+        ...(badges ? { badges } : {}),
+        ...(relationshipProperties.length > 0 ? { relationshipProperties } : {})
       };
     }
     return Object.keys(out).length > 0 ? out : null;
@@ -1326,6 +1508,19 @@ export class O3GraphState {
       out[key] = value === "expanded" ? "expanded" : "collapsed";
     }
     return Object.keys(out).length > 0 ? out : null;
+  }
+
+  private normalizeRelationshipProperties(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const value of raw) {
+      const property = String(value ?? "").trim().toLowerCase();
+      if (!property || seen.has(property)) continue;
+      seen.add(property);
+      out.push(property);
+    }
+    return out;
   }
 
   private annotateRuntimeNodeIds(

@@ -4,15 +4,28 @@ export interface EmbeddedGraphPersistencePolicyInput {
   parentIsPersistentGraphNote: boolean;
 }
 
+export interface EmbeddedGraphPersistenceOwnerInput {
+  targetPath: string;
+  targetIsPersistentGraphNote: boolean;
+  parentOwnerPath?: string;
+}
+
+export function resolveEmbeddedGraphPersistenceOwner(
+  input: EmbeddedGraphPersistenceOwnerInput,
+): string | null {
+  const targetPath = String(input.targetPath ?? "").trim();
+  const parentOwnerPath = String(input.parentOwnerPath ?? "").trim();
+  if (input.targetIsPersistentGraphNote) return targetPath || null;
+  return parentOwnerPath || null;
+}
+
 /**
- * Embedded runtime belongs to the embedded graph note. A persistent parent may
- * initialize that note's state block when a graph-capable note is first used
- * as a lens; ephemeral parent views remain ephemeral.
+ * A document may receive embedded runtime writes only when it is explicitly a
+ * persistent graph note. Parent-owned Lens snapshots are written through the
+ * parent's own graph state and never authorize writes into the Lens target.
  */
 export function shouldPersistEmbeddedGraphRuntime(
   input: EmbeddedGraphPersistencePolicyInput,
 ): boolean {
-  return input.ownerIsPersistentGraphNote
-    || input.ownerHasReadableGraphState
-    || input.parentIsPersistentGraphNote;
+  return input.ownerIsPersistentGraphNote;
 }

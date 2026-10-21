@@ -15,7 +15,6 @@ export interface ObsidianGraphLinkResolverOptions {
   getLabels(this: void): ReadonlyMap<string, string>;
   getExpansionPropertyAliases(this: void): ReadonlyMap<string, readonly string[]>;
   getDiscoveryDirections(this: void): ReadonlyMap<string, "incoming" | "outgoing" | "both">;
-  normalizeType?(this: void, value: string): string;
 }
 
 /**
@@ -24,7 +23,6 @@ export interface ObsidianGraphLinkResolverOptions {
  * incoming-link index; graph rendering and expansion state stay outside it.
  */
 export class ObsidianGraphLinkResolver {
-  private readonly normalizeType: (value: string) => string;
   private readonly incomingLinksByProperty = new Map<string, Map<string, Set<string>>>();
   private readonly incomingLinksBySource = new Map<string, Map<string, Set<string>>>();
   private incomingLinkIndexReady = false;
@@ -32,8 +30,10 @@ export class ObsidianGraphLinkResolver {
   constructor(
     private readonly app: App,
     private readonly options: ObsidianGraphLinkResolverOptions
-  ) {
-    this.normalizeType = options.normalizeType ?? ((value) => String(value ?? "").trim().toLowerCase());
+  ) {}
+
+  private normalizeProperty(value: string): string {
+    return String(value ?? "").trim().toLowerCase();
   }
 
   collectFrontmatterLinksByType(file: TFile): Map<string, Set<string>> {
@@ -92,10 +92,11 @@ export class ObsidianGraphLinkResolver {
   }
 
   resolveLinkedTargets(sourceFile: TFile, linkType: O3LinkType): ObsidianGraphLinkTarget[] {
-    const property = this.normalizeType(String(linkType.property ?? ""));
+    const property = this.normalizeProperty(String(linkType.property ?? ""));
     if (!property) return [];
     const direction = linkType.linkDiscoveryDirection
       ?? this.options.getDiscoveryDirections().get(property)
+      ?? Array.from(this.options.getDiscoveryDirections()).find(([key]) => this.normalizeProperty(key) === property)?.[1]
       ?? "outgoing";
     const candidates = new Set<string>();
     if (direction === "outgoing" || direction === "both") {
@@ -165,11 +166,12 @@ export class ObsidianGraphLinkResolver {
   }
 
   private applyActiveLinkTypePropertyAliases(byType: Map<string, Set<string>>): void {
-    for (const [primaryProperty, expansionProperties] of this.options.getExpansionPropertyAliases().entries()) {
+    for (const [rawPrimaryProperty, expansionProperties] of this.options.getExpansionPropertyAliases().entries()) {
+      const primaryProperty = this.normalizeProperty(rawPrimaryProperty);
       if (!primaryProperty || expansionProperties.length <= 1) continue;
       let primaryTargets = byType.get(primaryProperty);
       for (const property of expansionProperties) {
-        const targets = byType.get(this.normalizeType(property));
+        const targets = byType.get(this.normalizeProperty(property));
         if (!targets) continue;
         if (!primaryTargets) {
           primaryTargets = new Set<string>();
@@ -200,7 +202,8 @@ export class ObsidianGraphLinkResolver {
   private indexIncomingLinksForFile(file: TFile): void {
     const linksByType = this.collectFrontmatterLinksByType(file);
     const sourceEntries = new Map<string, Set<string>>();
-    for (const property of this.options.getDiscoveryDirections().keys()) {
+    for (const rawProperty of this.options.getDiscoveryDirections().keys()) {
+      const property = this.normalizeProperty(rawProperty);
       const targets = linksByType.get(property);
       if (!targets || targets.size === 0) continue;
       const sourceTargets = new Set<string>();
@@ -241,7 +244,7 @@ export class ObsidianGraphLinkResolver {
   }
 
   private normalizeFrontmatterLinkTypeKey(key: string): string {
-    return this.normalizeType(key);
+    return this.normalizeProperty(key);
   }
 
   private getFrontmatterLinks(cache: unknown): Array<{ key?: string; link?: string }> {
