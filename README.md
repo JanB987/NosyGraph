@@ -2,8 +2,8 @@
 
 Build and explore structured, expandable graphs from your Obsidian notes.
 
-Version **0.2.11**. See the [release notes](docs/releases/0.2.11.md)
-and [release/verification guide](docs/releases/0.2.11-release-guide.md).
+Version **0.2.12**. See the [release notes](docs/releases/0.2.12.md)
+and [release/verification guide](docs/releases/0.2.12-release-guide.md).
 
 NosyGraph is an Obsidian plugin for building interactive, property-driven graph views from Markdown notes. It reads relationships from note frontmatter, LinkType notes, group notes, graph notes, graph-capable notes, and Obsidian Bases views, then renders them as an explorable canvas graph with expandable links, embedded graph lenses, typed edges, grouping, and persistent graph-note state.
 

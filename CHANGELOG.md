@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.12 - 2026-10-21
+
+- Publish the validated plugin-checker fixes under a new version so Obsidian
+  can run a fresh release scan after 0.2.11 was already scanned.
+- Synchronize manifest, package metadata, compatibility mapping, and release
+  documentation. Runtime code is unchanged from the corrected 0.2.11 build.
+- Minimum Obsidian version remains 1.5.0. The 0.2.11 fixes passed 551 tests,
+  scoped typecheck, production build, and local checks for the reported lint rules.
+
 ## 0.2.11 - 2026-10-21
 
 ### Added

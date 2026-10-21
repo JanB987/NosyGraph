@@ -7,9 +7,10 @@ This page is the status boundary for the NosyGraph architecture migration. A com
 - **Experimental** means the code is detached, shadowed, staged, or available only through an explicit test/diagnostic entry point.
 - **Proposed** means the design or follow-up is recorded, but the production behavior is not implemented or has not passed its activation gate.
 
-Release `0.2.11` is prepared from the published `0.2.10` baseline (`e5aa1de`).
-See the [release notes](../releases/0.2.11.md) and
-[publication guide](../releases/0.2.11-release-guide.md) for assets, validation,
+Release `0.2.12` republishes the corrected `0.2.11` runtime (`834d18d`) with
+a new version for a fresh Obsidian release scan.
+See the [release notes](../releases/0.2.12.md) and
+[publication guide](../releases/0.2.12-release-guide.md) for assets, validation,
 and remaining interactive checks. Historical next-chat context is recorded in
 [`Handover-2026-09-19.md`](../Handover-2026-09-19.md). The release does not
 change the runtime ownership statuses below: the live path remains
