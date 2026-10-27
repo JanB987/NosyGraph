@@ -13,6 +13,7 @@ export default [{
   linterOptions: { reportUnusedDisableDirectives: "off" },
   rules: {
     "obsidianmd/no-unsupported-api": "error",
+    "obsidianmd/settings-tab/no-problematic-settings-headings": "error",
     "obsidianmd/prefer-create-el": "error",
     "obsidianmd/editor-drop-paste": "error",
     "@typescript-eslint/no-floating-promises": "error",

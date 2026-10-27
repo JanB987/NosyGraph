@@ -2318,10 +2318,10 @@ class BasesGraphSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("nosygraph-settings");
-    new Setting(containerEl)
-      .setName("NosyGraph")
-      .setDesc("Set up your graph defaults, appearance, and controls. Changes save automatically.")
-      .setHeading();
+    containerEl.createEl("p", {
+      text: "Set up your graph defaults, appearance, and controls. Changes save automatically.",
+      cls: "setting-item-description nosygraph-settings-intro"
+    });
 
     const defaultsEl = this.addSettingsSection(containerEl, "Graph defaults", "Starting values for notes that do not define their own graph settings. Your notes are not changed.");
     new Setting(defaultsEl)

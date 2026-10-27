@@ -183,9 +183,8 @@ body {
 }
 
 /* Plugin settings: use the active Obsidian theme for colors and controls. */
-.nosygraph-settings > .setting-item-heading {
-  margin-bottom: 20px;
-  padding-top: 0;
+.nosygraph-settings-intro {
+  margin: 0 0 20px;
 }
 
 .nosygraph-settings-section,

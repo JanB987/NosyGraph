@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.14 - 2026-10-27
+
+### Fixed
+
+- Remove the redundant plugin-name heading from the settings panel to comply
+  with the Obsidian checker. Keep the introduction as descriptive text.
+- Enable the matching settings-heading lint rule to catch this locally.
+
 ## 0.2.13 - 2026-10-27
 
 ### Changed
