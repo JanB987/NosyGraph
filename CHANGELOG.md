@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.13 - 2026-10-27
+
+### Changed
+
+- Organize plugin settings into graph defaults, appearance, linked-note
+  navigation, and interaction, with shorter labels and clearer descriptions.
+- Place advanced note identifiers and YAML property mappings in collapsible,
+  keyboard-accessible sections. Preserve existing saved values.
+- Add theme-aware section styling, aligned controls, labeled identifier fields,
+  and a stacked layout for narrow settings panels.
+
+- Hide the unused Graph marker, Filters, and Recursive property mappings.
+- Move Relationship direction into Legacy compatibility and clarify that it
+  provides an arrow-direction fallback, not relationship discovery.
+  Existing mappings remain stored for compatibility.
+
+### Fixed
+
+- Adding YAML links to explicitly configured or default root-node properties
+  refreshes open graph views and lenses automatically, including shortly after
+  a graph-state save.
+- Merge newly configured roots into existing and restored Lens snapshots while
+  retaining node positions, pinning, and badge expansion state.
+
 ## 0.2.12 - 2026-10-21
 
 - Publish the validated plugin-checker fixes under a new version so Obsidian

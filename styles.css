@@ -181,3 +181,130 @@ body {
   font-size: 10px;
   opacity: 0.85;
 }
+
+/* Plugin settings: use the active Obsidian theme for colors and controls. */
+.nosygraph-settings > .setting-item-heading {
+  margin-bottom: 20px;
+  padding-top: 0;
+}
+
+.nosygraph-settings-section,
+.nosygraph-settings-disclosure {
+  margin-bottom: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+}
+
+.nosygraph-settings-section {
+  padding: 0 18px;
+}
+
+.nosygraph-settings-section > .setting-item-heading {
+  padding: 16px 0;
+  border-top: 0;
+}
+
+.nosygraph-settings .setting-item-info {
+  min-width: 0;
+}
+
+.nosygraph-settings .setting-item-description {
+  line-height: 1.5;
+}
+
+.nosygraph-settings .setting-item-control {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nosygraph-settings textarea {
+  min-width: 160px;
+  resize: vertical;
+}
+
+.nosygraph-settings-advanced > .setting-item-heading {
+  padding: 12px 0 16px;
+  border-top: 0;
+}
+
+.nosygraph-settings-disclosure > summary {
+  padding: 14px 18px;
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+}
+
+.nosygraph-settings-disclosure > summary:hover {
+  background: var(--background-modifier-hover);
+}
+
+.nosygraph-settings-disclosure > summary:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-m);
+}
+
+.nosygraph-settings-disclosure-content {
+  padding: 0 18px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+@media (max-width: 600px) {
+  .nosygraph-settings .setting-item:not(.setting-item-heading) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .nosygraph-settings .setting-item-control {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  .nosygraph-settings textarea {
+    min-width: 0;
+  }
+}
+
+.nosygraph-settings .setting-item-heading .setting-item-control {
+  display: none;
+}
+
+.nosygraph-settings-list .setting-item-control {
+  flex: 0 0 230px;
+  max-width: 45%;
+}
+
+.nosygraph-settings-number input {
+  width: 80px;
+}
+
+.nosygraph-settings-key input {
+  width: 64px;
+  text-align: center;
+}
+
+.nosygraph-settings-identifier-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.nosygraph-settings-identifier-field input {
+  width: 150px;
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  .nosygraph-settings-list .setting-item-control {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+
+  .nosygraph-settings-identifier-field {
+    flex: 1 1 140px;
+  }
+}

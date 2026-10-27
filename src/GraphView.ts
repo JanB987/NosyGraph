@@ -1462,24 +1462,23 @@ export class BasesGraphView extends FileView {
     const embeddedVisibleLinkTypes = this.resolveVisibleLinkTypesFromYamlWithDefaults(frontmatter);
     const embeddedVisibleLinkTypeDefinitions = this.getVisibleLinkTypeDefinitionsForProperties(embeddedVisibleLinkTypes);
     let snapshots = state.toRuntimeNodeSnapshots();
-    if (snapshots.length === 0) {
-      const rootResolution = this.resolveRootNodeFilesFromGraphFrontmatter(frontmatter);
-      const rootTargets = this.resolveRootNodeTargetsFromGraphFrontmatter(frontmatter, file, rootResolution);
-      snapshots = rootTargets.map((rootTarget, index) => {
-        const pinned = state.state.pinned?.[rootTarget.path];
-        const x = Number(pinned?.x);
-        const y = Number(pinned?.y);
-        return {
-          nodeId: rootTarget.path,
-          path: rootTarget.path,
-          x: Number.isFinite(x) ? x : (index % 4) * 100,
-          y: Number.isFinite(y) ? y : Math.floor(index / 4) * 100,
-          pinned: Boolean(pinned),
-          origin: { kind: "root" as const },
-          badges: {}
-        };
-      });
-    }
+    const rootResolution = this.resolveRootNodeFilesFromGraphFrontmatter(frontmatter, file);
+    const rootTargets = this.resolveRootNodeTargetsFromGraphFrontmatter(frontmatter, file, rootResolution);
+    const rootSnapshots = rootTargets.map((rootTarget, index) => {
+      const pinned = state.state.pinned?.[rootTarget.path];
+      const x = Number(pinned?.x);
+      const y = Number(pinned?.y);
+      return {
+        nodeId: rootTarget.path,
+        path: rootTarget.path,
+        x: Number.isFinite(x) ? x : (index % 4) * 100,
+        y: Number.isFinite(y) ? y : Math.floor(index / 4) * 100,
+        pinned: Boolean(pinned),
+        origin: { kind: "root" as const },
+        badges: {}
+      };
+    });
+    snapshots = this.mergeConfiguredRootSnapshots(snapshots, rootSnapshots);
     snapshots = this.normalizeEmbeddedSnapshots(snapshots, embeddedLinkTypes);
     return {
       graphPath,
@@ -1506,6 +1505,21 @@ export class BasesGraphView extends FileView {
           : {})
       }))
     };
+  }
+
+  private mergeConfiguredRootSnapshots(
+    snapshots: O3GraphRuntimeNodeSnapshot[],
+    configuredSnapshots: O3GraphRuntimeNodeSnapshot[]
+  ): O3GraphRuntimeNodeSnapshot[] {
+    const roots = configuredSnapshots.filter((snapshot) => snapshot.origin.kind === "root");
+    const rootPaths = new Set(roots.map((snapshot) => snapshot.path));
+    const existingPaths = new Set(snapshots.map((snapshot) => snapshot.path));
+    return [
+      ...snapshots.map((snapshot) => rootPaths.has(snapshot.path) && snapshot.origin.kind === "expansion"
+        ? { ...snapshot, origin: { kind: "root" as const } }
+        : snapshot),
+      ...roots.filter((snapshot) => !existingPaths.has(snapshot.path))
+    ];
   }
 
   private normalizeEmbeddedSnapshots(
@@ -1966,7 +1980,7 @@ export class BasesGraphView extends FileView {
     return out;
   }
 
-  private resolveRootNodeFilesFromGraphFrontmatter(frontmatter: Record<string, unknown>): {
+  private resolveRootNodeFilesFromGraphFrontmatter(frontmatter: Record<string, unknown>, sourceFile = this.file): {
     files: TFile[];
     rawValues: unknown[];
     usesConfiguredProperties: boolean;
@@ -1994,7 +2008,7 @@ export class BasesGraphView extends FileView {
         : readFrontmatterPropertyByKey(frontmatter, this.graphPropertyKeys, "rootNodes");
       rawValues.push(rawValue);
       if (property.toLowerCase() === NONE_LINK_TYPE.toLowerCase()) {
-        for (const file of this.resolveBodyLinkFiles(this.file)) {
+        for (const file of this.resolveBodyLinkFiles(sourceFile)) {
           if (seen.has(file.path)) continue;
           seen.add(file.path);
           files.push(file);
@@ -2033,7 +2047,7 @@ export class BasesGraphView extends FileView {
     sourceFile: TFile,
     resolved?: ReturnType<GraphView["resolveRootNodeFilesFromGraphFrontmatter"]>
   ): Array<{ path: string; label: string }> {
-    const rootResolution = resolved ?? this.resolveRootNodeFilesFromGraphFrontmatter(frontmatter);
+    const rootResolution = resolved ?? this.resolveRootNodeFilesFromGraphFrontmatter(frontmatter, sourceFile);
     const out: Array<{ path: string; label: string }> = [];
     const seen = new Set<string>();
     const add = (pathRaw: string, labelRaw?: string): void => {
@@ -2379,7 +2393,7 @@ export class BasesGraphView extends FileView {
         if (definition) {
           this.engine.expandEmbeddedGraph(entry.originNodeId, {
             ...definition,
-            snapshots: entry.snapshots ?? definition.snapshots,
+            snapshots: this.mergeConfiguredRootSnapshots(entry.snapshots ?? definition.snapshots, definition.snapshots),
             lens: entry.lens ?? definition.lens,
             embeddedGraphs: entry.embeddedGraphs ?? definition.embeddedGraphs
           });
@@ -4351,8 +4365,12 @@ export class BasesGraphView extends FileView {
   }
 
   private shouldSuppressEmbeddedGraphReload(file: TFile): boolean {
-    return this.embeddedGraphStates.has(file.path)
-      && Date.now() < (this.suppressEmbeddedGraphReloadUntil.get(file.path) ?? 0);
+    const state = this.embeddedGraphStates.get(file.path);
+    return Boolean(state)
+      && Date.now() < (this.suppressEmbeddedGraphReloadUntil.get(file.path) ?? 0)
+      && !this.haveConfiguredRootNodesChanged(file, (state?.toRuntimeNodeSnapshots() ?? [])
+        .filter((snapshot) => snapshot.origin.kind === "root")
+        .map((snapshot) => snapshot.path));
   }
 
   private suppressGraphMutationMetadata(request: {
@@ -4419,7 +4437,9 @@ export class BasesGraphView extends FileView {
       }
       const replaced = this.engine.replaceEmbeddedGraphInstance(instance.originNodeId, {
         ...definition,
-        ...(currentSnapshots.length > 0 ? { snapshots: currentSnapshots } : {})
+        ...(currentSnapshots.length > 0
+          ? { snapshots: this.mergeConfiguredRootSnapshots(currentSnapshots, definition.snapshots) }
+          : {})
       });
       if (!replaced && previousState) {
         this.embeddedGraphStates.set(file.path, previousState);
@@ -5209,10 +5229,21 @@ export class BasesGraphView extends FileView {
     return false;
   }
 
+  private haveConfiguredRootNodesChanged(file: TFile, currentPaths: string[]): boolean {
+    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+    const resolution = this.resolveRootNodeFilesFromGraphFrontmatter(frontmatter, file);
+    if (!resolution.usesConfiguredProperties) return false;
+    const nextPaths = new Set(resolution.files.map((root) => root.path));
+    const previousPaths = new Set(currentPaths);
+    return nextPaths.size !== previousPaths.size
+      || Array.from(nextPaths).some((path) => !previousPaths.has(path));
+  }
+
   private shouldSuppressGraphFileReload(file: TFile): boolean {
     if (!this.file) return false;
     if (file.path !== this.file.path) return false;
-    return Date.now() < this.suppressGraphFileReloadUntil;
+    return Date.now() < this.suppressGraphFileReloadUntil
+      && !this.haveConfiguredRootNodesChanged(file, this.fileModeRootFiles.map((root) => root.path));
   }
 
   private async switchToMarkdownView(): Promise<void> {

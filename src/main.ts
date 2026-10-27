@@ -2317,26 +2317,16 @@ class BasesGraphSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-
+    containerEl.addClass("nosygraph-settings");
     new Setting(containerEl)
-      .setName("Default node drag hold duration (ms)")
-      .setDesc("Default hold duration before drag lock engages for graph nodes.")
-      .addText((text) => {
-        text
-          .setPlaceholder("180")
-          .setValue(String(this.plugin.settings.defaultNodeDragHoldDurationMs))
-          .onChange(async (value) => {
-            const parsed = Number(value);
-            this.plugin.settings.defaultNodeDragHoldDurationMs = Number.isFinite(parsed)
-              ? Math.max(0, Math.round(parsed))
-              : DEFAULT_SETTINGS.defaultNodeDragHoldDurationMs;
-            await this.plugin.savePluginSettings();
-          });
-      });
+      .setName("NosyGraph")
+      .setDesc("Set up your graph defaults, appearance, and controls. Changes save automatically.")
+      .setHeading();
 
-    new Setting(containerEl)
+    const defaultsEl = this.addSettingsSection(containerEl, "Graph defaults", "Starting values for notes that do not define their own graph settings. Your notes are not changed.");
+    new Setting(defaultsEl)
       .setName("LinkType folder")
-      .setDesc("Vault folder used as the global O3 LinkType registry.")
+      .setDesc("Vault folder containing your LinkType definition notes.")
       .addText((text) => {
         text
           .setPlaceholder(DEFAULT_SETTINGS.linkTypeFolder)
@@ -2350,7 +2340,39 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
+    this.addDefaultStringListSetting(
+      defaultsEl,
+      "Root node properties",
+      "Links in these YAML properties become root nodes. A note’s rootNodeProperties takes precedence. Use None-type links to include body links.",
+      "defaultRootNodeProperties"
+    );
+    this.addDefaultStringListSetting(
+      defaultsEl,
+      "Active groups",
+      "Group note links or paths used when a note does not define activeGroups.",
+      "defaultActiveGroups"
+    );
+    this.addDefaultStringListSetting(
+      defaultsEl,
+      "Visible LinkTypes",
+      "LinkType links, paths, keys, or properties used when a note does not define visibleLinkTypes. These links connect notes already visible in the graph.",
+      "defaultVisibleLinkTypes"
+    );
+    new Setting(defaultsEl)
+      .setName("Expand badges after a drop")
+      .setDesc("Expand or refresh a badge when a note is dropped onto it. A note can override this with autoExpandDroppedLinkTypes.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.defaultAutoExpandDroppedLinkTypes)
+          .onChange(async (value) => {
+            this.plugin.settings.defaultAutoExpandDroppedLinkTypes = Boolean(value);
+            this.plugin.applyDefaultAutoExpandDroppedLinkTypesToOpenViews();
+            await this.plugin.savePluginSettings();
+          });
+      });
+
+    const appearanceEl = this.addSettingsSection(containerEl, "Appearance", "Colors and visibility across your graphs.");
+    new Setting(appearanceEl)
       .setName("Root node ring color")
       .setDesc("Color of the circle around root nodes in graph view.")
       .addColorPicker((picker) => {
@@ -2364,7 +2386,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
+    new Setting(appearanceEl)
       .setName("Active node ring color")
       .setDesc("Color of the outer indicator around the graph node whose note is currently active.")
       .addColorPicker((picker) => {
@@ -2378,9 +2400,52 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Nearest active linked node indicator")
-      .setDesc("Show a faint marker on the closest visible node found through the active note's link chain.")
+    new Setting(appearanceEl)
+      .setName("Expanded node opacity")
+      .setDesc("Opacity for nodes created by badge expansion. 100% is fully opaque.")
+      .addSlider((slider) => {
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.subnodeOpacityPercent)
+          .onChange(async (value) => {
+            this.plugin.settings.subnodeOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
+            this.plugin.applySubnodeOpacityToOpenViews();
+            await this.plugin.savePluginSettings();
+          });
+      });
+
+    new Setting(appearanceEl)
+      .setName("Icon opacity")
+      .setDesc("Opacity for graph node icons. The node's group-colored backing disc remains opaque.")
+      .addSlider((slider) => {
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.iconOpacityPercent)
+          .onChange(async (value) => {
+            this.plugin.settings.iconOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
+            this.plugin.applyIconOpacityToOpenViews();
+            await this.plugin.savePluginSettings();
+          });
+      });
+
+    new Setting(appearanceEl)
+      .setName("Compact badges below zoom")
+      .setDesc("Below this zoom level, badges show initials and pins become smaller. Each graph can override this threshold.")
+      .addSlider((slider) => {
+        slider
+          .setLimits(0.1, 5, 0.05)
+          .setValue(this.plugin.settings.defaultBadgeFarViewThreshold)
+          .onChange(async (value) => {
+            this.plugin.settings.defaultBadgeFarViewThreshold = Math.max(0.1, Math.min(5, Number(value)));
+            this.plugin.applyDefaultBadgeFarViewThresholdToOpenViews();
+            await this.plugin.savePluginSettings();
+          });
+      });
+
+    const navigationEl = this.addSettingsSection(containerEl, "Linked-note indicator", "When the active note is outside the graph, highlight the closest visible note connected to it.");
+    new Setting(navigationEl)
+      .setName("Show linked-note indicator")
+      .setDesc("Mark the nearest visible note linked to the active note.")
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.nearestActiveLinkedNodeIndicatorEnabled)
@@ -2391,9 +2456,9 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Nearest active linked node color")
-      .setDesc("Color of the faint marker for the closest visible linked node.")
+    new Setting(navigationEl)
+      .setName("Indicator color")
+      .setDesc("Color of the linked-note marker.")
       .addColorPicker((picker) => {
         picker
           .setValue(this.plugin.settings.nearestActiveLinkedNodeIndicatorColor)
@@ -2405,9 +2470,9 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Nearest active linked node opacity")
-      .setDesc("Opacity of the faint marker for the closest visible linked node.")
+    new Setting(navigationEl)
+      .setName("Indicator opacity")
+      .setDesc("Visibility of the linked-note marker. 100% is fully opaque.")
       .addSlider((slider) => {
         slider
           .setLimits(0, 100, 1)
@@ -2419,9 +2484,9 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Nearest active linked node max hops")
-      .setDesc("Maximum link-chain distance checked when the active note is not visible.")
+    new Setting(navigationEl)
+      .setName("Maximum link distance").setClass("nosygraph-settings-number")
+      .setDesc("How many links to follow when searching. Range: 1–32.")
       .addText((text) => {
         text
           .setPlaceholder(String(DEFAULT_SETTINGS.nearestActiveLinkedNodeMaxHops))
@@ -2436,9 +2501,9 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Nearest active linked node max checked notes")
-      .setDesc("Maximum number of notes checked per nearest-linked-node search.")
+    new Setting(navigationEl)
+      .setName("Search limit (notes)").setClass("nosygraph-settings-number")
+      .setDesc("Maximum notes checked per search. Lower values reduce work in large vaults. Range: 50–10,000.")
       .addText((text) => {
         text
           .setPlaceholder(String(DEFAULT_SETTINGS.nearestActiveLinkedNodeMaxVisited))
@@ -2453,8 +2518,25 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Show all LinkType badges key")
+    const interactionEl = this.addSettingsSection(containerEl, "Interaction", "Mouse behavior and keys used while a graph has focus.");
+    new Setting(interactionEl)
+      .setName("Drag hold duration (ms)").setClass("nosygraph-settings-number")
+      .setDesc("How long to hold a node before drag lock engages. Use 0 for no delay.")
+      .addText((text) => {
+        text
+          .setPlaceholder("180")
+          .setValue(String(this.plugin.settings.defaultNodeDragHoldDurationMs))
+          .onChange(async (value) => {
+            const parsed = Number(value);
+            this.plugin.settings.defaultNodeDragHoldDurationMs = Number.isFinite(parsed)
+              ? Math.max(0, Math.round(parsed))
+              : DEFAULT_SETTINGS.defaultNodeDragHoldDurationMs;
+            await this.plugin.savePluginSettings();
+          });
+      });
+
+    new Setting(interactionEl)
+      .setName("Show badges key").setClass("nosygraph-settings-key")
       .setDesc("Hold this key while a graph is focused to show all LinkType badges on visible nodes.")
       .addText((text) => {
         text
@@ -2468,8 +2550,8 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Freeze graph key")
+    new Setting(interactionEl)
+      .setName("Freeze graph key").setClass("nosygraph-settings-key")
       .setDesc("Hold this key while a graph is focused to freeze node and container movement.")
       .addText((text) => {
         text
@@ -2483,165 +2565,85 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl)
-      .setName("Subnode opacity")
-      .setDesc("Opacity for nodes created by badge expansion. 100% is fully opaque.")
-      .addSlider((slider) => {
-        slider
-          .setLimits(0, 100, 1)
-          .setValue(this.plugin.settings.subnodeOpacityPercent)
-          .onChange(async (value) => {
-            this.plugin.settings.subnodeOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
-            this.plugin.applySubnodeOpacityToOpenViews();
-            await this.plugin.savePluginSettings();
-          });
-      });
+    const advancedEl = containerEl.createDiv({ cls: "nosygraph-settings-advanced" });
+    new Setting(advancedEl)
+      .setName("Advanced configuration")
+      .setDesc("Customize note identification and YAML property names to match your vault.")
+      .setHeading();
 
-    new Setting(containerEl)
-      .setName("Icon opacity")
-      .setDesc("Opacity for graph node icons. The node's group-colored backing disc remains opaque.")
-      .addSlider((slider) => {
-        slider
-          .setLimits(0, 100, 1)
-          .setValue(this.plugin.settings.iconOpacityPercent)
-          .onChange(async (value) => {
-            this.plugin.settings.iconOpacityPercent = Math.max(0, Math.min(100, Math.round(Number(value))));
-            this.plugin.applyIconOpacityToOpenViews();
-            await this.plugin.savePluginSettings();
-          });
-      });
+    const identifiersEl = this.addAdvancedSettingsSection(advancedEl, "Note identifiers", "Choose the YAML property and value used to recognize each kind of note. Matching ignores capitalization and accepts lists and wiki links.");
+    this.addNoteTypeIdentifierSetting(identifiersEl, "Graph notes", "Notes that should open as NosyGraph graph notes.", "graph");
+    this.addNoteTypeIdentifierSetting(identifiersEl, "LinkType notes", "Notes that define graph link types.", "linkType");
+    this.addNoteTypeIdentifierSetting(identifiersEl, "Group notes", "Notes that define graph groups.", "group");
 
-    new Setting(containerEl).setName("Graph-capable note defaults").setHeading();
-    containerEl.createEl("p", {
-      text: "Defaults used when a graph-capable note does not define the matching frontmatter property. These settings are not written to the note automatically.",
-      cls: "setting-item-description"
-    });
-    this.addDefaultStringListSetting(
-      containerEl,
-      "Default root node properties",
-      "Property names whose links become root nodes when the note has no rootNodeProperties property. Separate names with spaces, commas, semicolons, or new lines. Use None-type links for regular body links.",
-      "defaultRootNodeProperties"
-    );
-    this.addDefaultStringListSetting(
-      containerEl,
-      "Default active groups",
-      "Group note links or paths applied when the note has no activeGroups property.",
-      "defaultActiveGroups"
-    );
-    this.addDefaultStringListSetting(
-      containerEl,
-      "Default visible LinkTypes",
-      "LinkType note links, paths, keys, or properties applied when the note has no visibleLinkTypes property. Plain keys/properties can be separated with spaces, commas, semicolons, or new lines; wiki links with spaces stay intact.",
-      "defaultVisibleLinkTypes"
-    );
-    new Setting(containerEl)
-      .setName("Auto-expand dropped LinkTypes by default")
-      .setDesc("Default behavior when a graph note does not define autoExpandDroppedLinkTypes. If enabled, dropping a node onto a badge expands/refreshes that badge after the YAML mutation. If disabled, only visible LinkType edges refresh.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.defaultAutoExpandDroppedLinkTypes)
-          .onChange(async (value) => {
-            this.plugin.settings.defaultAutoExpandDroppedLinkTypes = Boolean(value);
-            this.plugin.applyDefaultAutoExpandDroppedLinkTypesToOpenViews();
-          await this.plugin.savePluginSettings();
-        });
-      });
+    const graphPropertiesEl = this.addAdvancedSettingsSection(advancedEl, "Graph property names", "Map graph and node settings to your YAML property names. Default names remain readable; new writes use your mappings.");
+    this.addGraphPropertySetting(graphPropertiesEl, "Root nodes", "Graph-note list of root node links.", "rootNodes");
+    this.addGraphPropertySetting(graphPropertiesEl, "Root node properties", "Graph-note list of property names whose linked notes become root nodes.", "rootNodeProperties");
+    this.addGraphPropertySetting(graphPropertiesEl, "Expansion LinkTypes", "Graph-note list of active expansion LinkType notes.", "activeLinkTypes");
+    this.addGraphPropertySetting(graphPropertiesEl, "Overlay LinkTypes", "Graph-note list of active overlay LinkType notes.", "activeOverlayLinkTypes");
+    this.addGraphPropertySetting(graphPropertiesEl, "Visible LinkTypes", "Graph-note list of LinkType properties/keys whose edges are shown only between already visible nodes.", "visibleLinkTypes");
+    this.addGraphPropertySetting(graphPropertiesEl, "Visible LinkType line style", "Graph-note property whose value controls visible/default visible LinkType edges: dashed or normal.", "visibleLinkTypeLineStyle");
+    this.addGraphPropertySetting(graphPropertiesEl, "Discovered link line style", "Graph-note property whose value controls discovered/active link edges: dashed or normal.", "discoveredLinkLineStyle");
+    this.addGraphPropertySetting(graphPropertiesEl, "Auto-expand dropped LinkTypes", "Graph-note boolean that controls whether dropping a node onto a badge automatically expands that badge after the YAML mutation.", "autoExpandDroppedLinkTypes");
+    this.addGraphPropertySetting(graphPropertiesEl, "Groups", "Graph-note list of active group notes.", "activeGroups");
+    this.addGraphPropertySetting(graphPropertiesEl, "Connected Base filters", "Graph-note Base view link or list of links. Matching notes from all connected views are combined.", "connectedBaseFilter");
+    this.addGraphPropertySetting(graphPropertiesEl, "Gravity", "Graph-note force gravity setting.", "graphForceGravity");
+    this.addGraphPropertySetting(graphPropertiesEl, "Repellent", "Graph-note force repellent setting.", "graphForceRepellent");
+    this.addGraphPropertySetting(graphPropertiesEl, "Default node size", "Graph-note default node radius setting.", "graphNodeSize");
+    this.addGraphPropertySetting(graphPropertiesEl, "Connection size multiplier", "Graph-note node size multiplier per connection.", "graphNodeConnectionSizeMultiplier");
+    this.addGraphPropertySetting(graphPropertiesEl, "Near-rest velocity", "Graph-note velocity threshold for slow frame cadence.", "graphVelocityNearRestThreshold");
+    this.addGraphPropertySetting(graphPropertiesEl, "Rest velocity", "Graph-note velocity threshold for resting frame cadence.", "graphVelocityRestThreshold");
+    this.addGraphPropertySetting(graphPropertiesEl, "Text fade threshold", "Graph-note node-label visibility threshold.", "graphTextFadeThreshold");
+    this.addGraphPropertySetting(graphPropertiesEl, "Graph background color", "Graph-note canvas background color property, such as #F7AA34.", "graphBackgroundColor");
+    this.addGraphPropertySetting(graphPropertiesEl, "Layout", "Graph-note layout property.", "graphLayout");
+    this.addGraphPropertySetting(graphPropertiesEl, "Embedded container color", "Graph-note color used when this graph is embedded in another graph.", "graphContainerColor");
+    this.addGraphPropertySetting(graphPropertiesEl, "Embedded container force", "Graph-note centering force used when this graph is embedded in another graph.", "graphContainerLinkForce");
+    this.addGraphPropertySetting(graphPropertiesEl, "Show node icons", "Graph-note boolean that controls whether node and group icons/images are rendered.", "showNodeIcons");
+    this.addGraphPropertySetting(graphPropertiesEl, "Individual node size", "Node-note property that overrides a single node size.", "nodeIndividualSize");
+    this.addGraphPropertySetting(graphPropertiesEl, "Node icon", "Node-note property that stores an emoji/text icon or image link/path.", "graphIcon");
 
-    new Setting(containerEl)
-      .setName("Far-view badge and pin threshold")
-      .setDesc("Camera zoom below this value uses compact badges with label initials and compact pins. A graph can override this value in the graph settings panel or with its graphBadge_FarViewThreshold property.")
-      .addSlider((slider) => {
-        slider
-          .setLimits(0.1, 5, 0.05)
-          .setValue(this.plugin.settings.defaultBadgeFarViewThreshold)
-          .onChange(async (value) => {
-            this.plugin.settings.defaultBadgeFarViewThreshold = Math.max(0.1, Math.min(5, Number(value)));
-            this.plugin.applyDefaultBadgeFarViewThresholdToOpenViews();
-            await this.plugin.savePluginSettings();
-          });
-      });
+    const linkPropertiesEl = this.addAdvancedSettingsSection(advancedEl, "LinkType property names", "Map the YAML properties used by LinkType definitions. Default names remain readable; new writes use your mappings.");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Label", "Display label/key of the LinkType.", "key");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Linked property", "YAML property or property list this LinkType reads on regular notes.", "property");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Write property", "Lens property receiving relationship mutations; if omitted, the first read property is used.", "writeProperty");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Link type", "Force Based, Direction Based, parent container, or lens behavior.", "linkType");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Discovery direction", "Outgoing reads the current note; incoming finds notes whose configured property points to it.", "linkDiscoveryDirection");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Arrow direction", "Pointer direction used by rendered link arrows.", "pointerDirection");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Badge color", "Primary color used for the LinkType badge.", "color");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Line color", "Rendered link line color.", "linkLineColor");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Line thickness", "Rendered link line thickness.", "linkLineThickness");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Link force", "Force-based link strength.", "linkForce");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Link distance", "Force-based target link distance.", "linkDistance");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Direction axis", "Direction-based preferred axis direction.", "linkDirection");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Y axis weight", "Direction-based Y axis weight.", "linkYAxis");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "X axis weight", "Direction-based X axis weight.", "linkXAxis");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Discovery", "Whether this LinkType can discover linked notes.", "linkDiscovery");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Duplicate nodes", "Whether this LinkType creates duplicate expansion nodes.", "linkDuplicateNodes");
 
-    new Setting(containerEl).setName("Note class identifiers").setHeading();
-    containerEl.createEl("p", {
-      text: "Configure which YAML property/value marks graph notes, LinkType notes, and group notes. Value matching ignores capitalization and may match inside arrays or wiki links.",
-      cls: "setting-item-description"
-    });
-    this.addNoteTypeIdentifierSetting(containerEl, "Graph notes", "Notes that should open as NosyGraph graph notes.", "graph");
-    this.addNoteTypeIdentifierSetting(containerEl, "LinkType notes", "Notes that define graph link types.", "linkType");
-    this.addNoteTypeIdentifierSetting(containerEl, "Group notes", "Notes that define graph groups.", "group");
+    const groupPropertiesEl = this.addAdvancedSettingsSection(advancedEl, "Group property names", "Map the YAML properties used by group definitions. Default names remain readable.");
+    this.addGroupPropertySetting(groupPropertiesEl, "Grouped property", "YAML property evaluated by the group rule.", "property");
+    this.addGroupPropertySetting(groupPropertiesEl, "Operator", "Group matching operator, such as equals, contains, or exists.", "operator");
+    this.addGroupPropertySetting(groupPropertiesEl, "Value", "Group matching value.", "value");
+    this.addGroupPropertySetting(groupPropertiesEl, "Color", "Group color applied to matching nodes.", "color");
+    this.addGroupPropertySetting(groupPropertiesEl, "Icon", "Group icon property used for matching graph nodes.", "icon");
 
-    new Setting(containerEl).setName("Graph note properties").setHeading();
-    containerEl.createEl("p", {
-      text: "Configure which YAML property names the plugin uses for graph notes and graph node notes. Existing default names remain readable as fallback; new writes use these configured names.",
-      cls: "setting-item-description"
-    });
+    const legacyEl = this.addAdvancedSettingsSection(advancedEl, "Legacy compatibility", "Property mappings for older LinkType notes. Use Discovery direction for relationship reads and Arrow direction for rendered arrows.");
+    this.addLinkTypePropertySetting(legacyEl, "Legacy relationship direction", "YAML property used as a fallback for arrow direction when a LinkType has no explicit Arrow direction property. It does not control relationship discovery.", "direction");
 
-    this.addGraphPropertySetting(
-      containerEl,
-      "Graph marker",
-      "Boolean property that marks a note as a NosyGraph graph note.",
-      "graphMarker"
-    );
-    this.addGraphPropertySetting(containerEl, "Root nodes", "Graph-note list of root node links.", "rootNodes");
-    this.addGraphPropertySetting(containerEl, "Root node properties", "Graph-note list of property names whose linked notes become root nodes.", "rootNodeProperties");
-    this.addGraphPropertySetting(containerEl, "Expansion LinkTypes", "Graph-note list of active expansion LinkType notes.", "activeLinkTypes");
-    this.addGraphPropertySetting(containerEl, "Overlay LinkTypes", "Graph-note list of active overlay LinkType notes.", "activeOverlayLinkTypes");
-    this.addGraphPropertySetting(containerEl, "Visible LinkTypes", "Graph-note list of LinkType properties/keys whose edges are shown only between already visible nodes.", "visibleLinkTypes");
-    this.addGraphPropertySetting(containerEl, "Visible LinkType line style", "Graph-note property whose value controls visible/default visible LinkType edges: dashed or normal.", "visibleLinkTypeLineStyle");
-    this.addGraphPropertySetting(containerEl, "Discovered link line style", "Graph-note property whose value controls discovered/active link edges: dashed or normal.", "discoveredLinkLineStyle");
-    this.addGraphPropertySetting(containerEl, "Auto-expand dropped LinkTypes", "Graph-note boolean that controls whether dropping a node onto a badge automatically expands that badge after the YAML mutation.", "autoExpandDroppedLinkTypes");
-    this.addGraphPropertySetting(containerEl, "Groups", "Graph-note list of active group notes.", "activeGroups");
-    this.addGraphPropertySetting(containerEl, "Filters", "Graph-note list of active filter notes reserved for filter-based sources.", "activeFilters");
-    this.addGraphPropertySetting(containerEl, "Connected Base filters", "Graph-note Base view link or list of links. Matching notes from all connected views are combined.", "connectedBaseFilter");
-    this.addGraphPropertySetting(containerEl, "Gravity", "Graph-note force gravity setting.", "graphForceGravity");
-    this.addGraphPropertySetting(containerEl, "Repellent", "Graph-note force repellent setting.", "graphForceRepellent");
-    this.addGraphPropertySetting(containerEl, "Default node size", "Graph-note default node radius setting.", "graphNodeSize");
-    this.addGraphPropertySetting(containerEl, "Connection size multiplier", "Graph-note node size multiplier per connection.", "graphNodeConnectionSizeMultiplier");
-    this.addGraphPropertySetting(containerEl, "Near-rest velocity", "Graph-note velocity threshold for slow frame cadence.", "graphVelocityNearRestThreshold");
-    this.addGraphPropertySetting(containerEl, "Rest velocity", "Graph-note velocity threshold for resting frame cadence.", "graphVelocityRestThreshold");
-    this.addGraphPropertySetting(containerEl, "Text fade threshold", "Graph-note node-label visibility threshold.", "graphTextFadeThreshold");
-    this.addGraphPropertySetting(containerEl, "Graph background color", "Graph-note canvas background color property, such as #F7AA34.", "graphBackgroundColor");
-    this.addGraphPropertySetting(containerEl, "Layout", "Graph-note layout property.", "graphLayout");
-    this.addGraphPropertySetting(containerEl, "Embedded container color", "Graph-note color used when this graph is embedded in another graph.", "graphContainerColor");
-    this.addGraphPropertySetting(containerEl, "Embedded container force", "Graph-note centering force used when this graph is embedded in another graph.", "graphContainerLinkForce");
-    this.addGraphPropertySetting(containerEl, "Show node icons", "Graph-note boolean that controls whether node and group icons/images are rendered.", "showNodeIcons");
-    this.addGraphPropertySetting(containerEl, "Individual node size", "Node-note property that overrides a single node size.", "nodeIndividualSize");
-    this.addGraphPropertySetting(containerEl, "Node icon", "Node-note property that stores an emoji/text icon or image link/path.", "graphIcon");
+  }
 
-    new Setting(containerEl).setName("LinkType note properties").setHeading();
-    containerEl.createEl("p", {
-      text: "Configure which YAML property names LinkType notes use. Existing default names remain readable as fallback; new LinkType writes use these configured names.",
-      cls: "setting-item-description"
-    });
-    this.addLinkTypePropertySetting(containerEl, "Label", "Display label/key of the LinkType.", "key");
-    this.addLinkTypePropertySetting(containerEl, "Linked property", "YAML property or property list this LinkType reads on regular notes.", "property");
-    this.addLinkTypePropertySetting(containerEl, "Write property", "Lens property receiving relationship mutations; if omitted, the first read property is used.", "writeProperty");
-    this.addLinkTypePropertySetting(containerEl, "Link type", "Force Based, Direction Based, parent container, or lens behavior.", "linkType");
-    this.addLinkTypePropertySetting(containerEl, "Relationship direction", "Outgoing, incoming, or both for YAML relationship reads.", "direction");
-    this.addLinkTypePropertySetting(containerEl, "Discovery direction", "Outgoing reads the current note; incoming finds notes whose configured property points to it.", "linkDiscoveryDirection");
-    this.addLinkTypePropertySetting(containerEl, "Arrow direction", "Pointer direction used by rendered link arrows.", "pointerDirection");
-    this.addLinkTypePropertySetting(containerEl, "Badge color", "Primary color used for the LinkType badge.", "color");
-    this.addLinkTypePropertySetting(containerEl, "Line color", "Rendered link line color.", "linkLineColor");
-    this.addLinkTypePropertySetting(containerEl, "Line thickness", "Rendered link line thickness.", "linkLineThickness");
-    this.addLinkTypePropertySetting(containerEl, "Recursive", "Whether this LinkType should recurse through matching relationships.", "recursive");
-    this.addLinkTypePropertySetting(containerEl, "Link force", "Force-based link strength.", "linkForce");
-    this.addLinkTypePropertySetting(containerEl, "Link distance", "Force-based target link distance.", "linkDistance");
-    this.addLinkTypePropertySetting(containerEl, "Direction axis", "Direction-based preferred axis direction.", "linkDirection");
-    this.addLinkTypePropertySetting(containerEl, "Y axis weight", "Direction-based Y axis weight.", "linkYAxis");
-    this.addLinkTypePropertySetting(containerEl, "X axis weight", "Direction-based X axis weight.", "linkXAxis");
-    this.addLinkTypePropertySetting(containerEl, "Discovery", "Whether this LinkType can discover linked notes.", "linkDiscovery");
-    this.addLinkTypePropertySetting(containerEl, "Duplicate nodes", "Whether this LinkType creates duplicate expansion nodes.", "linkDuplicateNodes");
+  private addSettingsSection(parent: HTMLElement, name: string, description: string): HTMLElement {
+    const section = parent.createDiv({ cls: "nosygraph-settings-section" });
+    new Setting(section).setName(name).setDesc(description).setHeading();
+    return section;
+  }
 
-    new Setting(containerEl).setName("Group note properties").setHeading();
-    containerEl.createEl("p", {
-      text: "Configure which YAML property names group notes use. Existing default names remain readable as fallback.",
-      cls: "setting-item-description"
-    });
-    this.addGroupPropertySetting(containerEl, "Grouped property", "YAML property evaluated by the group rule.", "property");
-    this.addGroupPropertySetting(containerEl, "Operator", "Group matching operator, such as equals, contains, or exists.", "operator");
-    this.addGroupPropertySetting(containerEl, "Value", "Group matching value.", "value");
-    this.addGroupPropertySetting(containerEl, "Color", "Group color applied to matching nodes.", "color");
-    this.addGroupPropertySetting(containerEl, "Icon", "Group icon property used for matching graph nodes.", "icon");
+  private addAdvancedSettingsSection(parent: HTMLElement, name: string, description: string): HTMLElement {
+    const details = parent.createEl("details", { cls: "nosygraph-settings-disclosure" });
+    details.createEl("summary", { text: name });
+    const content = details.createDiv({ cls: "nosygraph-settings-disclosure-content" });
+    content.createEl("p", { text: description, cls: "setting-item-description" });
+    return content;
   }
 
   private addGraphPropertySetting(
@@ -2676,7 +2678,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
     key: "defaultRootNodeProperties" | "defaultActiveGroups" | "defaultVisibleLinkTypes"
   ): void {
     new Setting(containerEl)
-      .setName(name)
+      .setName(name).setClass("nosygraph-settings-list")
       .setDesc(desc)
       .addTextArea((text) => {
         text
@@ -2759,6 +2761,11 @@ class BasesGraphSettingTab extends PluginSettingTab {
       .setName(name)
       .setDesc(desc)
       .addText((text) => {
+        const label = text.inputEl.parentElement?.createEl("label", { cls: "nosygraph-settings-identifier-field" });
+        label?.createSpan({ text: "YAML property" });
+        label?.appendChild(text.inputEl);
+        text.inputEl.setAttribute("aria-label", name + " YAML property");
+        text.inputEl.setAttribute("title", "YAML property");
         text
           .setPlaceholder(defaults.property)
           .setValue(this.plugin.settings.noteTypeIdentifiers[key].property)
@@ -2776,6 +2783,11 @@ class BasesGraphSettingTab extends PluginSettingTab {
           });
       })
       .addText((text) => {
+        const label = text.inputEl.parentElement?.createEl("label", { cls: "nosygraph-settings-identifier-field" });
+        label?.createSpan({ text: "Matching value" });
+        label?.appendChild(text.inputEl);
+        text.inputEl.setAttribute("aria-label", name + " matching value");
+        text.inputEl.setAttribute("title", "Matching value");
         text
           .setPlaceholder(defaults.value)
           .setValue(this.plugin.settings.noteTypeIdentifiers[key].value)
