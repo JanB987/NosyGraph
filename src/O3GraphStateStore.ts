@@ -117,29 +117,36 @@ export class O3GraphStateStore {
     persistedState: Record<string, unknown>,
     options?: { forceEmptyOverwrite?: boolean; allowNodeRemoval?: boolean }
   ): Promise<boolean> {
-    const content = await this.app.vault.read(this.file);
-    if (!options?.forceEmptyOverwrite && O3GraphStateStore.isUnsafeGraphDocumentWriteTarget(content)) {
-      console.warn("[GraphStateStore] Refused graph-state write because the current file content is empty.", {
-        file: this.file.path
-      });
-      return false;
-    }
-    if (
-      !options?.forceEmptyOverwrite
-      && O3GraphStateStore.isUnsafeGraphStateOverwrite(content, persistedState, options?.allowNodeRemoval === true)
-    ) {
-      console.warn("[GraphStateStore] Refused unsafe graph-state overwrite.", {
-        file: this.file.path
-      });
-      return false;
-    }
     const newJson = JSON.stringify(persistedState, null, 2);
-    const newContent = O3GraphStateStore.replaceGraphStateBlock(content, newJson);
-    if (newContent === content) {
-      return false;
-    }
-    await this.app.vault.modify(this.file, newContent);
-    return true;
+    // Skip no-op writes before entering Vault.process, which may emit modify events.
+    // This snapshot is only an optimization; the write uses the atomic callback data.
+    const current = await this.app.vault.read(this.file);
+    if (O3GraphStateStore.replaceGraphStateBlock(current, newJson) === current) return false;
+    let wrote = false;
+    await this.app.vault.process(this.file, (content) => {
+      if (!options?.forceEmptyOverwrite && O3GraphStateStore.isUnsafeGraphDocumentWriteTarget(content)) {
+        console.warn("[GraphStateStore] Refused graph-state write because the current file content is empty.", {
+          file: this.file.path
+        });
+        return content;
+      }
+      if (
+        !options?.forceEmptyOverwrite
+        && O3GraphStateStore.isUnsafeGraphStateOverwrite(content, persistedState, options?.allowNodeRemoval === true)
+      ) {
+        console.warn("[GraphStateStore] Refused unsafe graph-state overwrite.", {
+          file: this.file.path
+        });
+        return content;
+      }
+      const newContent = O3GraphStateStore.replaceGraphStateBlock(content, newJson);
+      if (newContent === content) {
+        return content;
+      }
+      wrote = true;
+      return newContent;
+    });
+    return wrote;
   }
 
   private static isUnsafeGraphDocumentWriteTarget(content: string): boolean {

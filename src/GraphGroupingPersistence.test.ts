@@ -27,6 +27,11 @@ function fixture() {
   const app = { vault: {
     read: async () => content,
     cachedRead: async () => content,
+    process: async (_file: TFile, transform: (value: string) => string) => {
+      const next = transform(content);
+      if (next !== content) { content = next; writes += 1; }
+      return content;
+    },
     modify: async (_file: TFile, next: string) => { content = next; writes += 1; }
   } } as unknown as App;
   return { app, prefix, suffix, content: () => content, writes: () => writes };

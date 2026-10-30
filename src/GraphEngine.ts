@@ -554,6 +554,8 @@ export class GraphEngine {
   private readonly recentGraphLinkMutationTargetTtlMs = 10000;
   private parentContainers = new Map<string, ParentContainerState>();
   private embeddedGraphContainers = new Map<string, EmbeddedGraphContainerState>();
+  private graphLensFocusOrder = new Map<string, number>();
+  private graphLensFocusSequence = 0;
   private lockedEmbeddedGraphContainerKeys = new Set<string>();
   private isReconcilingGraphTopology = false;
   private duplicateNodeSourceById = new Map<string, string>();
@@ -3639,6 +3641,8 @@ export class GraphEngine {
       if (event.button !== 0) return;
       const currentNode = this.nodeMap.get(node.id);
       if (!currentNode) return;
+      const owner = this.getEmbeddedClipContainerForNode(currentNode);
+      if (owner) this.focusGraphLens(owner);
       void this.toggleEmbeddedGraph(currentNode.id);
     });
     ["mouseup", "click", "dblclick"].forEach(evt => {
@@ -4195,6 +4199,8 @@ export class GraphEngine {
         this.badgeOverlay.appendChild(anchor);
 
         const badge = new O3NodeBadge(anchor, linkType, (type, modifiers) => {
+          const owner = this.getEmbeddedClipContainerForNode(node);
+          if (owner) this.focusGraphLens(owner);
           if (modifiers) {
             void this.graphController.executeBadgeInteraction({
               type: "badge-interaction",
@@ -4783,7 +4789,7 @@ export class GraphEngine {
       : null;
     const previousLens = previousDefinition?.lens ?? this.getEmbeddedGraphLensState(originNodeId, graphPath);
     if ((definition.snapshots ?? []).length === 0) return false;
-    this.collapseEmbeddedGraph(originNodeId, graphPath);
+    this.collapseEmbeddedGraph(originNodeId, graphPath, { preserveFocus: true });
     const replaced = this.expandEmbeddedGraph(originNodeId, {
       ...definition,
       lens: definition.lens ?? previousLens
@@ -4946,7 +4952,7 @@ export class GraphEngine {
     return refreshed;
   }
 
-  clearEmbeddedGraphRuntime(): void {
+  clearEmbeddedGraphRuntime(options?: { preserveFocus?: boolean }): void {
     for (const container of Array.from(this.embeddedGraphContainers.values())) {
       this.edges = this.edges.filter((edge) => !container.memberIds.has(edge.from) && !container.memberIds.has(edge.to));
       for (const nodeId of container.memberIds) {
@@ -4954,6 +4960,10 @@ export class GraphEngine {
       }
     }
     this.embeddedGraphContainers.clear();
+    if (!options?.preserveFocus) {
+      this.graphLensFocusOrder?.clear();
+      this.graphLensFocusSequence = 0;
+    }
     this.badgesDirty = true;
   }
 
@@ -5004,6 +5014,7 @@ export class GraphEngine {
     const expanded = this.expandEmbeddedGraph(originNodeId, definition);
     if (expanded) {
       const container = this.embeddedGraphContainers.get(key);
+      if (container) this.focusGraphLens(container);
       const context = container
         ? this.getEmbeddedGraphPersistenceContext(container)
         : {
@@ -5051,6 +5062,7 @@ export class GraphEngine {
     if (!definition || !this.expandEmbeddedGraph(originNode.id, definition)) return;
     const container = this.embeddedGraphContainers.get(key);
     if (!container) return;
+    this.focusGraphLens(container);
     const context = this.getEmbeddedGraphPersistenceContext(container);
     this.menuOptions.onEmbeddedGraphExpansionChanged?.(
       context.originNodeId,
@@ -5387,13 +5399,13 @@ export class GraphEngine {
     return true;
   }
 
-  collapseEmbeddedGraph(originNodeIdRaw: string, graphPathRaw: string): boolean {
+  collapseEmbeddedGraph(originNodeIdRaw: string, graphPathRaw: string, options?: { preserveFocus?: boolean }): boolean {
     const key = this.embeddedGraphKey(originNodeIdRaw, graphPathRaw);
     const container = this.embeddedGraphContainers.get(key);
     if (!container) return false;
     for (const nested of Array.from(this.embeddedGraphContainers.values())) {
       if (container.memberIds.has(nested.origin)) {
-        this.collapseEmbeddedGraph(nested.origin, nested.graphPath);
+        this.collapseEmbeddedGraph(nested.origin, nested.graphPath, options);
       }
     }
     this.edges = this.edges.filter((edge) => !container.memberIds.has(edge.from) && !container.memberIds.has(edge.to));
@@ -5401,6 +5413,7 @@ export class GraphEngine {
       this.removeNodeById(nodeId);
     }
     this.embeddedGraphContainers.delete(key);
+    if (!options?.preserveFocus) this.graphLensFocusOrder?.delete(key);
     this.lockedEmbeddedGraphContainerKeys.delete(key);
     this.nodeConnectionCountsDirty = true;
     this.badgesDirty = true;
@@ -5410,7 +5423,7 @@ export class GraphEngine {
 
   getEmbeddedGraphPathAtClientPosition(clientX: number, clientY: number): string | null {
     const world = this.clientToWorld(clientX, clientY);
-    const containers = Array.from(this.embeddedGraphContainers.values()).reverse();
+    const containers = this.getGraphLensesTopFirst();
     return containers.find((container) => {
       const bounds = this.getGraphLensBounds(container);
       return world.x >= bounds.left && world.x <= bounds.right
@@ -6035,6 +6048,11 @@ export class GraphEngine {
       const previousKey = container.key;
       const nextKey = this.embeddedGraphKey(replacement.id, container.graphPath);
       this.embeddedGraphContainers.delete(previousKey);
+      const focusOrder = this.graphLensFocusOrder?.get(previousKey);
+      if (focusOrder !== undefined) {
+        this.graphLensFocusOrder.delete(previousKey);
+        this.graphLensFocusOrder.set(nextKey, focusOrder);
+      }
       if (this.lockedEmbeddedGraphContainerKeys.delete(previousKey) || container.interactionLocked) {
         this.lockedEmbeddedGraphContainerKeys.add(nextKey);
         container.interactionLocked = true;
@@ -8018,7 +8036,8 @@ export class GraphEngine {
   ): number {
     let alpha = 1;
     const visibleThroughLensAlpha = 1 - this.getGraphLensBodyOpacity();
-    for (const container of this.embeddedGraphContainers.values()) {
+    for (const container of this.getGraphLensesTopFirst()) {
+      if (container.key === ownContainer?.key) break;
       if (ownContainer && this.isSameOrAncestorGraphLens(container, ownContainer)) continue;
       const bounds = this.getGraphLensBounds(container);
       if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
@@ -8051,22 +8070,7 @@ export class GraphEngine {
     clientY: number
   ): EmbeddedGraphContainerState | null {
     const world = this.clientToWorld(clientX, clientY);
-    return Array.from(this.embeddedGraphContainers.values())
-      .sort((a, b) => {
-        const ancestryDelta = b.ancestry.length - a.ancestry.length;
-        if (ancestryDelta !== 0) return ancestryDelta;
-        const aBounds = this.getGraphLensBounds(a);
-        const bBounds = this.getGraphLensBounds(b);
-        return ((aBounds.right - aBounds.left) * (aBounds.bottom - aBounds.top))
-          - ((bBounds.right - bBounds.left) * (bBounds.bottom - bBounds.top));
-      })
-      .find((container) => {
-        const bounds = this.getGraphLensBounds(container);
-        return world.x >= bounds.left
-          && world.x <= bounds.right
-          && world.y >= bounds.top
-          && world.y <= bounds.bottom;
-      }) ?? null;
+    return this.getTopGraphLensAtWorldPoint(world.x, world.y);
   }
 
   private findGraphLensMoveHandleAtScreenPosition(
@@ -8118,16 +8122,58 @@ export class GraphEngine {
     return action ? { container, action } : null;
   }
 
+  private getGraphLensStackPath(container: EmbeddedGraphContainerState): EmbeddedGraphContainerState[] {
+    const chain: EmbeddedGraphContainerState[] = [];
+    const seen = new Set<string>();
+    let current: EmbeddedGraphContainerState | undefined = container;
+    while (current && !seen.has(current.key)) {
+      seen.add(current.key);
+      chain.unshift(current);
+      const parentKey = this.nodeMap.get(current.origin)?.embeddedInstanceId;
+      current = parentKey ? this.embeddedGraphContainers.get(parentKey) : undefined;
+    }
+    return chain;
+  }
+
+  private focusGraphLens(container: EmbeddedGraphContainerState): void {
+    this.graphLensFocusOrder ??= new Map();
+    this.graphLensFocusSequence = (this.graphLensFocusSequence ?? 0) + 1;
+    for (const item of this.getGraphLensStackPath(container)) {
+      this.graphLensFocusOrder.set(item.key, this.graphLensFocusSequence);
+    }
+    this.badgesDirty = true;
+    this.requestRender();
+  }
+
+  /** One foreground order for frames, content, occlusion, and pointer input. */
   private getGraphLensesTopFirst(): EmbeddedGraphContainerState[] {
-    return Array.from(this.embeddedGraphContainers.values())
-      .sort((a, b) => {
-        const ancestryDelta = b.ancestry.length - a.ancestry.length;
-        if (ancestryDelta !== 0) return ancestryDelta;
-        const aBounds = this.getGraphLensBounds(a);
-        const bBounds = this.getGraphLensBounds(b);
-        return ((aBounds.right - aBounds.left) * (aBounds.bottom - aBounds.top))
-          - ((bBounds.right - bBounds.left) * (bBounds.bottom - bBounds.top));
-      });
+    const containers = Array.from(this.embeddedGraphContainers?.values() ?? []);
+    const paths = new Map(containers.map((container) => [container.key, this.getGraphLensStackPath(container)]));
+    return containers.sort((a, b) => {
+      const first = paths.get(a.key)!;
+      const second = paths.get(b.key)!;
+      let index = 0;
+      while (index < first.length && index < second.length && first[index].key === second[index].key) index++;
+      // A child always stays above its parent, even when the parent is activated.
+      if (index === first.length || index === second.length) return second.length - first.length;
+      const branchA = first[index];
+      const branchB = second[index];
+      const focusDelta = (this.graphLensFocusOrder?.get(branchB.key) ?? 0) - (this.graphLensFocusOrder?.get(branchA.key) ?? 0);
+      if (focusDelta) return focusDelta;
+      const ancestryDelta = branchB.ancestry.length - branchA.ancestry.length;
+      if (ancestryDelta) return ancestryDelta;
+      const boundsA = this.getGraphLensBounds(branchA);
+      const boundsB = this.getGraphLensBounds(branchB);
+      return (boundsA.right - boundsA.left) * (boundsA.bottom - boundsA.top)
+        - (boundsB.right - boundsB.left) * (boundsB.bottom - boundsB.top);
+    });
+  }
+
+  private getGraphNodesInPaintOrder(): GraphNode[] {
+    const lenses = this.getGraphLensesTopFirst().reverse();
+    if (!lenses.length) return this.nodes;
+    const ranks = new Map(lenses.map((container, index) => [container.key, index]));
+    return [...this.nodes].sort((a, b) => (ranks.get(a.embeddedInstanceId ?? "") ?? -1) - (ranks.get(b.embeddedInstanceId ?? "") ?? -1));
   }
 
   private getTopGraphLensAtWorldPoint(x: number, y: number): EmbeddedGraphContainerState | null {
@@ -8539,8 +8585,8 @@ export class GraphEngine {
       }
     }
 
-    // Nodes
-    for (const n of this.nodes) {
+    // Nodes: draw foreground-lens content after the layers behind it.
+    for (const n of this.getGraphNodesInPaintOrder()) {
       const nodeClipContainer = this.getEmbeddedClipContainerForNode(n);
       const renderedCenter = this.getRenderedNodeCenter(n);
       const nodeLensCoverAlpha = this.getGraphLensCoverAlphaAtPoint(renderedCenter.x, renderedCenter.y, nodeClipContainer);
@@ -8737,6 +8783,7 @@ export class GraphEngine {
     const worldY = (mouseY / this.camera.zoom) - this.camera.y;
     const embeddedContainer = this.findEmbeddedContainerAtScreenPosition(e.clientX, e.clientY);
     if (embeddedContainer) {
+      this.focusGraphLens(embeddedContainer);
       const before = this.getEmbeddedContainerRenderTransform(embeddedContainer);
       const rawX = before.sourceCenterX + ((worldX - before.targetCenterX) / before.scale);
       const rawY = before.sourceCenterY + ((worldY - before.targetCenterY) / before.scale);
@@ -9108,12 +9155,7 @@ export class GraphEngine {
   }
 
   private drawGraphLenses(): void {
-    const containers = Array.from(this.embeddedGraphContainers.values())
-      .sort((a, b) => {
-        const ancestryDelta = a.ancestry.length - b.ancestry.length;
-        if (ancestryDelta !== 0) return ancestryDelta;
-        return (b.right - b.left) * (b.bottom - b.top) - (a.right - a.left) * (a.bottom - a.top);
-      });
+    const containers = this.getGraphLensesTopFirst().reverse();
     for (const container of containers) {
       const bounds = this.getGraphLensBounds(container);
       const x = (bounds.left + this.camera.x) * this.camera.zoom;
@@ -9541,6 +9583,7 @@ export class GraphEngine {
 
     const lensButtonTarget = this.findGraphLensButtonAtScreenPosition(e.clientX, e.clientY);
     if (lensButtonTarget) {
+      this.focusGraphLens(lensButtonTarget.container);
       if (lensButtonTarget.action === "close") {
         this.closeEmbeddedGraph(lensButtonTarget.container.origin, lensButtonTarget.container.graphPath);
       } else if (lensButtonTarget.action === "maximize") {
@@ -9557,6 +9600,7 @@ export class GraphEngine {
 
     const lensResizeTarget = this.findGraphLensResizeTargetAtScreenPosition(e.clientX, e.clientY);
     if (lensResizeTarget) {
+      this.focusGraphLens(lensResizeTarget.container);
       this.resizingGraphLens = lensResizeTarget.container;
       const transform = this.getEmbeddedContainerRenderTransform(lensResizeTarget.container);
       const bounds = this.getGraphLensBounds(lensResizeTarget.container);
@@ -9585,6 +9629,7 @@ export class GraphEngine {
 
     const lensMoveTarget = this.findGraphLensMoveHandleAtScreenPosition(e.clientX, e.clientY);
     if (lensMoveTarget) {
+      this.focusGraphLens(lensMoveTarget);
       this.movingGraphLens = lensMoveTarget;
       this.lensMoveStart = {
         x: Number.isFinite(lensMoveTarget.lensOffsetX) ? lensMoveTarget.lensOffsetX : 0,
@@ -9605,6 +9650,7 @@ export class GraphEngine {
 
     const embeddedContainer = this.findEmbeddedContainerAtScreenPosition(e.clientX, e.clientY);
     if (embeddedContainer) {
+      this.focusGraphLens(embeddedContainer);
       const embeddedClickedNode = this.findNodeAtScreenPosition(e.clientX, e.clientY, new Set(), { ignoreLockedEmbeddedContainers: true });
       if (embeddedClickedNode?.embeddedInstanceId === embeddedContainer.key) {
         this.pressedNode = embeddedClickedNode;
@@ -10889,11 +10935,7 @@ export class GraphEngine {
     const directNode = this.findActualNodeAtScreenPosition(clientX, clientY, excludeNodeIds);
     if (directNode) return directNode;
     const world = this.clientToWorld(clientX, clientY);
-    const containers = Array.from(this.embeddedGraphContainers.values())
-      .sort((a, b) =>
-        ((a.right - a.left) * (a.bottom - a.top))
-        - ((b.right - b.left) * (b.bottom - b.top))
-      );
+    const containers = this.getGraphLensesTopFirst();
     for (const container of containers) {
       if (excludeNodeIds.has(container.origin)) continue;
       if (options?.ignoreLockedEmbeddedContainers && container.interactionLocked) continue;
@@ -10922,8 +10964,13 @@ export class GraphEngine {
     let bestNode: GraphNode | null = null;
     let bestDistSq = Number.POSITIVE_INFINITY;
 
+    const world = { x: mouseX / this.camera.zoom - this.camera.x, y: mouseY / this.camera.zoom - this.camera.y };
+    const topLens = this.getTopGraphLensAtWorldPoint(world.x, world.y);
+    if (topLens && this.isWorldPointInGraphLensTitleBar(world.x, world.y, this.getGraphLensBounds(topLens))) return null;
     for (const node of this.nodes) {
       if (excludeNodeIds.has(node.id)) continue;
+      if (topLens && node.embeddedInstanceId !== topLens.key) continue;
+      if (!this.isRenderedPointInsideNodeLens(node, world.x, world.y)) continue;
       const renderedCenter = this.getRenderedNodeCenter(node);
       const sx = (renderedCenter.x + this.camera.x) * this.camera.zoom;
       const sy = (renderedCenter.y + this.camera.y) * this.camera.zoom;
@@ -10967,7 +11014,7 @@ export class GraphEngine {
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "top";
 
-    for (const node of this.nodes) {
+    for (const node of this.getGraphNodesInPaintOrder()) {
       if (!node.label) continue;
       if (!shouldDrawUnselectedLabels && !this.graphStore.isNodeSelected(node.id)) continue;
 

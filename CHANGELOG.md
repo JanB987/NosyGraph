@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.15 - 2026-10-30
+
+### Fixed
+
+- Renaming or moving a linked note updates links in explicitly configured and
+  default root-node properties, including loaded graph-note lenses.
+- Preserve wiki aliases, heading fragments, Markdown labels, and scalar/list
+  values; match short and relative links in the graph note's source context.
+- Update graph-note frontmatter and saved runtime blocks with atomic vault
+  operations so graph-state saves preserve concurrent automatic link updates.
+- Skip unchanged graph-state writes to avoid unnecessary modify events.
+- Bring the most recently opened or used Lens to the foreground. Use the same
+  hierarchy-aware order for Lens frames, nodes, labels, coverage, and pointer
+  targets so background lenses cannot hide or intercept its nodes.
+- Preserve foreground order during background Lens definition refreshes and
+  same-graph reloads.
+
 ## 0.2.14 - 2026-10-27
 
 ### Fixed

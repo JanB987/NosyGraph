@@ -39,6 +39,7 @@ import type { GraphEvent } from "./GraphEvents";
 import { GraphModel, type GraphEdge } from "./GraphModel";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE, resolveWikiLinkArray } from "./linkResolver";
 import { StateManager } from "./StateManager";
+import { renameRootLinkValue } from "./GraphRootLinkRename";
 import { normalizeGraphGroupingRules } from "./GraphGroupingRules";
 import {
   DEFAULT_GRAPH_PROPERTY_KEYS,
@@ -132,6 +133,7 @@ export class BasesGraphView extends FileView {
   private discoveredProperties: string[] = [];
   private sourceLinkProperties: string[] = [];
   private activeRootNodeProperties: string[] = [];
+  private graphLensFocusOwnerPath: string | null = null;
   private currentGraphFiles: TFile[] = [];
   private groupRegistry: Map<string, O3GraphGroup> = new Map();
   private activeGroups: O3GraphGroup[] = [];
@@ -2353,7 +2355,8 @@ export class BasesGraphView extends FileView {
     this.isHydratingGraphRuntime = true;
     let hydrationSucceeded = false;
     try {
-      this.engine.clearEmbeddedGraphRuntime();
+      this.engine.clearEmbeddedGraphRuntime({ preserveFocus: this.graphLensFocusOwnerPath === this.file?.path });
+      this.graphLensFocusOwnerPath = this.file?.path ?? null;
       await this.buildGraph();
       await this.restoreEmbeddedGraphExpansions();
 
@@ -4304,57 +4307,44 @@ export class BasesGraphView extends FileView {
 
   private async updateGraphRootNodesForRenamedPath(graphFile: TFile, oldPath: string, newFile: TFile): Promise<boolean> {
     try {
-      const content = await this.app.vault.read(graphFile);
-      const parsed = this.parseFrontmatter(content);
-      const rawRootNodes = this.normalizeFrontmatterStringArray(
-        readFrontmatterPropertyByKey(parsed.frontmatter, this.graphPropertyKeys, "rootNodes")
-      );
-      if (rawRootNodes.length === 0) return false;
       let changed = false;
-      const nextRootNodes = rawRootNodes.map((value) => {
-        if (!this.rootNodeValueReferencesPath(value, oldPath)) return value;
-        changed = true;
-        return this.toRootNodeWikiLink(newFile);
+      await this.app.vault.process(graphFile, (content) => {
+        const parsed = this.parseFrontmatter(content);
+        const configured = hasFrontmatterProperty(parsed.frontmatter, this.graphPropertyKeys, "rootNodeProperties")
+          ? this.collectRootNodePropertyNames(readFrontmatterPropertyByKey(parsed.frontmatter, this.graphPropertyKeys, "rootNodeProperties"))
+          : this.defaultRootNodeProperties;
+        const properties = new Set([
+          this.graphPropertyKeys.rootNodes,
+          DEFAULT_GRAPH_PROPERTY_KEYS.rootNodes,
+          ...configured
+        ].map((property) => String(property ?? "").trim().toLowerCase()).filter((property) => property && property !== NONE_LINK_TYPE.toLowerCase()));
+        for (const [property, value] of Object.entries(parsed.frontmatter)) {
+          if (!properties.has(property.trim().toLowerCase())) continue;
+          const next = renameRootLinkValue(value, {
+            oldPath, newPath: newFile.path, sourcePath: graphFile.path,
+            resolveLinkpath: (linkpath, sourcePath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null
+          });
+          if (JSON.stringify(next) === JSON.stringify(value)) continue;
+          parsed.frontmatter[property] = next;
+          changed = true;
+        }
+        if (!changed) return content;
+        if (graphFile.path === this.file?.path) {
+          this.suppressGraphFileReloadUntil = Date.now() + 1500;
+        } else {
+          this.suppressEmbeddedGraphReloadUntil.set(graphFile.path, Date.now() + 1500);
+        }
+        return this.serializeFrontmatter(parsed.frontmatter, parsed.body, {
+          hasFrontmatter: parsed.hasFrontmatter, eol: parsed.eol
+        });
       });
-      if (!changed) return false;
-      writeFrontmatterProperty(parsed.frontmatter, this.graphPropertyKeys, "rootNodes", nextRootNodes);
-      const updated = this.serializeFrontmatter(parsed.frontmatter, parsed.body, {
-        hasFrontmatter: parsed.hasFrontmatter,
-        eol: parsed.eol
-      });
-      if (updated === content) return false;
-      if (graphFile.path === this.file?.path) {
-        this.suppressGraphFileReloadUntil = Date.now() + 1500;
-      } else {
-        this.suppressEmbeddedGraphReloadUntil.set(graphFile.path, Date.now() + 1500);
-      }
-      await this.app.vault.modify(graphFile, updated);
-      return true;
+      return changed;
     } catch (error) {
       console.error("[GraphView] Failed to update graph root node path after rename:", {
-        graphFile: graphFile.path,
-        oldPath,
-        newPath: newFile.path,
-        error
+        graphFile: graphFile.path, oldPath, newPath: newFile.path, error
       });
       return false;
     }
-  }
-
-  private rootNodeValueReferencesPath(valueRaw: string, oldPathRaw: string): boolean {
-    const oldPath = String(oldPathRaw ?? "").trim().replace(/\\/g, "/");
-    if (!oldPath) return false;
-    const oldLinkpath = oldPath.replace(/\.md$/i, "");
-    const raw = String(valueRaw ?? "").trim().replace(/\\/g, "/");
-    if (!raw) return false;
-    const normalized = raw
-      .replace(/^\[\[/, "")
-      .replace(/\]\]$/, "")
-      .split("|")[0]
-      .split("#")[0]
-      .trim()
-      .replace(/\.md$/i, "");
-    return normalized === oldLinkpath || normalized === oldPath;
   }
 
   private moveMapEntry<T>(map: Map<string, T>, oldPath: string, newPath: string): void {

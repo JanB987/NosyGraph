@@ -63,6 +63,11 @@ describe("Lens open/close persistence ordering", () => {
     const modify = vi.fn(async (_file: TFile, content: string) => { markdown = content; });
     const app = { vault: {
       getAbstractFileByPath: (path: string) => path === graphFile.path ? graphFile : null,
+      process: async (file: TFile, transform: (value: string) => string) => {
+        const next = transform(markdown);
+        if (next !== markdown) await modify(file, next);
+        return markdown;
+      },
       read: async () => markdown, modify
     } } as unknown as App;
     const store = new O3GraphDocumentStore(app, graphFile, {});
