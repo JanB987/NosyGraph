@@ -39,7 +39,7 @@ export function resolveWikiLink(app: App, linkText: string): TFile | null {
  * Parses an array of quoted wiki links from YAML frontmatter.
  * Returns array of resolved TFiles.
  */
-export function resolveWikiLinkArray(app: App, values: unknown): TFile[] {
+export function resolveWikiLinkArray(app: App, values: unknown, sourcePath = ""): TFile[] {
   if (!values) return [];
 
   const rawValues: string[] = [];
@@ -69,7 +69,7 @@ export function resolveWikiLinkArray(app: App, values: unknown): TFile[] {
     const linkPath = decodeLinkPath((match?.[1] ?? markdownMatch?.[1] ?? raw)?.trim());
     if (!linkPath) continue;
 
-    const file = app.metadataCache.getFirstLinkpathDest(linkPath, "");
+    const file = app.metadataCache.getFirstLinkpathDest(linkPath.split("#")[0], sourcePath);
     if (!file) continue;
 
     if (seen.has(file.path)) continue;

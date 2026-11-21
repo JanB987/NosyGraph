@@ -43,6 +43,7 @@ The flow above is the guarded store-mode composition. The live Obsidian path sti
 
 - [GraphView](GraphView.md) owns the Obsidian view lifecycle.
 - [GraphController](GraphController.md) executes user and host commands.
+- [Graph Tab Markdown mode](GraphTabMarkdownModePlan.md) describes native editor switching, source arbitration, and exact tab binding.
 - [GraphStore](GraphStore.md) is the single owner of runtime graph state.
 - [GraphStoreInitializer](GraphStoreInitializer.md) bootstraps store mode from one validated host-adapted snapshot.
 - [GraphSceneStore](GraphSceneStore.md) owns detached lens, group, and container records through explicit lifecycle commands.

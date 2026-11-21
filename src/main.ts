@@ -1,11 +1,25 @@
+import { ObsidianGraphNodeCutHost, isGraphNodeCutHolder, type GraphCutChange } from "./ObsidianGraphNodeCutHost";
+import type { GraphNodeCutSelection } from "./graph-application/GraphNodeCutService";
+import { resolveEffectiveRootProperties } from "./GraphRootPropertyResolver";
+import { reconcileRootSnapshots } from "./GraphRootSnapshotReconciliation";
+import { resolveVisibleRelationshipDefinitions, resolveVisibleRelationshipSelector } from "./graph-application/GraphRelationshipEdgePolicy";
+import { isBadgeMembershipWriteActive } from "./GraphDocumentMutationQueue";
+import { resolveGraphPropertyFiles } from "./ObsidianGraphNoteLinkPaste";
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { App, MarkdownRenderChild, Notice, parseYaml, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, type Editor, type MarkdownFileInfo, type MenuItem } from "obsidian";
 import { BASES_GRAPH_VIEW, BasesGraphView } from "./GraphView";
+import { GRAPH_TAB_MARKDOWN_VIEW, GraphTabMarkdownView } from "./GraphTabMarkdownView";
+import { readGraphTabPanelWidths, renameGraphTabPanelWidths } from "./graph-application/GraphTabPanelWidths";
+import { ObsidianGraphTabController } from "./ObsidianGraphTabController";
+import { isObsidianGraphCapable } from "./ObsidianGraphCapability";
 import { GraphEngine, type EmbeddedGraphDefinition, type GraphLineStyle } from "./GraphEngine";
 import { O3GraphState, type O3GraphRuntimeNodeSnapshot, type O3GraphRuntimeState } from "./O3GraphState";
 import { O3GraphStateStore } from "./O3GraphStateStore";
 import { O3LinkType } from "./O3LinkType";
-import { ObsidianGraphLinkInputHandler } from "./ObsidianGraphLinkInputHandler";
+import { requestGraphBadgeInput, type GraphBadgeInputIntegration } from "./ObsidianGraphBadgeInputHost";
+import { GraphNodeClipboardState } from "./GraphNodeClipboard";
+import type { GraphBadgeBatchCommitted, GraphBadgeMembershipResult } from "./graph-application/GraphLinkMutation";
+import { BadgeMembershipPreference, BADGE_MEMBERSHIP_DESCRIPTION, BADGE_MEMBERSHIP_LABEL, normalizeBadgeMembershipPreference } from "./graph-application/BadgeMembershipPreference";
 import { ObsidianGraphLinkMutationHandler } from "./ObsidianGraphLinkMutationHandler";
 import { ObsidianGraphNodeOpenHandler } from "./ObsidianGraphNodeOpenHandler";
 import { ObsidianGraphRootInputHandler } from "./ObsidianGraphRootInputHandler";
@@ -15,6 +29,7 @@ import { ObsidianTemplaterAdapter } from "./ObsidianTemplaterAdapter";
 import { ConfirmTemplaterBatchModal } from "./ConfirmTemplaterBatchModal";
 import { TemplaterBatchService, type TemplaterBatchTarget } from "./TemplaterBatchService";
 import { setStyle } from "./domStyle";
+import { loadGraphLocalStorage, requestStyleSettingsReparse } from "./ObsidianCompatibility";
 import {
   DEFAULT_GRAPH_PROPERTY_KEYS,
   type GraphPropertyKeys,
@@ -41,6 +56,31 @@ import {
 } from "./NoteTypePropertyKeys";
 import { NONE_LINK_TYPE } from "./linkResolver";
 
+function splitSettingListTextPreservingWikiLinks(textRaw: string): string[] {
+  const text = String(textRaw ?? "").trim();
+  if (!text) return [];
+  const out: string[] = [];
+  const wikiLinkPattern = /\[\[[^\]]+\]\]/g;
+  let cursor = 0;
+  const addPlain = (plain: string): void => {
+    for (const part of plain.split(/[\s,;]+/).map((value) => value.trim()).filter(Boolean)) {
+      out.push(part);
+    }
+  };
+  for (const match of text.matchAll(wikiLinkPattern)) {
+    const index = match.index ?? 0;
+    addPlain(text.slice(cursor, index));
+    out.push(match[0]);
+    cursor = index + match[0].length;
+  }
+  addPlain(text.slice(cursor));
+  return out;
+}
+
+function normalizeFolderPath(raw: unknown): string {
+  return String(raw ?? "").trim().replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
 interface BasesGraphPluginSettings {
   defaultNodeDragHoldDurationMs: number;
   defaultNodeLimit: number;
@@ -49,7 +89,10 @@ interface BasesGraphPluginSettings {
   defaultActiveGroups: string[];
   defaultVisibleLinkTypes: string[];
   defaultAutoExpandDroppedLinkTypes: boolean;
+  badgeInputAddToMembership: boolean;
   defaultBadgeFarViewThreshold: number;
+  graphNoteTemplatePath: string;
+  graphTabPanelWidths: Record<string, number>;
   linkTypeFolder: string;
   rootNodeRingColor: string;
   activeNodeRingColor: string;
@@ -76,7 +119,10 @@ const DEFAULT_SETTINGS: BasesGraphPluginSettings = {
   defaultActiveGroups: [],
   defaultVisibleLinkTypes: [],
   defaultAutoExpandDroppedLinkTypes: true,
+  badgeInputAddToMembership: true,
   defaultBadgeFarViewThreshold: 0.55,
+  graphNoteTemplatePath: "",
+  graphTabPanelWidths: {},
   linkTypeFolder: "O3/LinkTypes",
   rootNodeRingColor: "#6eaaff",
   activeNodeRingColor: "#ff6b6b",
@@ -97,12 +143,23 @@ const DEFAULT_SETTINGS: BasesGraphPluginSettings = {
 
 export default class BasesGraphPlugin extends Plugin {
   settings: BasesGraphPluginSettings = { ...DEFAULT_SETTINGS };
+  private settingsWriteQueue: Promise<void> = Promise.resolve();
+  readonly badgeMembershipPreference = new BadgeMembershipPreference(
+    () => this.settings.badgeInputAddToMembership,
+    (value) => this.queueSettingsWrite(value)
+  );
   private markdownGraphSwitchActions = new Map<WorkspaceLeaf, HTMLElement>();
-  private copiedGraphNodePaths: string[] = [];
-  private copiedGraphNodeClipboardText = "";
+  private graphNodeClipboard = new GraphNodeClipboardState();
+  private renderedGraphEmbeds = new Set<O3GraphEmbedRenderChild>();
+  private nodeCutHost = new ObsidianGraphNodeCutHost(
+    this.app,
+    () => this.settings,
+    () => [...this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW)
+      .flatMap(leaf => leaf.view instanceof BasesGraphView ? [leaf.view] : []), ...this.renderedGraphEmbeds],
+    (paths, text) => this.graphNodeClipboard.remember(paths, text)
+  );
   private lastGraphCapableFilePath = "";
-  private graphTabFollowSequence = 0;
-  private graphTabSyncInProgress = false;
+  private graphTabs = new ObsidianGraphTabController(this.app, file => this.isGraphCapableFile(file));
   private lastGraphTabSourceLeaf: WorkspaceLeaf | null = null;
 
   async onload() {
@@ -138,11 +195,22 @@ export default class BasesGraphPlugin extends Plugin {
           this.settings.noteTypeIdentifiers,
           this.settings.linkTypePropertyKeys,
           this.settings.groupPropertyKeys,
-          (paths, clipboardText) => this.rememberCopiedGraphNodeLinks(paths, clipboardText),
+          (paths, clipboardText) => this.graphNodeClipboard.remember(paths, clipboardText),
           (graphLeaf, path) => this.openGraphTabNodeInMarkdown(graphLeaf, path),
-          this.settings.defaultBadgeFarViewThreshold
+          this.settings.defaultBadgeFarViewThreshold,
+          this.getBadgeInputIntegration(),
+          this.nodeCutHost,
+          this.graphTabs
         )
     );
+    this.registerView(GRAPH_TAB_MARKDOWN_VIEW, leaf => new GraphTabMarkdownView(leaf, this.graphTabs, {
+      read: path => {
+        const width = this.settings.graphTabPanelWidths[path];
+        return typeof width === "number" ? width : undefined;
+      },
+      save: (path, width) => this.saveGraphTabPanelWidth(path, width)
+    }));
+    this.registerDomEvent(document, "focusin", () => this.nodeCutHost.trackFocus(document.activeElement));
     this.registerEvent(this.app.workspace.on("editor-paste", (event, editor, info) => {
       if (event.defaultPrevented) return;
       if (this.handleGraphNodeLinksFrontmatterPaste(event, editor, info)) {
@@ -150,6 +218,8 @@ export default class BasesGraphPlugin extends Plugin {
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      this.graphTabs.rename(oldPath, file.path);
+      void this.rekeyFileSettings(oldPath, file.path);
       if (!(file instanceof TFile)) return;
       void this.reconcileRenamedLinkTypeReference(file, oldPath);
     }));
@@ -240,14 +310,24 @@ export default class BasesGraphPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "cut-selected-graph-nodes-from-focused-graph",
+      name: "Cut selected graph nodes",
+      checkCallback: (checking: boolean) => {
+        const surface = this.nodeCutHost.focusedSurface(document.activeElement);
+        if (!surface) return false;
+        if (!this.nodeCutHost.canCut(surface)) return false;
+        if (!checking) void this.nodeCutHost.cut(surface);
+        return true;
+      }
+    });
+
+    this.addCommand({
       id: "copy-selected-graph-node-links-from-focused-graph",
       name: "Copy selected graph node links",
       checkCallback: (checking: boolean) => {
-        const view = this.findFocusedGraphView();
-        if (!view) return false;
-        if (!checking) {
-          void view.copySelectedNodeLinksToClipboard();
-        }
+        const surface = this.nodeCutHost.focusedSurface(document.activeElement);
+        if (!surface) return false;
+        if (!checking) void surface.copySelectedNodeLinksToClipboard();
         return true;
       }
     });
@@ -318,6 +398,10 @@ export default class BasesGraphPlugin extends Plugin {
       name: "Toggle graph/markdown view (current tab)",
       callback: async () => {
         const leaf = this.app.workspace.getMostRecentLeaf();
+        if (leaf && this.isGraphTabLeaf(leaf)) {
+          this.graphTabs.toggle(leaf);
+          return;
+        }
         const file = this.resolveActiveFileForLeaf(leaf);
         if (!leaf || !file) {
           new Notice("No active file to toggle view.");
@@ -334,17 +418,23 @@ export default class BasesGraphPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
       this.rememberGraphTabSourceLeaf(leaf ?? null);
       this.syncMarkdownGraphSwitchAction(leaf ?? null);
-      void this.followActiveLeafInGraphTabs(leaf ?? null);
+      this.graphTabs.observeActiveNote(leaf ?? null);
     }));
 
-    this.registerEvent(this.app.workspace.on("file-open", () => {
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
       const leaf = this.app.workspace.getMostRecentLeaf();
       this.rememberGraphTabSourceLeaf(leaf);
       this.syncMarkdownGraphSwitchAction(leaf);
-      void this.followActiveLeafInGraphTabs(leaf);
+      if (file) this.graphTabs.observeActiveNote(leaf, file.path);
+      else this.graphTabs.refresh();
     }));
+    this.registerEvent(this.app.workspace.on("layout-change", () => this.graphTabs.refresh()));
+    this.registerEvent(this.app.vault.on("delete", () => this.graphTabs.refresh()));
+    this.registerEvent(this.app.metadataCache.on("resolved", () => this.graphTabs.refresh()));
+    this.app.workspace.onLayoutReady(() => this.graphTabs.refresh());
 
     this.registerEvent(this.app.metadataCache.on("changed", (file) => {
+      this.graphTabs.refresh();
       const leaf = this.app.workspace.getMostRecentLeaf();
       if (!leaf || !(file instanceof TFile)) return;
       const leafFile = this.resolveLeafFile(leaf);
@@ -355,6 +445,7 @@ export default class BasesGraphPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file, _source, sourceLeaf) => {
       if (!(file instanceof TFile)) return;
       if (file.extension !== "md") return;
+      if (sourceLeaf && this.isGraphTabLeaf(sourceLeaf)) return;
       menu.addItem((item: MenuItem) => {
         item
           .setTitle("Open as NosyGraph")
@@ -384,21 +475,18 @@ export default class BasesGraphPlugin extends Plugin {
       if (embedContent.dataset.o3GraphEmbedMounted === "1") return;
       embedContent.dataset.o3GraphEmbedMounted = "1";
 
-      const child = new O3GraphEmbedRenderChild(
-        embedContent,
-        this.app,
-        sourceFile,
-        this.settings
-      );
-      ctx.addChild(child);
+      ctx.addChild(this.createRenderedGraphEmbed(embedContent, sourceFile));
     });
   }
 
-  private rememberCopiedGraphNodeLinks(paths: string[], clipboardText: string): void {
-    this.copiedGraphNodePaths = Array.from(new Set(
-      (paths ?? []).map((path) => String(path ?? "").trim()).filter(Boolean)
-    ));
-    this.copiedGraphNodeClipboardText = String(clipboardText ?? "");
+  private createRenderedGraphEmbed(container: HTMLElement, sourceFile: TFile): O3GraphEmbedRenderChild {
+    const child = new O3GraphEmbedRenderChild(
+      container, this.app, sourceFile, this.settings,
+      this.getBadgeInputIntegration(), this.nodeCutHost, this.graphTabs
+    );
+    this.renderedGraphEmbeds.add(child);
+    child.register(() => { this.renderedGraphEmbeds.delete(child); });
+    return child;
   }
 
   private handleGraphNodeLinksFrontmatterPaste(
@@ -406,13 +494,13 @@ export default class BasesGraphPlugin extends Plugin {
     editor: Editor,
     info: MarkdownFileInfo
   ): boolean {
-    if (event.defaultPrevented || this.copiedGraphNodePaths.length === 0) return false;
-    const pastedText = event.clipboardData?.getData("text/plain") ?? "";
-    if (!pastedText || pastedText !== this.copiedGraphNodeClipboardText) return false;
+    if (event.defaultPrevented) return false;
+    const paths = this.graphNodeClipboard.match(event.clipboardData?.getData("text/plain") ?? "");
+    if (!paths) return false;
     if (!this.isEditorSelectionInsideFrontmatter(editor)) return false;
 
     const destinationPath = info.file?.path ?? "";
-    const yamlLinks = this.copiedGraphNodePaths.map((path) => {
+    const yamlLinks = paths.map((path) => {
       const file = this.app.vault.getAbstractFileByPath(path);
       const link = file instanceof TFile
         ? this.app.fileManager.generateMarkdownLink(file, destinationPath)
@@ -426,9 +514,9 @@ export default class BasesGraphPlugin extends Plugin {
   }
 
   private handleGraphNodeLinksPropertiesPaste(event: ClipboardEvent): void {
-    if (event.defaultPrevented || this.copiedGraphNodePaths.length === 0) return;
-    const pastedText = event.clipboardData?.getData("text/plain") ?? "";
-    if (!pastedText || pastedText !== this.copiedGraphNodeClipboardText) return;
+    if (event.defaultPrevented) return;
+    const paths = this.graphNodeClipboard.match(event.clipboardData?.getData("text/plain") ?? "");
+    if (!paths) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const propertyElement = target.closest<HTMLElement>(".metadata-property[data-property-key]");
@@ -437,7 +525,7 @@ export default class BasesGraphPlugin extends Plugin {
     const destinationFile = this.app.workspace.getActiveFile();
     if (!(destinationFile instanceof TFile)) return;
 
-    const sources = this.copiedGraphNodePaths.map((path) => ({ nodeId: path, path }));
+    const sources = paths.map((path) => ({ nodeId: path, path }));
     if (target.instanceOf(HTMLElement)) target.blur();
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -467,6 +555,33 @@ export default class BasesGraphPlugin extends Plugin {
         view.refreshAfterExternalFrontmatterMutation(filePath);
       }
     }
+  }
+
+  private refreshAfterBadgeClipboardBatch: GraphBadgeBatchCommitted = (write, result) => {
+    const views = this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW).map((leaf) => leaf.view as BasesGraphView);
+    for (const host of [...views, ...this.renderedGraphEmbeds]) {
+      try {
+        host.refreshAfterBadgeClipboardBatch(write, result);
+      } catch (error) {
+        console.error("[NosyGraph] Failed to refresh a graph after adding badge links:", error);
+      }
+    }
+  };
+
+  private getBadgeInputIntegration(): GraphBadgeInputIntegration {
+    return {
+      matchClipboard: this.graphNodeClipboard.match,
+      preference: this.badgeMembershipPreference,
+      onBatchCommitted: this.refreshAfterBadgeClipboardBatch,
+      onMembershipCommitted: (result) => {
+        const views = this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW).map((leaf) => leaf.view as BasesGraphView);
+        for (const host of [...views, ...this.renderedGraphEmbeds]) {
+          void host.refreshAfterBadgeMembership(result).catch((error) => {
+            console.error("[NosyGraph] Failed to refresh graph membership:", error);
+          });
+        }
+      }
+    };
   }
 
   private formatFrontmatterLinkPaste(editor: Editor, yamlLinks: string[]): string {
@@ -553,7 +668,7 @@ export default class BasesGraphPlugin extends Plugin {
   }
 
   private triggerStyleSettingsReparse(): void {
-    const trigger = () => this.app.workspace.trigger("parse-style-settings");
+    const trigger = () => requestStyleSettingsReparse(this.app.workspace);
     this.app.workspace.onLayoutReady(() => {
       trigger();
       window.setTimeout(trigger, 250);
@@ -662,6 +777,7 @@ export default class BasesGraphPlugin extends Plugin {
   }
 
   onunload(): void {
+    this.graphTabs.dispose();
     for (const action of this.markdownGraphSwitchActions.values()) {
       action.remove();
     }
@@ -687,11 +803,14 @@ export default class BasesGraphPlugin extends Plugin {
     this.settings.defaultActiveGroups = this.normalizeSettingStringArray(merged.defaultActiveGroups);
     this.settings.defaultVisibleLinkTypes = this.normalizeVisibleLinkTypeSettingArray(merged.defaultVisibleLinkTypes);
     this.settings.defaultAutoExpandDroppedLinkTypes = merged.defaultAutoExpandDroppedLinkTypes !== false;
+    this.settings.badgeInputAddToMembership = normalizeBadgeMembershipPreference(merged.badgeInputAddToMembership);
     const defaultBadgeFarViewThreshold = Number(merged.defaultBadgeFarViewThreshold);
     this.settings.defaultBadgeFarViewThreshold = Number.isFinite(defaultBadgeFarViewThreshold)
       ? Math.max(0.1, Math.min(5, defaultBadgeFarViewThreshold))
       : DEFAULT_SETTINGS.defaultBadgeFarViewThreshold;
-    const linkTypeFolder = this.normalizeFolderPath(merged.linkTypeFolder);
+    this.settings.graphNoteTemplatePath = normalizeGraphNoteTemplatePath(merged.graphNoteTemplatePath);
+    this.settings.graphTabPanelWidths = readGraphTabPanelWidths(merged.graphTabPanelWidths);
+    const linkTypeFolder = normalizeFolderPath(merged.linkTypeFolder);
     this.settings.linkTypeFolder = linkTypeFolder || DEFAULT_SETTINGS.linkTypeFolder;
     const rootNodeRingColor = String(merged.rootNodeRingColor ?? "").trim();
     this.settings.rootNodeRingColor = rootNodeRingColor || DEFAULT_SETTINGS.rootNodeRingColor;
@@ -731,7 +850,33 @@ export default class BasesGraphPlugin extends Plugin {
   }
 
   async savePluginSettings() {
-    await this.saveData(this.settings);
+    await this.queueSettingsWrite();
+  }
+
+  private async saveGraphTabPanelWidth(path: string, width: number): Promise<void> {
+    this.settings.graphTabPanelWidths = { ...this.settings.graphTabPanelWidths, [path]: width };
+    await this.savePluginSettings();
+  }
+
+  private async rekeyFileSettings(oldPath: string, newPath: string): Promise<void> {
+    const previous = this.settings.graphTabPanelWidths;
+    const widths = renameGraphTabPanelWidths(previous, oldPath, newPath);
+    const template = this.settings.graphNoteTemplatePath;
+    const templateMoved = template === oldPath || template.startsWith(`${oldPath}/`);
+    if (!templateMoved && widths === previous) return;
+    if (templateMoved) this.settings.graphNoteTemplatePath = newPath + template.slice(oldPath.length);
+    this.settings.graphTabPanelWidths = widths;
+    await this.savePluginSettings();
+  }
+
+  private queueSettingsWrite(membership?: boolean): Promise<void> {
+    const pending = this.settingsWriteQueue.catch(() => undefined).then(async () => {
+      const value = membership ?? this.settings.badgeInputAddToMembership;
+      await this.saveData({ ...this.settings, badgeInputAddToMembership: value });
+      this.settings.badgeInputAddToMembership = value;
+    });
+    this.settingsWriteQueue = pending;
+    return pending;
   }
 
   normalizeSettingStringArray(raw: unknown): string[] {
@@ -776,7 +921,7 @@ export default class BasesGraphPlugin extends Plugin {
       : Array.isArray(raw)
         ? raw
         : [];
-    const values = rawValues.flatMap((item) => this.splitSettingListTextPreservingWikiLinks(String(item ?? "")));
+    const values = rawValues.flatMap((item) => splitSettingListTextPreservingWikiLinks(String(item ?? "")));
     const out: string[] = [];
     const seen = new Set<string>();
     for (const item of values) {
@@ -786,27 +931,6 @@ export default class BasesGraphPlugin extends Plugin {
       seen.add(normalized);
       out.push(value);
     }
-    return out;
-  }
-
-  private splitSettingListTextPreservingWikiLinks(textRaw: string): string[] {
-    const text = String(textRaw ?? "").trim();
-    if (!text) return [];
-    const out: string[] = [];
-    const wikiLinkPattern = /\[\[[^\]]+\]\]/g;
-    let cursor = 0;
-    const addPlain = (plain: string): void => {
-      for (const part of plain.split(/[\s,;]+/).map((value) => value.trim()).filter(Boolean)) {
-        out.push(part);
-      }
-    };
-    for (const match of text.matchAll(wikiLinkPattern)) {
-      const index = match.index ?? 0;
-      addPlain(text.slice(cursor, index));
-      out.push(match[0]);
-      cursor = index + match[0].length;
-    }
-    addPlain(text.slice(cursor));
     return out;
   }
 
@@ -940,10 +1064,6 @@ export default class BasesGraphPlugin extends Plugin {
     }
   }
 
-  private normalizeFolderPath(raw: unknown): string {
-    return String(raw ?? "").trim().replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
-  }
-
   private isValidVaultFolderPath(path: string): boolean {
     if (!path) return false;
     if (path.includes("\\")) return false;
@@ -954,7 +1074,7 @@ export default class BasesGraphPlugin extends Plugin {
   }
 
   async updateLinkTypeFolder(rawPath: string): Promise<boolean> {
-    const normalized = this.normalizeFolderPath(rawPath);
+    const normalized = normalizeFolderPath(rawPath);
     if (!this.isValidVaultFolderPath(normalized)) {
       return false;
     }
@@ -1008,7 +1128,11 @@ export default class BasesGraphPlugin extends Plugin {
     return raw as Record<string, unknown>;
   }
 
-  private async openFileInGraphView(file: TFile, leaf: WorkspaceLeaf): Promise<void> {
+  private async openFileInGraphView(file: TFile, leaf: WorkspaceLeaf): Promise<boolean> {
+    if (this.isGraphTabLeaf(leaf)) {
+      this.graphTabs.toggle(leaf, "graph");
+      return true;
+    }
     try {
       this.app.workspace.setActiveLeaf(leaf, { focus: true });
       await leaf.setViewState({
@@ -1016,6 +1140,7 @@ export default class BasesGraphPlugin extends Plugin {
         state: { file: file.path },
         active: true
       }, false);
+      return true;
     } catch (error) {
       console.error("[BasesGraphPlugin] Failed to open graph view:", {
         file: file.path,
@@ -1023,12 +1148,14 @@ export default class BasesGraphPlugin extends Plugin {
         error
       });
       new Notice("Failed to open NosyGraph view. See console for details.");
+      return false;
     }
   }
 
   private async openGraphTab(): Promise<void> {
     const sourceLeaf = this.app.workspace.getMostRecentLeaf();
-    const activeFile = this.resolveActiveFileForLeaf(sourceLeaf);
+    const root = sourceLeaf && this.isGraphTabLeaf(sourceLeaf) ? this.graphTabs.graphSourcePath(sourceLeaf) : null;
+    const activeFile = root ? this.app.vault.getAbstractFileByPath(root) : this.resolveActiveFileForLeaf(sourceLeaf);
     const sourceFile = activeFile instanceof TFile && activeFile.extension === "md"
       ? activeFile
       : this.resolveLastGraphCapableFile();
@@ -1060,7 +1187,13 @@ export default class BasesGraphPlugin extends Plugin {
     const file = this.resolveLeafFile(leaf);
     if (file instanceof TFile && file.extension === "md") {
       this.lastGraphTabSourceLeaf = leaf;
+      if (this.isGraphCapableFile(file)) this.lastGraphCapableFilePath = file.path;
     }
+  }
+
+  private isGraphCapableFile(file: TFile): boolean {
+    return isObsidianGraphCapable(this.app, file, this.app.metadataCache.getFileCache(file)?.frontmatter ?? {},
+      this.settings.graphPropertyKeys, this.settings.defaultRootNodeProperties, this.settings.noteTypeIdentifiers.graph);
   }
 
   private async openGraphTabNodeInMarkdown(graphLeaf: WorkspaceLeaf, pathRaw: string): Promise<void> {
@@ -1090,67 +1223,19 @@ export default class BasesGraphPlugin extends Plugin {
     this.app.workspace.setActiveLeaf(targetLeaf, { focus: true });
   }
 
-  private async followActiveLeafInGraphTabs(sourceLeaf: WorkspaceLeaf | null): Promise<void> {
-    if (!sourceLeaf || this.graphTabSyncInProgress || this.isGraphTabLeaf(sourceLeaf)) return;
-    const sourceFile = this.resolveLeafFile(sourceLeaf);
-    if (!(sourceFile instanceof TFile) || sourceFile.extension !== "md") return;
-
-    const sourceGroup = this.readLeafGroup(sourceLeaf);
-    const targets = this.app.workspace.getLeavesOfType(BASES_GRAPH_VIEW)
-      .filter((leaf) => leaf !== sourceLeaf && this.isGraphTabLeaf(leaf))
-      .filter((leaf) => {
-        const graphTabGroup = this.readLeafGroup(leaf);
-        return !graphTabGroup || graphTabGroup === sourceGroup;
-      });
-    if (targets.length === 0) return;
-    const graphCapable = targets.some((leaf) => (
-      leaf.view instanceof BasesGraphView
-      && leaf.view.isGraphCapablePath(sourceFile.path)
-    ));
-    if (!graphCapable) return;
-
-    const sequence = ++this.graphTabFollowSequence;
-    this.lastGraphCapableFilePath = sourceFile.path;
-
-    this.graphTabSyncInProgress = true;
-    try {
-      for (const leaf of targets) {
-        if (sequence !== this.graphTabFollowSequence) return;
-        const viewState = leaf.getViewState() as Record<string, unknown>;
-        const innerState = viewState.state && typeof viewState.state === "object"
-          ? viewState.state as Record<string, unknown>
-          : {};
-        if (String(innerState.file ?? "").trim() === sourceFile.path) continue;
-        await leaf.setViewState({
-          ...viewState,
-          state: {
-            ...innerState,
-            file: sourceFile.path,
-            graphTab: true
-          },
-          active: false
-        }, false);
-      }
-    } finally {
-      this.graphTabSyncInProgress = false;
-    }
-  }
-
   private isGraphTabLeaf(leaf: WorkspaceLeaf): boolean {
-    const viewState = leaf.getViewState() as Record<string, unknown>;
-    const innerState = viewState.state && typeof viewState.state === "object"
-      ? viewState.state as Record<string, unknown>
-      : {};
-    if (innerState.graphTab === true) return true;
-    return leaf.view instanceof BasesGraphView && leaf.view.isGraphTab();
+    return this.graphTabs.isGraphTab(leaf);
   }
 
   private readLeafGroup(leaf: WorkspaceLeaf): string {
-    const viewState = leaf.getViewState() as Record<string, unknown>;
-    return String(viewState.group ?? "").trim();
+    return this.graphTabs.sourceGroup(leaf);
   }
 
   private async openFileInMarkdownView(file: TFile, leaf: WorkspaceLeaf): Promise<void> {
+    if (this.isGraphTabLeaf(leaf)) {
+      this.graphTabs.toggle(leaf, "markdown");
+      return;
+    }
     await leaf.setViewState({
       type: "markdown",
       state: { file: file.path },
@@ -1161,6 +1246,10 @@ export default class BasesGraphPlugin extends Plugin {
   private async createNewGraphNoteFromTemplate(): Promise<void> {
     const folderPath = this.resolvePreferredNewNoteFolderPath();
     const filePath = this.buildUniqueNotePath(folderPath, "Graph Note");
+    if (this.settings.graphNoteTemplatePath) {
+      await this.createGraphNoteWithCustomTemplate(folderPath, filePath);
+      return;
+    }
     const content = [
       "---",
       `${this.settings.noteTypeIdentifiers.graph.property}: ${this.formatIdentifierFrontmatterValue(this.settings.noteTypeIdentifiers.graph)}`,
@@ -1185,11 +1274,74 @@ export default class BasesGraphPlugin extends Plugin {
     try {
       const file = await this.app.vault.create(filePath, content);
       const leaf = this.resolveCurrentLeafForFile(file);
-      await this.openFileInGraphView(file, leaf);
-      new Notice(`Created graph note: ${file.basename}`);
+      if (await this.openFileInGraphView(file, leaf)) new Notice(`Created graph note: ${file.basename}`);
+      else new Notice(`Graph note created but could not be opened: ${file.path}`);
     } catch (error) {
       console.error("[BasesGraphPlugin] Failed to create graph note:", error);
       new Notice("Failed to create graph note.");
+    }
+  }
+
+  private async createGraphNoteWithCustomTemplate(folderPath: string, filePath: string): Promise<void> {
+    const templatePath = this.settings.graphNoteTemplatePath;
+    const template = this.app.vault.getAbstractFileByPath(templatePath);
+    if (!(template instanceof TFile)) {
+      new Notice(`Graph note template not found: ${templatePath}. Choose another template in NosyGraph settings.`);
+      return;
+    }
+    if (template.extension.toLowerCase() !== "md") {
+      new Notice(`Graph note template must be a Markdown file: ${templatePath}`);
+      return;
+    }
+    const adapter = new ObsidianTemplaterAdapter(this.app);
+    if (!adapter.canCreateNote()) {
+      new Notice("Install and enable a compatible Templater plugin to create graph notes from a template.");
+      return;
+    }
+    const folder = folderPath ? this.app.vault.getAbstractFileByPath(folderPath) : this.app.vault.getRoot();
+    if (!(folder instanceof TFolder)) {
+      new Notice(`Graph note destination folder not found: ${folderPath}`);
+      return;
+    }
+    let file: TFile | undefined;
+    try {
+      const filename = filePath.slice(filePath.lastIndexOf("/") + 1).replace(/\.md$/i, "");
+      file = await adapter.createNote(template, folder, filename);
+      if (!(file instanceof TFile)) {
+        new Notice("Templater did not create a graph note. Check Templater's messages and template.");
+        return;
+      }
+      const identifier = this.settings.noteTypeIdentifiers.graph;
+      let conflict = false;
+      await this.app.vault.process(file, (content) => {
+        const match = /^---\r?\n([\s\S]*?)^---(?:\r?\n|$)/m.exec(content);
+        if (!match && /^---(?:\r?\n|$)/.test(content)) throw new Error("Unclosed frontmatter in rendered template.");
+        const parsed: unknown = match && match[1].trim() ? parseYaml(match[1]) : {};
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid frontmatter in rendered template.");
+        const fm = parsed as Record<string, unknown>;
+        const key = Object.keys(fm).find((name) => name.trim().toLowerCase() === identifier.property.trim().toLowerCase());
+        if (key !== undefined) {
+          conflict = !frontmatterMatchesIdentifier(fm, identifier);
+          return content;
+        }
+        const property = `${identifier.property}: ${this.formatIdentifierFrontmatterValue(identifier)}\n`;
+        if (match) {
+          const firstLine = content.indexOf("\n") + 1;
+          return content.slice(0, firstLine) + property + content.slice(firstLine);
+        }
+        return `---\n${property}---\n${content}`;
+      });
+      const leaf = this.resolveCurrentLeafForFile(file);
+      if (conflict) {
+        await this.openFileInMarkdownView(file, leaf);
+        new Notice(`Graph identifier conflicts in ${file.path}. Fix the template property or the graph identifier in NosyGraph settings.`);
+        return;
+      }
+      if (await this.openFileInGraphView(file, leaf)) new Notice(`Created graph note: ${file.basename}`);
+      else new Notice(`Graph note created but could not be opened: ${file.path}`);
+    } catch (error) {
+      console.error("[BasesGraphPlugin] Failed to create graph note from template:", error);
+      new Notice(file ? `Graph note created at ${file.path}, but could not be processed or opened. See console.` : "Templater failed to create the graph note. See console.");
     }
   }
 
@@ -1376,8 +1528,9 @@ export default class BasesGraphPlugin extends Plugin {
 
   private async reconcileRenamedLinkTypeReference(file: TFile, oldPath: string): Promise<void> {
     const cache = this.app.metadataCache.getFileCache(file);
-    const inConfiguredFolder = this.normalizeFolderPath(oldPath).startsWith(`${this.normalizeFolderPath(this.settings.linkTypeFolder)}/`)
-      || this.normalizeFolderPath(file.path).startsWith(`${this.normalizeFolderPath(this.settings.linkTypeFolder)}/`);
+    const configuredFolder = normalizeFolderPath(this.settings.linkTypeFolder);
+    const inConfiguredFolder = normalizeFolderPath(oldPath).startsWith(`${configuredFolder}/`)
+      || normalizeFolderPath(file.path).startsWith(`${configuredFolder}/`);
     const isLinkType = inConfiguredFolder || frontmatterMatchesIdentifier(
       cache?.frontmatter,
       this.settings.noteTypeIdentifiers.linkType
@@ -1425,6 +1578,11 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
   private resizeObserver: ResizeObserver | null = null;
   private graphFilesForRender: TFile[] = [];
   private labelsForRender = new Map<string, string>();
+  private visibleLinkTypesForRender: string[] = [];
+  private visibleLinkTypeDefinitionsForRender: O3LinkType[] = [];
+  private activeEdgeDefinitionsForRender: O3LinkType[] = [];
+  private overlayEdgeDefinitionsForRender: O3LinkType[] = [];
+  private knownEdgeDefinitionsForRender: O3LinkType[] = [];
   private visibleLinkTypeLineStyleForRender: GraphLineStyle = "dashed";
   private discoveredLinkLineStyleForRender: GraphLineStyle = "normal";
   private runtimeStateForRender: O3GraphRuntimeState | null = null;
@@ -1432,27 +1590,59 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
   private graphStateStore: O3GraphStateStore | null = null;
   private suppressGraphFileReloadUntil = 0;
   private viewportPersistTimer: number | null = null;
+  private readonly graphTabSurface = Symbol();
+  private stopGraphTabSubscription?: () => void;
+  private graphTabSelectionTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     containerEl: HTMLElement,
     private appRef: App,
     private graphFile: TFile,
-    private settings: BasesGraphPluginSettings
+    private settings: BasesGraphPluginSettings,
+    private badgeInput: GraphBadgeInputIntegration,
+    private nodeCutHost: ObsidianGraphNodeCutHost,
+    private graphTabs: ObsidianGraphTabController
   ) {
     super(containerEl);
   }
 
   onload(): void {
+    this.registerEvent(this.appRef.metadataCache.on("changed", (file) => {
+      const engine = this.engine;
+      if (!engine || isGraphNodeCutHolder(this.appRef, file.path)) return;
+      const frontmatter = this.readFrontmatter(file);
+      const isLinkType = frontmatterMatchesIdentifier(frontmatter, this.settings.noteTypeIdentifiers.linkType);
+      if (isLinkType || this.knownEdgeDefinitionsForRender.some(({ definitionId }) => definitionId === file.path)) {
+        if (isLinkType && engine.refreshLinkTypeBadgeIcon(new O3LinkType(file, frontmatter, this.settings.linkTypePropertyKeys))) return;
+        this.refreshEmbedLinkTypeConfiguration(engine);
+        return;
+      }
+      engine.reconcileBadgeClipboardMetadata(file);
+      engine.refreshOpenLensDefinitionsForSourcePath(file.path);
+      engine.refreshMetadataRelationshipEdges(file);
+    }));
+    this.registerEvent(this.appRef.vault.on("rename", (file, oldPath) => {
+      if (this.engine && this.knownEdgeDefinitionsForRender.some(({ definitionId }) => definitionId === oldPath)) {
+        this.refreshEmbedLinkTypeConfiguration(this.engine);
+      }
+    }));
+    this.registerEvent(this.appRef.vault.on("delete", (file) => {
+      if (this.engine && this.knownEdgeDefinitionsForRender.some(({ definitionId }) => definitionId === file.path)) {
+        this.refreshEmbedLinkTypeConfiguration(this.engine);
+      }
+    }));
     this.registerEvent(this.appRef.vault.on("modify", (file) => {
       if (!(file instanceof TFile)) return;
       if (file.path !== this.graphFile.path) return;
-      if (Date.now() < this.suppressGraphFileReloadUntil) return;
+      if (Date.now() < this.suppressGraphFileReloadUntil || isBadgeMembershipWriteActive(this.appRef, file.path) || isGraphNodeCutHolder(this.appRef, file.path)) return;
       void this.mountAsync();
     }));
     void this.mountAsync();
   }
 
   onunload(): void {
+    this.stopGraphTabObservation();
+    this.graphTabs.removeEmbed(this.graphTabSurface);
     if (this.viewportPersistTimer !== null) {
       window.clearTimeout(this.viewportPersistTimer);
       this.viewportPersistTimer = null;
@@ -1464,7 +1654,103 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     this.hostEl = null;
   }
 
+  refreshAfterBadgeClipboardBatch: GraphBadgeBatchCommitted = (write, result) => {
+    this.engine?.refreshAfterBadgeClipboardBatch(write, result);
+  };
+
+  async refreshAfterBadgeMembership(result: GraphBadgeMembershipResult): Promise<void> {
+    const { destination } = result;
+    const engine = this.engine;
+    if (!engine || !destination) return;
+    if (destination.lensDefinitionId) {
+      engine.refreshAfterEnclosingLensMembership(destination);
+      return;
+    }
+    for (const path of result.changedFilePaths) {
+      const isGraphFile = path === this.graphFile.path;
+      const instances = engine.getEmbeddedGraphInstances(path);
+      if (!isGraphFile && !instances.length) continue;
+      const owner = this.appRef.vault.getAbstractFileByPath(path);
+      if (!(owner instanceof TFile)) continue;
+      if (isGraphFile) this.suppressGraphFileReloadUntil = Date.now() + 500;
+      const content = await this.appRef.vault.read(owner);
+      if (engine !== this.engine || this.appRef.vault.getAbstractFileByPath(path) !== owner) return;
+      const yaml = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)?.[1];
+      const parsed: unknown = yaml ? parseYaml(yaml) : undefined;
+      const frontmatter = parsed && typeof parsed === "object" ? { ...parsed } : {};
+      await this.refreshRootMembership(engine, owner, frontmatter);
+    }
+  }
+
+  private async refreshRootMembership(engine: GraphEngine, owner: TFile, frontmatter: Record<string, unknown>, reconcileCutMembership = false): Promise<void> {
+    const path = owner.path;
+    if (path === this.graphFile.path) {
+      this.suppressGraphFileReloadUntil = Date.now() + 2000;
+      const model = this.graphStateModel ?? new O3GraphState(owner);
+      model.migrateToCurrentLayout(engine.getRuntimeNodeSnapshots());
+      model.state.viewport = engine.getViewportSnapshot();
+      this.graphStateModel = model;
+      this.runtimeStateForRender = model.state;
+      this.updateEmbedGraph(engine, frontmatter, this.readPersistedGraphViewState());
+    }
+    for (const instance of engine.getEmbeddedGraphInstances(path)) {
+      const definition = await this.loadEmbeddedGraphDefinition(path, instance.ancestry, frontmatter);
+      if (engine !== this.engine) return;
+      if (!definition || !engine.getEmbeddedGraphInstances(path).some(({ instanceId }) => instanceId === instance.instanceId)) continue;
+      const snapshots = engine.getEmbeddedGraphSnapshotsForInstance(instance.instanceId);
+      engine.replaceEmbeddedGraphInstance(instance.originNodeId, {
+        ...definition, snapshots: reconcileRootSnapshots(snapshots, definition.snapshots)
+      }, true, reconcileCutMembership);
+    }
+  }
+
+  getCutSource(): TFile | null {
+    return this.engine ? this.graphFile : null;
+  }
+
+  private stopGraphTabObservation(): void {
+    this.stopGraphTabSubscription?.();
+    this.stopGraphTabSubscription = undefined;
+    if (this.graphTabSelectionTimer !== undefined) clearTimeout(this.graphTabSelectionTimer);
+    this.graphTabSelectionTimer = undefined;
+  }
+
+  hasCutFocus(): boolean {
+    return this.engine?.hasGraphKeyboardFocus() ?? false;
+  }
+
+  getCutSelection(): GraphNodeCutSelection[] {
+    return this.engine?.getSelectedNodeCutRefs() ?? [];
+  }
+
+  getCutSelectedCount(): number {
+    return this.engine?.getSelectedNodeCount() ?? 0;
+  }
+
+  isCutNoteVisible(path: string): boolean {
+    return this.engine?.hasVisibleNodeForSourcePath(path) ?? false;
+  }
+
+  async copySelectedNodeLinksToClipboard(): Promise<void> {
+    await this.nodeCutHost.copy(this, this.engine?.getSelectedNodePaths() ?? []);
+  }
+
+  async refreshAfterCut(changes: readonly GraphCutChange[]): Promise<void> {
+    const engine = this.engine;
+    if (!engine) return;
+    engine.reconcileAfterPropertyCut(changes);
+    for (const { file, frontmatter, rootMembership, properties } of changes) {
+      if (this.engine !== engine) return;
+      if (file !== this.graphFile && !engine.getEmbeddedGraphInstances(file.path).length) continue;
+      const config = resolveEffectiveRootProperties(frontmatter, this.settings.graphPropertyKeys, this.settings.defaultRootNodeProperties);
+      if (!rootMembership && !config.propertyKeys.some(key => properties.has(key.trim().toLowerCase()))) continue;
+      await this.refreshRootMembership(engine, file, frontmatter, true);
+    }
+    engine.removeStaleCutSelection();
+  }
+
   private async mountAsync(): Promise<void> {
+    this.stopGraphTabObservation();
     if (this.viewportPersistTimer !== null) {
       window.clearTimeout(this.viewportPersistTimer);
       this.viewportPersistTimer = null;
@@ -1514,6 +1800,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
       initialSubnodeOpacityPercent: this.settings.subnodeOpacityPercent,
       initialIconOpacityPercent: this.settings.iconOpacityPercent,
       graphPropertyKeys: this.settings.graphPropertyKeys,
+      linkTypePropertyKeys: this.settings.linkTypePropertyKeys,
       initialLinkTypeMenuSize: this.runtimeStateForRender?.linkTypeMenu,
       onLinkTypeMenuSizeChange: (size) => {
         this.handleLinkTypeMenuSizeChanged(size);
@@ -1525,26 +1812,11 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
         return new ObsidianGraphLinkMutationHandler(this.appRef).applyBadgeDrop(request);
       },
       shouldAutoExpandDroppedLinkTypes: () => this.shouldAutoExpandDroppedLinkTypes(),
-      onGraphLinkInputRequested: async (request) => {
-        const result = await new ObsidianGraphLinkInputHandler(this.appRef).requestLinkInput(request);
-        const ownerPath = String(request.graphCapableOwnerPath ?? this.graphFile.path).trim();
-        const selectedFiles = (result.selected ?? [])
-          .map((path) => this.appRef.vault.getAbstractFileByPath(path))
-          .filter((file): file is TFile => file instanceof TFile);
-        const ownerFile = this.appRef.vault.getAbstractFileByPath(ownerPath);
-        if (ownerFile instanceof TFile && selectedFiles.length > 0) {
-          const rootResult = await new ObsidianGraphRootPropertyMutationHandler(this.appRef).addFilesToReferenceProperty({
-            ownerPath: ownerFile.path,
-            referencePath: request.target.path,
-            files: selectedFiles,
-            propertyNames: this.getRootNodePropertyNamesForFile(ownerFile)
-          });
-          if (rootResult.added > 0) {
-            window.setTimeout(() => { void this.reloadFromFile(); }, 0);
-          }
-        }
-        return result;
-      },
+      getMembershipOwnerPath: () => this.graphFile.path,
+      onCutSelectedNodes: selection => this.nodeCutHost.cut(this, selection),
+      canCutSelectedNodes: selection => this.nodeCutHost.canCut(this, selection),
+      onCopySelectedNodeLinks: () => this.copySelectedNodeLinksToClipboard(),
+      onGraphLinkInputRequested: (request) => requestGraphBadgeInput(this.appRef, request, this.badgeInput, () => this.settings),
       onNodeOpen: (request) => {
         return new ObsidianGraphNodeOpenHandler(this.appRef).openNode(request);
       },
@@ -1576,6 +1848,15 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     });
     this.engine = engine;
     engine.init();
+    const publishSelection = this.graphTabs.embedPublisher(this.graphTabSurface, this.containerEl);
+    const publish = (interacted = false) => publishSelection(this.graphFile.path, engine.readGraphTabSelection(), interacted);
+    this.stopGraphTabSubscription = engine.observeGraphTab(() => publish(true), () => {
+      if (this.graphTabSelectionTimer !== undefined) return;
+      this.graphTabSelectionTimer = setTimeout(() => {
+        this.graphTabSelectionTimer = undefined;
+        publish();
+      }, 32);
+    });
     engine.onNodePositionChanged = (path, x, y) => {
       void this.handleNodePositionChanged(path, x, y);
     };
@@ -1590,24 +1871,32 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     });
     this.resizeObserver.observe(host);
 
-    const fm = this.readFrontmatter(this.graphFile);
+    this.updateEmbedGraph(engine, this.readFrontmatter(this.graphFile), persisted);
+    publish();
+    this.ensureInitialEmbedViewport(0);
+  }
+
+  private updateEmbedGraph(engine: GraphEngine, fm: Record<string, unknown>, persisted: Record<string, unknown>): void {
     const rootsFromFrontmatter = this.resolveRootNodeFilesFromGraphFrontmatter(fm);
-    const roots = rootsFromFrontmatter.length > 0
+    const authoritative = resolveEffectiveRootProperties(fm, this.settings.graphPropertyKeys, this.settings.defaultRootNodeProperties).authoritative;
+    const roots = authoritative || rootsFromFrontmatter.length > 0
       ? rootsFromFrontmatter
       : this.resolveFilesFromGraphValue(persisted.rootNodes);
-    const graphFiles = (roots.length > 0 ? roots : [this.graphFile])
+    const graphFiles = (authoritative || roots.length > 0 ? roots : [this.graphFile])
       .slice(0, Math.max(1, Math.round(this.settings.defaultSourceLimit)));
 
     const activeLinkTypes = this.resolveActiveLinkTypesFromFrontmatter(fm);
+    const overlayLinkTypes = this.resolveActiveLinkTypesFromFrontmatter(fm, "activeOverlayLinkTypes");
     const activePropertiesFromDefinitions = activeLinkTypes
       .map((lt) => String(lt.property ?? "").trim().toLowerCase())
       .filter(Boolean);
-    const visibleLinkTypes = this.normalizeStringArray(
-      hasFrontmatterProperty(fm, this.settings.graphPropertyKeys, "visibleLinkTypes")
-        ? readFrontmatterPropertyByKey(fm, this.settings.graphPropertyKeys, "visibleLinkTypes") ?? []
-        : this.settings.defaultVisibleLinkTypes
-    );
-    const visibleLinkTypeDefinitions = this.resolveVisibleLinkTypeDefinitions(visibleLinkTypes);
+    const { selectors: visibleLinkTypes, definitions: visibleLinkTypeDefinitions, registry } =
+      this.resolveVisibleLinkTypeConfiguration(fm, activeLinkTypes, this.graphFile.path, overlayLinkTypes);
+    this.visibleLinkTypesForRender = visibleLinkTypes;
+    this.visibleLinkTypeDefinitionsForRender = visibleLinkTypeDefinitions;
+    this.activeEdgeDefinitionsForRender = activeLinkTypes;
+    this.overlayEdgeDefinitionsForRender = overlayLinkTypes;
+    this.knownEdgeDefinitionsForRender = registry;
     const visibleLinkTypeLineStyle = this.readGraphLineStyle(fm, "visibleLinkTypeLineStyle", "dashed");
     const discoveredLinkLineStyle = this.readGraphLineStyle(fm, "discoveredLinkLineStyle", "normal");
     const showNodeIcons = this.readGraphBoolean(fm, "showNodeIcons", true);
@@ -1626,13 +1915,17 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     this.labelsForRender = new Map(labels);
     engine.setActiveLinkTypes(activeLinkTypes);
     engine.setSelectedLinkTypes(selectedTypes);
-    engine.setHideNodesWithoutSelectedLinkTypes(persistedGraphSettings.hideNodesWithoutSelectedLinkTypes);
+    engine.setHideNodesWithoutSelectedLinkTypes(this.readPersistedGraphSettings(persisted).hideNodesWithoutSelectedLinkTypes);
     engine.updateGraph(graphFiles, {
       labels,
       linkTypeSourceFiles: graphFiles,
       nodeLimit: Math.max(1, Math.round(this.settings.defaultNodeLimit)),
       visibleLinkTypes,
       visibleLinkTypeDefinitions,
+      edgeLinkTypeDefinitions: activeLinkTypes,
+      knownLinkTypeDefinitions: registry,
+      overlayLinkTypes: overlayLinkTypes.map(({ definitionId }) => definitionId),
+      overlayLinkTypeDefinitions: overlayLinkTypes,
       visibleLinkTypeLineStyle,
       discoveredLinkLineStyle,
       showNodeIcons,
@@ -1645,12 +1938,20 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     });
     this.replayPersistedBadgeExpansions();
 
-    this.ensureInitialEmbedViewport(0);
   }
 
-  private resolveActiveLinkTypesFromFrontmatter(frontmatter: Record<string, unknown>): O3LinkType[] {
+  private refreshEmbedLinkTypeConfiguration(engine: GraphEngine): void {
+    this.updateEmbedGraph(engine, this.readFrontmatter(this.graphFile), this.readPersistedGraphViewState());
+    engine.refreshOpenLensDefinitions();
+  }
+
+  private resolveActiveLinkTypesFromFrontmatter(
+    frontmatter: Record<string, unknown>,
+    key: "activeLinkTypes" | "activeOverlayLinkTypes" = "activeLinkTypes",
+    ownerPath = this.graphFile.path
+  ): O3LinkType[] {
     const files = this.resolveFilesFromGraphValue(
-      readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "activeLinkTypes") ?? []
+      readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, key) ?? [], ownerPath
     );
     const out: O3LinkType[] = [];
     for (const file of files) {
@@ -1661,52 +1962,34 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     return out;
   }
 
-  private resolveVisibleLinkTypeDefinitions(values: string[]): O3LinkType[] {
-    const candidates = this.collectLinkTypeDefinitions();
-    const knownPaths = new Set(candidates.map((linkType) => linkType.file.path));
-    for (const value of values ?? []) {
-      const linkedFile = this.resolveFilesFromGraphValue([value])[0];
-      if (!linkedFile || knownPaths.has(linkedFile.path)) continue;
-      const frontmatter = this.readFrontmatter(linkedFile);
-      if (!frontmatterMatchesIdentifier(frontmatter, this.settings.noteTypeIdentifiers.linkType)) continue;
-      candidates.push(new O3LinkType(linkedFile, frontmatter, this.settings.linkTypePropertyKeys));
-      knownPaths.add(linkedFile.path);
-    }
-    const out: O3LinkType[] = [];
-    const seen = new Set<string>();
-    for (const valueRaw of values ?? []) {
-      const value = String(valueRaw ?? "").trim();
-      if (!value) continue;
-      const linkedFile = this.resolveFilesFromGraphValue([value])[0];
-      const normalized = value
-        .replace(/^\[\[/, "")
-        .replace(/\]\]$/, "")
-        .split("|")[0]
-        .split("#")[0]
-        .trim()
-        .toLowerCase();
-      const matched = candidates.find((linkType) => {
-        const identities = [
-          String(linkType.property ?? "").trim().toLowerCase(),
-          ...(linkType.properties ?? []).map((property) => String(property ?? "").trim().toLowerCase()),
-          String(linkType.key ?? "").trim().toLowerCase(),
-          String(linkType.file?.path ?? "").trim().toLowerCase(),
-          String(linkType.file?.basename ?? "").trim().toLowerCase()
-        ].filter(Boolean);
-        return (linkedFile && linkType.file.path === linkedFile.path)
-          || identities.includes(normalized);
-      });
-      if (!matched) continue;
-      const property = String(matched.property ?? "").trim().toLowerCase();
-      if (!property || seen.has(property)) continue;
-      seen.add(property);
-      out.push(matched);
-    }
-    return out;
+  private resolveVisibleLinkTypeConfiguration(
+    frontmatter: Record<string, unknown>, active: O3LinkType[], ownerPath: string, overlays: O3LinkType[] = []
+  ): { selectors: string[]; definitions: O3LinkType[]; registry: O3LinkType[] } {
+    const entries = this.normalizeStringArray(
+      hasFrontmatterProperty(frontmatter, this.settings.graphPropertyKeys, "visibleLinkTypes")
+        ? readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "visibleLinkTypes") ?? []
+        : this.settings.defaultVisibleLinkTypes,
+      false
+    );
+    const byPath = new Map([...this.collectLinkTypeDefinitions(), ...active, ...overlays].map((definition) => [definition.definitionId, definition]));
+    const resolveReference = (path: string): string | undefined => {
+      const file = this.appRef.metadataCache.getFirstLinkpathDest(path, ownerPath);
+      if (!(file instanceof TFile)) return undefined;
+      if (!byPath.has(file.path)) {
+        const fm = this.readFrontmatter(file);
+        if (frontmatterMatchesIdentifier(fm, this.settings.noteTypeIdentifiers.linkType)) {
+          byPath.set(file.path, new O3LinkType(file, fm, this.settings.linkTypePropertyKeys));
+        }
+      }
+      return file.path;
+    };
+    const selectors = entries.map((entry) => resolveVisibleRelationshipSelector(entry, [...byPath.values()], resolveReference));
+    const registry = [...byPath.values()];
+    return { selectors, definitions: resolveVisibleRelationshipDefinitions(selectors, registry, active), registry };
   }
 
   private collectLinkTypeDefinitions(): O3LinkType[] {
-    const configuredFolder = this.normalizeFolderPath(this.settings.linkTypeFolder);
+    const configuredFolder = normalizeFolderPath(this.settings.linkTypeFolder);
     const files = this.appRef.vault
       .getMarkdownFiles()
       .filter((file) => !configuredFolder || file.path.startsWith(`${configuredFolder}/`) || file.path === configuredFolder);
@@ -1720,41 +2003,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
   }
 
   private resolveRootNodeFilesFromGraphFrontmatter(frontmatter: Record<string, unknown>): TFile[] {
-    const hasConfiguredProperties = hasFrontmatterProperty(frontmatter, this.settings.graphPropertyKeys, "rootNodeProperties");
-    const defaultPropertyNames = this.settings.defaultRootNodeProperties
-      .map((property) => String(property ?? "").trim())
-      .filter(Boolean);
-    const usesConfiguredProperties = hasConfiguredProperties || defaultPropertyNames.length > 0;
-    if (!usesConfiguredProperties) {
-      return this.resolveFilesFromGraphValue(
-        readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "rootNodes")
-      );
-    }
-
-    const files: TFile[] = [];
-    const seen = new Set<string>();
-    const propertyNames = hasConfiguredProperties
-      ? this.collectRootNodePropertyNames(
-          readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "rootNodeProperties")
-        )
-      : defaultPropertyNames;
-    for (const propertyName of propertyNames) {
-      if (String(propertyName ?? "").trim().toLowerCase() === NONE_LINK_TYPE.toLowerCase()) {
-        for (const file of this.resolveBodyLinkFiles(this.graphFile)) {
-          if (seen.has(file.path)) continue;
-          seen.add(file.path);
-          files.push(file);
-        }
-        continue;
-      }
-      const value = readFrontmatterProperty(frontmatter, propertyName);
-      for (const file of this.resolveFilesFromGraphValue(value)) {
-        if (seen.has(file.path)) continue;
-        seen.add(file.path);
-        files.push(file);
-      }
-    }
-    return files;
+    return this.resolveRootNodeFilesForFile(this.graphFile, frontmatter);
   }
 
   private resolveBodyLinkFiles(sourceFile: TFile): TFile[] {
@@ -1780,6 +2029,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     if (!(file instanceof TFile)) return false;
     const frontmatter = this.readFrontmatter(file);
     if (frontmatterMatchesIdentifier(frontmatter, this.settings.noteTypeIdentifiers.graph)) return true;
+    if (resolveEffectiveRootProperties(frontmatter, this.settings.graphPropertyKeys, this.settings.defaultRootNodeProperties).authoritative) return true;
 
     const hasConfiguredProperties = hasFrontmatterProperty(frontmatter, this.settings.graphPropertyKeys, "rootNodeProperties");
     const propertyNames = hasConfiguredProperties
@@ -1807,7 +2057,8 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
 
   private async loadEmbeddedGraphDefinition(
     graphPathRaw: string,
-    ancestryRaw: string[]
+    ancestryRaw: string[],
+    membershipFrontmatter?: Record<string, unknown>
   ): Promise<EmbeddedGraphDefinition | null> {
     const graphPath = String(graphPathRaw ?? "").trim();
     const ancestry = Array.from(new Set(
@@ -1819,23 +2070,20 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     if (!graphPath || ancestry.includes(graphPath)) return null;
     const file = this.appRef.vault.getAbstractFileByPath(graphPath);
     if (!(file instanceof TFile)) return null;
-    const frontmatter = this.readFrontmatter(file);
-    if (!this.isLensExpandablePath(file.path)) return null;
+    const frontmatter = membershipFrontmatter ?? this.readFrontmatter(file);
+    if (!membershipFrontmatter && !this.isLensExpandablePath(file.path)) return null;
 
     const store = new O3GraphStateStore(this.appRef, file, this.settings.graphPropertyKeys);
     const state = await store.read();
     const colorRaw = readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "graphContainerColor");
     const forceRaw = Number(readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "graphContainerLinkForce"));
-    const activeLinkTypes = this.resolveActiveLinkTypesFromFrontmatter(frontmatter);
-    const visibleLinkTypes = this.normalizeStringArray(
-      hasFrontmatterProperty(frontmatter, this.settings.graphPropertyKeys, "visibleLinkTypes")
-        ? readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "visibleLinkTypes") ?? []
-        : this.settings.defaultVisibleLinkTypes
-    );
+    const activeLinkTypes = this.resolveActiveLinkTypesFromFrontmatter(frontmatter, "activeLinkTypes", file.path);
+    const { selectors: visibleLinkTypes, definitions: visibleLinkTypeDefinitions } =
+      this.resolveVisibleLinkTypeConfiguration(frontmatter, activeLinkTypes, file.path);
     let snapshots = state.toRuntimeNodeSnapshots();
-    if (snapshots.length === 0) {
+    if (membershipFrontmatter || snapshots.length === 0) {
       const roots = this.resolveRootNodeFilesForFile(file, frontmatter);
-      snapshots = roots.map((root, index) => ({
+      const configured = roots.map((root, index) => ({
         nodeId: root.path,
         path: root.path,
         x: (index % 4) * 100,
@@ -1844,6 +2092,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
         origin: { kind: "root" as const },
         badges: {}
       }));
+      snapshots = reconcileRootSnapshots(snapshots, configured);
     }
     return {
       graphPath,
@@ -1854,11 +2103,12 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
       ancestry,
       linkTypes: activeLinkTypes,
       visibleLinkTypes,
-      visibleLinkTypeDefinitions: this.resolveVisibleLinkTypeDefinitions(visibleLinkTypes),
+      visibleLinkTypeDefinitions,
       embeddedGraphs: state.listExpandedEmbeddedGraphs().map((entry) => ({
         originNodeId: entry.originNodeId,
         graphPath: entry.graphPath,
         expanded: true,
+        ...(entry.linkTypeId ? { linkTypeId: entry.linkTypeId } : {}),
         ...(entry.lens ? { lens: entry.lens } : {}),
         ...(entry.snapshots && entry.snapshots.length > 0
           ? { snapshots: entry.snapshots }
@@ -1871,29 +2121,12 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
   }
 
   private resolveRootNodeFilesForFile(file: TFile, frontmatter: Record<string, unknown>): TFile[] {
-    const hasConfiguredProperties = hasFrontmatterProperty(frontmatter, this.settings.graphPropertyKeys, "rootNodeProperties");
-    const propertyNames = hasConfiguredProperties
-      ? this.collectRootNodePropertyNames(
-          readFrontmatterPropertyByKey(frontmatter, this.settings.graphPropertyKeys, "rootNodeProperties")
-        )
-      : this.settings.defaultRootNodeProperties
-          .map((property) => String(property ?? "").trim())
-          .filter(Boolean);
-    const files: TFile[] = [];
-    const seen = new Set<string>();
-    for (const propertyName of propertyNames) {
-      const property = String(propertyName ?? "").trim();
-      if (!property) continue;
-      const linked = property.toLowerCase() === NONE_LINK_TYPE.toLowerCase()
-        ? this.resolveBodyLinkFiles(file)
-        : this.resolveFilesFromGraphValue(readFrontmatterProperty(frontmatter, property));
-      for (const linkedFile of linked) {
-        if (seen.has(linkedFile.path)) continue;
-        seen.add(linkedFile.path);
-        files.push(linkedFile);
-      }
+    const roots = resolveEffectiveRootProperties(frontmatter, this.settings.graphPropertyKeys, this.settings.defaultRootNodeProperties);
+    const files = roots.propertyKeys.flatMap((property) => resolveGraphPropertyFiles(this.appRef, frontmatter[property], file.path));
+    if (roots.propertyNames.some((property) => property.toLowerCase() === NONE_LINK_TYPE.toLowerCase())) {
+      files.push(...this.resolveBodyLinkFiles(file));
     }
-    return files;
+    return [...new Map(files.map((candidate) => [candidate.path, candidate])).values()];
   }
 
   private async requestRootNodeInput(ownerPath?: string | null): Promise<void> {
@@ -1909,7 +2142,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
       propertyNames
     });
     if (result.added > 0) {
-      await this.reloadFromFile();
+      await this.mountAsync();
     } else if (propertyNames.length === 0) {
       new Notice("No root node property configured for this graph view.");
     }
@@ -1949,7 +2182,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     return out;
   }
 
-  private resolveFilesFromGraphValue(raw: unknown): TFile[] {
+  private resolveFilesFromGraphValue(raw: unknown, ownerPath = this.graphFile.path): TFile[] {
     const rawValues: string[] = [];
     if (typeof raw === "string") {
       rawValues.push(...raw.split(",").map((v) => v.trim()).filter(Boolean));
@@ -1968,7 +2201,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
       const match = value.match(/^\[\[([^|\]]+)/);
       const linkPath = (match ? match[1] : value).trim();
       if (!linkPath) continue;
-      const file = this.appRef.metadataCache.getFirstLinkpathDest(linkPath, this.graphFile.path);
+      const file = this.appRef.metadataCache.getFirstLinkpathDest(linkPath, ownerPath);
       if (!(file instanceof TFile)) continue;
       if (seen.has(file.path)) continue;
       seen.add(file.path);
@@ -1977,16 +2210,17 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     return out;
   }
 
-  private normalizeStringArray(raw: unknown): string[] {
+  private normalizeStringArray(raw: unknown, lowerCase = true): string[] {
     const values = typeof raw === "string"
-      ? this.splitSettingListTextPreservingWikiLinks(raw)
+      ? splitSettingListTextPreservingWikiLinks(raw)
       : Array.isArray(raw)
-        ? raw.flatMap((item) => this.splitSettingListTextPreservingWikiLinks(String(item ?? "")))
+        ? raw.flatMap((item) => splitSettingListTextPreservingWikiLinks(String(item ?? "")))
         : [];
     const out: string[] = [];
     const seen = new Set<string>();
     for (const item of values) {
-      const value = String(item ?? "").trim().toLowerCase();
+      const trimmed = String(item ?? "").trim();
+      const value = lowerCase ? trimmed.toLowerCase() : trimmed;
       if (!value || seen.has(value)) continue;
       seen.add(value);
       out.push(value);
@@ -2041,7 +2275,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     const scopeKey = BASES_GRAPH_VIEW;
     const storageKey = `nosygraph:${scopeKey}:graphState`;
     try {
-      const raw = this.app.loadLocalStorage(storageKey);
+      const raw = loadGraphLocalStorage(this.appRef, storageKey);
       if (!raw) return {};
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object"
@@ -2142,8 +2376,12 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
         labels: this.labelsForRender,
         linkTypeSourceFiles: this.graphFilesForRender,
         nodeLimit: Math.max(1, Math.round(this.settings.defaultNodeLimit)),
-        visibleLinkTypes,
-        visibleLinkTypeDefinitions: this.resolveVisibleLinkTypeDefinitions(visibleLinkTypes),
+        visibleLinkTypes: this.visibleLinkTypesForRender,
+        visibleLinkTypeDefinitions: this.visibleLinkTypeDefinitionsForRender,
+        edgeLinkTypeDefinitions: this.activeEdgeDefinitionsForRender,
+        knownLinkTypeDefinitions: this.knownEdgeDefinitionsForRender,
+        overlayLinkTypes: this.overlayEdgeDefinitionsForRender.map(({ definitionId }) => definitionId),
+        overlayLinkTypeDefinitions: this.overlayEdgeDefinitionsForRender,
         visibleLinkTypeLineStyle: this.visibleLinkTypeLineStyleForRender,
         discoveredLinkLineStyle: this.discoveredLinkLineStyleForRender,
         showNodeIcons: this.readGraphBoolean(this.readFrontmatter(this.graphFile), "showNodeIcons", true),
@@ -2306,6 +2544,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
 }
 
 class BasesGraphSettingTab extends PluginSettingTab {
+  private unsubscribeMembershipPreference?: () => void;
   constructor(app: App, private plugin: BasesGraphPlugin) {
     super(app, plugin);
   }
@@ -2314,7 +2553,13 @@ class BasesGraphSettingTab extends PluginSettingTab {
     return [];
   }
 
+  hide(): void {
+    this.unsubscribeMembershipPreference?.();
+    this.unsubscribeMembershipPreference = undefined;
+  }
+
   display(): void {
+    this.unsubscribeMembershipPreference?.();
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("nosygraph-settings");
@@ -2322,6 +2567,23 @@ class BasesGraphSettingTab extends PluginSettingTab {
       text: "Set up your graph defaults, appearance, and controls. Changes save automatically.",
       cls: "setting-item-description nosygraph-settings-intro"
     });
+
+    const templateEl = this.addSettingsSection(containerEl, "Graph note template", "An empty selection uses the built-in graph note. A selected template requires Templater.");
+    const templateSetting = new Setting(templateEl)
+      .setName("Template file")
+      .setDesc(this.plugin.settings.graphNoteTemplatePath || "No template selected")
+      .addButton((button) => button.setButtonText("Choose Markdown file").onClick(async () => {
+        const file = await new ObsidianTemplaterAdapter(this.app).chooseVaultTemplate();
+        if (!file) return;
+        this.plugin.settings.graphNoteTemplatePath = normalizeGraphNoteTemplatePath(file.path);
+        await this.plugin.savePluginSettings();
+        templateSetting.setDesc(this.plugin.settings.graphNoteTemplatePath || "No template selected");
+      }))
+      .addButton((button) => button.setButtonText("Clear").onClick(async () => {
+        this.plugin.settings.graphNoteTemplatePath = "";
+        await this.plugin.savePluginSettings();
+        templateSetting.setDesc(this.plugin.settings.graphNoteTemplatePath || "No template selected");
+      }));
 
     const defaultsEl = this.addSettingsSection(containerEl, "Graph defaults", "Starting values for notes that do not define their own graph settings. Your notes are not changed.");
     new Setting(defaultsEl)
@@ -2358,6 +2620,21 @@ class BasesGraphSettingTab extends PluginSettingTab {
       "LinkType links, paths, keys, or properties used when a note does not define visibleLinkTypes. These links connect notes already visible in the graph.",
       "defaultVisibleLinkTypes"
     );
+    new Setting(defaultsEl)
+      .setName(BADGE_MEMBERSHIP_LABEL)
+      .setDesc(BADGE_MEMBERSHIP_DESCRIPTION)
+      .addToggle((toggle) => {
+        const preference = this.plugin.badgeMembershipPreference;
+        toggle.setValue(preference.get().value).onChange((value) => {
+          void preference.set(value).catch((error) => {
+            console.error("[NosyGraph] Failed to save the membership preference:", error);
+            new Notice("Could not save the graph membership preference.");
+          });
+        });
+        this.unsubscribeMembershipPreference = preference.subscribe(({ value }) => {
+          if (toggle.getValue() !== value) toggle.setValue(value);
+        });
+      });
     new Setting(defaultsEl)
       .setName("Expand badges after a drop")
       .setDesc("Expand or refresh a badge when a note is dropped onto it. A note can override this with autoExpandDroppedLinkTypes.")
@@ -2610,6 +2887,7 @@ class BasesGraphSettingTab extends PluginSettingTab {
     this.addLinkTypePropertySetting(linkPropertiesEl, "Discovery direction", "Outgoing reads the current note; incoming finds notes whose configured property points to it.", "linkDiscoveryDirection");
     this.addLinkTypePropertySetting(linkPropertiesEl, "Arrow direction", "Pointer direction used by rendered link arrows.", "pointerDirection");
     this.addLinkTypePropertySetting(linkPropertiesEl, "Badge color", "Primary color used for the LinkType badge.", "color");
+    this.addLinkTypePropertySetting(linkPropertiesEl, "Badge icon", "Optional registered icon name, emoji, or short text shown on this LinkType's badges.", "linkTypeIcon");
     this.addLinkTypePropertySetting(linkPropertiesEl, "Line color", "Rendered link line color.", "linkLineColor");
     this.addLinkTypePropertySetting(linkPropertiesEl, "Line thickness", "Rendered link line thickness.", "linkLineThickness");
     this.addLinkTypePropertySetting(linkPropertiesEl, "Link force", "Force-based link strength.", "linkForce");
@@ -2807,3 +3085,10 @@ class BasesGraphSettingTab extends PluginSettingTab {
   }
 }
 /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */
+
+export function normalizeGraphNoteTemplatePath(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  const path = raw.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").replace(/\/{2,}/g, "/");
+  if (/^[a-z]:/i.test(path) || path.split("/").some((part) => part === "." || part === "..") || /[\x00-\x1f]/.test(path)) return "";
+  return path;
+}

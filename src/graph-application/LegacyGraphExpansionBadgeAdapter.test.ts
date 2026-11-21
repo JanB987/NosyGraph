@@ -118,6 +118,8 @@ describe("LegacyGraphExpansionBadgeAdapter", () => {
           label: "Client",
           color: "#4488cc",
           semantic: "lens",
+          iconKind: "lens",
+          linkTypeIcon: "telescope",
           duplicateNodes: false
         },
         {
@@ -126,6 +128,8 @@ describe("LegacyGraphExpansionBadgeAdapter", () => {
           label: "Project",
           color: "#cc8844",
           semantic: "lens",
+          iconKind: "lens",
+          linkTypeIcon: "text:★",
           duplicateNodes: false
         }
       ],
@@ -138,5 +142,13 @@ describe("LegacyGraphExpansionBadgeAdapter", () => {
       "instance:B::LinkTypes/Project Lens.md"
     ]);
     expect(badges.every((badge) => badge.semantic === "lens")).toBe(true);
+    expect(badges).toMatchObject([
+      {
+        iconKind: "lens", linkTypeIcon: "telescope", hasRelationships: true
+      },
+      {
+        iconKind: "lens", linkTypeIcon: "text:★", hasRelationships: true
+      }
+    ]);
   });
 });

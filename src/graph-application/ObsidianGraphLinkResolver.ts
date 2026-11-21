@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument -- Obsidian metadata-cache and vault APIs expose runtime-shaped host data; this adapter narrows it before graph use. */
 import type { App, TFile } from "obsidian";
 import { extractInternalLinkCandidates } from "../linkResolver";
+import { getGraphCutFrontmatter } from "../ObsidianGraphCutFrontmatter";
 import type { O3LinkType } from "../O3LinkType";
 
 export interface ObsidianGraphLinkTarget {
@@ -26,6 +27,7 @@ export class ObsidianGraphLinkResolver {
   private readonly incomingLinksByProperty = new Map<string, Map<string, Set<string>>>();
   private readonly incomingLinksBySource = new Map<string, Map<string, Set<string>>>();
   private incomingLinkIndexReady = false;
+  private readonly incomingIndexProperties = new Set<string>();
 
   constructor(
     private readonly app: App,
@@ -36,7 +38,7 @@ export class ObsidianGraphLinkResolver {
     return String(value ?? "").trim().toLowerCase();
   }
 
-  collectFrontmatterLinksByType(file: TFile): Map<string, Set<string>> {
+  collectFrontmatterLinksByType(file: TFile, includePropertyAliases = true): Map<string, Set<string>> {
     const byType = new Map<string, Set<string>>();
     const cache = this.readFileCache(file);
 
@@ -64,7 +66,7 @@ export class ObsidianGraphLinkResolver {
       }
     }
 
-    this.applyActiveLinkTypePropertyAliases(byType);
+    if (includePropertyAliases) this.applyActiveLinkTypePropertyAliases(byType);
     return byType;
   }
 
@@ -91,7 +93,11 @@ export class ObsidianGraphLinkResolver {
     return this.resolveGraphLinkTarget(rawLinkText, sourcePath)?.path;
   }
 
-  resolveLinkedTargets(sourceFile: TFile, linkType: O3LinkType): ObsidianGraphLinkTarget[] {
+  resolveLinkedTargets(
+    sourceFile: TFile,
+    linkType: Pick<O3LinkType, "property" | "linkDiscoveryDirection">,
+    options?: { includePropertyAliases?: boolean }
+  ): ObsidianGraphLinkTarget[] {
     const property = this.normalizeProperty(String(linkType.property ?? ""));
     if (!property) return [];
     const direction = linkType.linkDiscoveryDirection
@@ -100,13 +106,15 @@ export class ObsidianGraphLinkResolver {
       ?? "outgoing";
     const candidates = new Set<string>();
     if (direction === "outgoing" || direction === "both") {
-      for (const targetPath of this.collectFrontmatterLinksByType(sourceFile).get(property) ?? []) {
+      const byType = this.collectFrontmatterLinksByType(sourceFile, options?.includePropertyAliases);
+      for (const targetPath of byType.get(property) ?? []) {
         candidates.add(targetPath);
       }
     }
     if (direction === "incoming" || direction === "both") {
-      this.ensureIncomingLinkIndex();
-      for (const incomingSource of this.incomingLinksByProperty.get(property)?.get(sourceFile.path) ?? []) {
+      this.ensureIncomingLinkIndex(property);
+      const indexKey = options?.includePropertyAliases === false ? `raw:${property}` : `alias:${property}`;
+      for (const incomingSource of this.incomingLinksByProperty.get(indexKey)?.get(sourceFile.path) ?? []) {
         candidates.add(incomingSource);
       }
     }
@@ -135,6 +143,7 @@ export class ObsidianGraphLinkResolver {
   clearIncomingLinkIndex(): void {
     this.incomingLinksByProperty.clear();
     this.incomingLinksBySource.clear();
+    this.incomingIndexProperties.clear();
     this.incomingLinkIndexReady = false;
   }
 
@@ -151,7 +160,10 @@ export class ObsidianGraphLinkResolver {
     const withoutHeading = withoutAlias.split("#")[0]?.trim() ?? withoutAlias;
     const normalized = withoutHeading.replace(/\\/g, "/").trim();
     if (!normalized) return null;
-    const resolved = this.app.metadataCache.getFirstLinkpathDest(normalized, sourcePath);
+    let decoded = normalized;
+    try { decoded = decodeURIComponent(normalized); } catch { /* Preserve malformed literal paths. */ }
+    const resolved = this.app.metadataCache.getFirstLinkpathDest(normalized, sourcePath)
+      ?? (decoded !== normalized ? this.app.metadataCache.getFirstLinkpathDest(decoded, sourcePath) : null);
     if (this.options.isFile(resolved)) {
       return {
         path: resolved.path,
@@ -182,8 +194,13 @@ export class ObsidianGraphLinkResolver {
     }
   }
 
-  private ensureIncomingLinkIndex(): void {
-    if (this.incomingLinkIndexReady) return;
+  private ensureIncomingLinkIndex(property: string): void {
+    if (this.incomingLinkIndexReady && this.incomingIndexProperties.has(property)) return;
+    this.incomingIndexProperties.add(property);
+    for (const key of this.options.getDiscoveryDirections().keys()) this.incomingIndexProperties.add(this.normalizeProperty(key));
+    for (const properties of this.options.getExpansionPropertyAliases().values()) {
+      for (const key of properties) this.incomingIndexProperties.add(this.normalizeProperty(key));
+    }
     this.incomingLinksByProperty.clear();
     this.incomingLinksBySource.clear();
     for (const file of this.app.vault.getMarkdownFiles()) this.indexIncomingLinksForFile(file);
@@ -191,7 +208,9 @@ export class ObsidianGraphLinkResolver {
   }
 
   private readFileCache(file: TFile): unknown {
-    return this.app.metadataCache.getFileCache(file);
+    const cached = this.app.metadataCache.getFileCache(file);
+    const committed = getGraphCutFrontmatter(this.app, file, cached);
+    return committed ? { frontmatter: committed } : cached;
   }
 
   private getFrontmatter(cache: unknown): Record<string, unknown> {
@@ -200,12 +219,18 @@ export class ObsidianGraphLinkResolver {
   }
 
   private indexIncomingLinksForFile(file: TFile): void {
-    const linksByType = this.collectFrontmatterLinksByType(file);
+    const linksByType = this.collectFrontmatterLinksByType(file, false);
+    const indexEntries: Array<[string, Set<string>]> = [...linksByType]
+      .filter(([property]) => this.incomingIndexProperties.has(property))
+      .map(([property, targets]) => [`raw:${property}`, targets]);
+    const aliased = new Map([...linksByType].map(([property, targets]) => [property, new Set(targets)]));
+    this.applyActiveLinkTypePropertyAliases(aliased);
+    for (const [property, targets] of aliased) {
+      if (this.incomingIndexProperties.has(property)) indexEntries.push([`alias:${property}`, targets]);
+    }
     const sourceEntries = new Map<string, Set<string>>();
-    for (const rawProperty of this.options.getDiscoveryDirections().keys()) {
-      const property = this.normalizeProperty(rawProperty);
-      const targets = linksByType.get(property);
-      if (!targets || targets.size === 0) continue;
+    for (const [property, targets] of indexEntries) {
+      if (targets.size === 0) continue;
       const sourceTargets = new Set<string>();
       for (const targetPath of targets) {
         sourceTargets.add(targetPath);

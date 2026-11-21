@@ -1,7 +1,10 @@
+import { queueGraphDocumentMutation } from "./GraphDocumentMutationQueue";
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { Modal, TFile, type App } from "obsidian";
 import { resolveWikiLinkArray } from "./linkResolver";
 import { setStyle } from "./domStyle";
+import type { GraphBadgeMembershipDestination, GraphBadgeMembershipItem, GraphBadgeMembershipResult } from "./graph-application/GraphLinkMutation";
+import { getGraphMarkdownFile, graphPropertyContainsNote } from "./ObsidianGraphNoteLinkPaste";
 
 export interface GraphRootPropertyMutationRequest {
   ownerPath: string;
@@ -12,13 +15,6 @@ export interface GraphRootPropertyMutationRequest {
 export interface GraphRootPropertyMutationResult {
   added: number;
   property: string | null;
-}
-
-export interface GraphReferencePropertyMutationRequest {
-  ownerPath: string;
-  referencePath: string;
-  files: TFile[];
-  propertyNames: string[];
 }
 
 export class ObsidianGraphRootPropertyMutationHandler {
@@ -41,31 +37,50 @@ export class ObsidianGraphRootPropertyMutationHandler {
     return { added, property };
   }
 
-  async addFilesToReferenceProperty(
-    request: GraphReferencePropertyMutationRequest
-  ): Promise<GraphRootPropertyMutationResult> {
-    const ownerFile = this.resolveFile(request.ownerPath);
-    const referenceFile = this.resolveFile(request.referencePath);
-    const files = this.normalizeFiles(request.files, ownerFile?.path ?? "");
-    const propertyNames = this.normalizeProperties(request.propertyNames);
-    if (!(ownerFile instanceof TFile) || !(referenceFile instanceof TFile) || files.length === 0) {
-      return { added: 0, property: null };
-    }
-
-    const frontmatter = this.app.metadataCache.getFileCache(ownerFile)?.frontmatter ?? {};
-    const matchingProperties = propertyNames.filter((property) =>
-      resolveWikiLinkArray(this.app, frontmatter[this.findFrontmatterPropertyKey(frontmatter, property) ?? property])
-        .some((file) => file.path === referenceFile.path)
-    );
-    if (matchingProperties.length === 0) return { added: 0, property: null };
-
-    const property = matchingProperties.length === 1
-      ? matchingProperties[0]
-      : await this.requestPropertySelection(matchingProperties, ownerFile);
-    if (!property) return { added: 0, property: null };
-
-    const added = await this.addFilesToProperty(ownerFile, files, property);
-    return { added, property };
+  async appendBadgeMembership(
+    destination: GraphBadgeMembershipDestination,
+    owner: TFile,
+    reference: TFile,
+    entries: readonly { path: string; file: TFile }[],
+    propertyIsCurrent: (frontmatter: Record<string, unknown>) => boolean
+  ): Promise<GraphBadgeMembershipResult> {
+    const { ownerPath, referencePath, property } = destination;
+    const notes = [...new Map(entries.map((entry) => [entry.path, entry])).values()];
+    const stale = (): GraphBadgeMembershipItem[] => notes.map(({ path }) => ({
+      path, status: "stale", reason: "The selected membership property or its parent changed. Review the destination before retrying."
+    }));
+    const identitiesMatch = () => getGraphMarkdownFile(this.app, ownerPath) === owner
+      && getGraphMarkdownFile(this.app, referencePath) === reference;
+    return queueGraphDocumentMutation(this.app, ownerPath, async () => {
+      if (!identitiesMatch()) return { destination, items: stale(), changedFilePaths: [] };
+      let items: GraphBadgeMembershipItem[] = [];
+      await this.app.fileManager.processFrontMatter(owner, (frontmatter) => {
+        items = [];
+        if (!identitiesMatch() || !propertyIsCurrent(frontmatter)
+          || !graphPropertyContainsNote(this.app, frontmatter[property], referencePath, ownerPath)) {
+          items = stale();
+          return;
+        }
+        const existing: unknown = frontmatter[property];
+        const references: string[] = [];
+        for (const { path, file } of notes) {
+          if (path === ownerPath) {
+            items.push({ path, status: "unavailable", reason: "A graph owner cannot be added as its own member." });
+          } else if (getGraphMarkdownFile(this.app, path) !== file) {
+            items.push({ path, status: "stale", reason: "The selected note changed or was deleted." });
+          } else if (graphPropertyContainsNote(this.app, existing, path, ownerPath)) {
+            items.push({ path, status: "already-present" });
+          } else {
+            references.push(this.app.fileManager.generateMarkdownLink(file, ownerPath));
+            items.push({ path, status: "added" });
+          }
+        }
+        if (references.length) {
+          frontmatter[property] = [...(Array.isArray(existing) ? existing : [existing]), ...references];
+        }
+      });
+      return { destination, items, changedFilePaths: items.some(({ status }) => status === "added") ? [ownerPath] : [] };
+    }, "badge-membership");
   }
 
   private async requestPropertySelection(propertyNames: string[], ownerFile: TFile): Promise<string | null> {

@@ -33,6 +33,8 @@ export interface GraphBadge {
   state: GraphBadgeState;
   semantic: GraphBadgeSemantic;
   iconKind?: GraphBadgeIconKind;
+  /** Requested glyph from the LinkType definition. */
+  linkTypeIcon?: string;
   hasRelationships: boolean;
   duplicateNodes: boolean;
   expansionId?: ExpansionId;

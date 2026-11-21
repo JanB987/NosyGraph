@@ -2,13 +2,21 @@
 
 Build and explore structured, expandable graphs from your Obsidian notes.
 
-Version **0.2.15**. See the [release notes](docs/releases/0.2.15.md)
-and [release/verification guide](docs/releases/0.2.15-release-guide.md).
+Version **0.3.0**. See the [release notes](docs/releases/0.3.0.md)
+and [release/verification guide](docs/releases/0.3.0-release-guide.md).
 
 NosyGraph is an Obsidian plugin for building interactive, property-driven graph views from Markdown notes. It reads relationships from note frontmatter, LinkType notes, group notes, graph notes, graph-capable notes, and Obsidian Bases views, then renders them as an explorable canvas graph with expandable links, embedded graph lenses, typed edges, grouping, and persistent graph-note state.
 
 **Beta warning:** This plugin is currently beta software. Use it first in a copied vault or with reliable backups enabled. Earlier development builds had a critical bug where an open graph note could sometimes be emptied when Obsidian reloaded while the graph view was active. This has not been seen recently, and safeguards have been added to block unsafe empty graph-state writes, but graph notes should still be treated as important data and backed up.
 
+## New in 0.3.0
+
+- Switch a Graph Tab between graph navigation and editable Markdown, with a resizable list for multiple selected notes.
+- Link a Graph Tab to one specific source tab, or follow the graph pane you last used automatically.
+- Cut property-backed nodes from graphs, lenses, nested lenses, and expanded relationships, then paste their links elsewhere.
+- Paste batches of note links into an Alt-click badge input, review them, and press Enter to add the relationships.
+- Choose whether badge additions also add graph or Lens membership, and customize LinkType badge icons.
+- Create graph notes from a Templater template. Lens LinkType views now show only their linked targets and no longer generate ordinary relationship edges.
 
 ## Screenshots
 
@@ -22,7 +30,6 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 
 ![NosyGraph nested lenses and connected nodes](docs/images/nosygraph-nested-lenses.png)
 
-
 ## Features
 
 ### Graph Notes
@@ -33,6 +40,7 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 - Migrate older graph-note JSON layouts to the current state layout.
 - Clear graph runtime data and rebuild it from graph-note frontmatter.
 - Configure graph-note property keys in plugin settings to fit existing vault conventions.
+- Choose a Markdown template under **Graph note template → Template file** to create new graph notes through Templater. Leave it empty to use the built-in graph note without Templater. Template output is preserved; a missing graph identifier is added, while a conflicting identifier opens in Markdown for correction.
 
 ### Graph-Capable Notes
 
@@ -41,23 +49,35 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 - Override defaults per note through frontmatter.
 - Explicitly render graph transclusions only when using a graph-view subpath such as `![[Some Note#graphview]]`.
 
+### Graph Tabs
+
+- Run **Open Graph Tab**, then use the upper-right mode button to switch between the graph and Obsidian’s Markdown editor in the same tab.
+- Markdown supports normal note editing, properties, and reading mode. With one selected node, it shows that note; when the selection is empty, it shows the graph source note. Select multiple notes to show the **Selected notes** list. Entries use their full paths, and opening an entry leaves the graph root and selection in place.
+- Drag the divider beside **Selected notes** to resize the list. NosyGraph saves the width for each graph note and restores it when you reopen that graph.
+- Use the chain button to link to a specific open tab, rather than to a note path. Linked Graph Tabs follow only that tab’s note and graph selection, including when it is inactive; selecting nodes in other tabs does not redirect them. If the source closes, use the chain button to relink or return to **Automatic**.
+- Automatic mode follows the graph pane you last used, including rendered graph embeds, and keeps the normal active-note following rules. Each Graph Tab saves its own mode and source binding with the workspace.
+
 ### LinkTypes
 
 - Define LinkType notes that describe how relationship properties should be read and rendered.
 - Expand LinkType badges to add linked notes to the graph.
 - Support LinkTypes with one property or multiple equivalent properties.
 - Define `linkType: lens` LinkTypes with multiple read properties and an optional
-  `writeProperty`, keeping each Lens definition's viewport independent.
+  `writeProperty`, keeping each viewport independent. A Lens uses its linked targets as members. Ordinary lines and springs require a separately enabled ordinary LinkType, which can read the same property.
 - Support outgoing, incoming, and bidirectional link discovery.
 - Support LinkTypes that create duplicate nodes where duplicate visual contexts are required.
 - Configure LinkType colors, badge colors, line colors, line thickness, arrow direction, link force, link distance, and duplicate behavior.
 - Use `visibleLinkTypes` to show typed edges only between nodes already visible in the graph.
 - Configure visible and discovered link styles as normal or dashed.
+- Set `linkTypeIcon` to an Obsidian/Lucide icon name, emoji, or short text. Default icons distinguish Lens, Force Based, Direction Based, and Parent badges; see [badge icon examples](#linktype-badge-icons).
 
 ### Relationship Editing
 
 - Add relationships by dragging a node onto another node's LinkType badge.
-- Add relationships through an input modal with fuzzy file selection and new-file support.
+- Alt-click a LinkType badge to search for or create a single note, or paste note links to preview a batch. The preview shows full paths, skipped links, and the write property. Use **Enter** or **Add** to submit the eligible notes, **Remove** or **Clear** to edit the batch, or **Escape** to cancel before writing.
+- Batch paste supports graph Copy/Cut links, wiki and Markdown note links, and links copied from property lists. Incoming badges write a link to the clicked note in each pasted note's configured property. Outgoing and both-direction badges write in the clicked note. A batch skips relationships already present in an equivalent property.
+- **Also add to graph membership** is On by default and saves immediately from the badge input or plugin settings. It applies to search, note creation, and pasted batches. The modal shows the property that already lists the clicked note and asks you to pick one when several match.
+- Inside a Lens LinkType, membership belongs to the enclosing Lens source note. If a badge link saves and membership fails, retry membership from the same modal.
 - Mutate source note YAML as the source of truth, then refresh graph state from the changed note.
 - Apply a Templater template to selected graph nodes with **Apply template to
   selected nodes** when the Templater plugin is enabled.
@@ -69,6 +89,7 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 
 - Expand graph-note nodes and graph-capable notes into graph lenses.
 - Open nested lenses from nodes inside lenses.
+- A Lens LinkType badge opens the notes linked under its configured read properties, without inserting the source node into the Lens. Lens membership keeps its viewport connector and does not create ordinary node-to-node edges or springs. Enable a separate Force Based or Direction Based LinkType when those edges are wanted.
 - Move, resize, maximize, restore, close, and fit lens content.
 - Pan and zoom inside a lens independently from the parent graph.
 - Persist lens position, size, maximize state, and viewport state in graph notes.
@@ -111,8 +132,11 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 - Right-click nodes, containers, and graph objects for context actions.
 - Open nodes with double click.
 - Open nodes in a new tab from the context menu.
-- Copy selected graph node links with `Ctrl+C` when a graph view is focused.
-- Select all graph nodes with `Ctrl+A` when a graph view is focused.
+- Copy selected graph node links with `Ctrl+C` / `Cmd+C` when a graph view is focused.
+- Cut selected nodes with **Cut node / Cut nodes** beside Copy in the context menu, `Ctrl+X` / `Cmd+X` on the focused canvas, or the **Cut selected graph nodes** command. Cut unlinks each selected instance from the properties that introduce it, including graph roots, classic and nested lenses, Lens LinkType viewports, and active property badge expansions. Incoming expansions remove the reverse reference while copying the selected note’s link. Body-link-only and filter-only nodes are skipped with an explanation. Editable fields retain native text cutting.
+- Paste copied or cut links into note bodies, source frontmatter, or property widgets using the existing paste integration. Paste can be repeated. Cut publishes and registers the eligible links before removing references. A partial-failure notice identifies failed owner updates or runtime refreshes, and the clipboard retains the original eligible links for recovery.
+- Cutting the last root leaves an empty property array and keeps the graph usable. Referenced note files, unrelated property values, and note bodies are preserved. Ambiguous compound property values are skipped.
+- Select all nodes across the focused graph and its open lenses with `Ctrl+A` / `Cmd+A`. In Markdown mode, native editor shortcuts continue to act on text.
 - Configure separate hotkeys for showing all LinkType badges and freezing the graph.
 - Lock graph containers/lenses so dragging inside them pans the viewport instead of moving the object.
 
@@ -163,7 +187,7 @@ NosyGraph works locally inside Obsidian and does not make network requests.
 
 The plugin may enumerate Markdown files in the vault to resolve graph roots, graph capable notes, incoming links, discovered link types, connected Base view results, and missing-file relationships. This is needed because graph membership can depend on links and frontmatter relationships across multiple notes.
 
-Clipboard access is used for explicit copy actions in the graph view, such as copying selected graph node links. NosyGraph does not read clipboard content for background processing.
+Clipboard access is used for explicit Copy and Cut actions in the graph view and for text supplied by a paste event. The badge input reads pasted text when you paste into it. NosyGraph does not read clipboard content for background processing.
 
 ## Note Types
 
@@ -362,6 +386,34 @@ property:
 
 All listed properties are treated as equivalent read properties for that LinkType.
 
+### LinkType badge icons
+
+Set `linkTypeIcon` in the LinkType note to use a registered Obsidian/Lucide icon, an emoji or symbol, or short literal text. The setting works with every LinkType mode.
+
+```yaml
+o3LinkType: true
+key: Project scope
+linkType: lens
+property:
+  - parts
+  - deliverables
+writeProperty: parts
+linkTypeIcon: telescope
+```
+
+You can replace `telescope` with `"🔭"`, `"★"`, or `"text:ABC"`. Quote symbol and text values in YAML, especially `"#"`, `"*"`, and `":"`. Registered names take precedence over bare symbols. Use `"text:x"` for a literal x or `"text:7"` for the numeral. Choose a short symbol or abbreviation because the badge clips text to the icon slot.
+
+Missing, blank, or unrecognized values use the mode's default. Removing the property restores that default.
+
+| LinkType mode | Default icon |
+| --- | --- |
+| Lens | `scan-search` |
+| Force Based | `zap` |
+| Direction Based | `arrow-right` |
+| Parent | `git-branch` |
+
+Map a custom frontmatter key under **LinkType property names → Badge icon** in plugin settings. Each definition uses its own glyph, including lenses that share a read property.
+
 ## Group Example
 
 ```yaml
@@ -392,7 +444,7 @@ The plugin manifest uses the id `nosygraph`, the name `NosyGraph`, and Jan Bergh
 
 ## Release Status
 
-Current status: beta. Current release: `0.2.9` (release commit `46ebb0e`; GitHub release publication and checker scan are pending). See the handover document for the current release state.
+Current status: beta. Current release: [0.3.0](https://github.com/JanB987/NosyGraph/releases/tag/0.3.0). See the [release notes](docs/releases/0.3.0.md) for the changes and the [verification guide](docs/releases/0.3.0-release-guide.md) for checks and known limitations.
 
 Release history is recorded in [CHANGELOG.md](CHANGELOG.md).
 
@@ -411,3 +463,9 @@ Before publishing to the official Obsidian Community Plugins directory, test at 
 ## License
 
 NosyGraph is released under the MIT License. See `LICENSE` for the full license text.
+
+### Graph note templates
+
+In NosyGraph settings, choose a Markdown file under **Graph note template** to use it with **Create new graph note**. The picker includes the entire vault; the file does not need to be in Templater's template folder. Install and enable a compatible Templater plugin for a selected template. Clear the selection to use NosyGraph's built-in graph note without Templater. The new note is created in the active note's folder, or in the vault root when no note is active.
+
+The template supplies the complete note, and Templater commands (including prompts, rename, and move) run before the graph opens. NosyGraph adds the configured graph identifier if it is absent. A matching property is preserved; if the property conflicts, the note opens in Markdown so you can fix the template or graph identifier setting. A missing template or Templater does not fall back to built-in content.

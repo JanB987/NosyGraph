@@ -8,6 +8,7 @@ export interface LinkTypePropertyKeys {
   linkDiscoveryDirection: string;
   pointerDirection: string;
   color: string;
+  linkTypeIcon: string;
   linkLineColor: string;
   linkLineThickness: string;
   recursive: string;
@@ -38,6 +39,7 @@ export const DEFAULT_LINK_TYPE_PROPERTY_KEYS: LinkTypePropertyKeys = {
   linkDiscoveryDirection: "LinkDiscoveryDirection",
   pointerDirection: "PointerDirection",
   color: "color",
+  linkTypeIcon: "linkTypeIcon",
   linkLineColor: "linkLineColor",
   linkLineThickness: "linkLineThickness",
   recursive: "recursive",

@@ -79,6 +79,16 @@ describe("ObsidianGraphLinkResolver", () => {
     ]);
   });
 
+  it("uses the exact read property for incoming discovery when aliases are disabled", () => {
+    const { records, resolver } = fixture();
+    const target = records[2]!.file;
+    const exact = { includePropertyAliases: false };
+    expect(resolver.resolveLinkedTargets(target, linkType("incoming"), exact)).toEqual([]);
+    expect(resolver.resolveLinkedTargets(target, { property: "parts", linkDiscoveryDirection: "incoming" }, exact)
+      .map(note => note.path)).toEqual(["A.md"]);
+    expect(resolver.resolveLinkedTargets(target, linkType("incoming")).map(note => note.path)).toEqual(["A.md"]);
+  });
+
   it("supports incoming target discovery through its own index", () => {
     const { records, resolver } = fixture();
     expect(resolver.resolveLinkedTargets(records[0]!.file, linkType("incoming"))).toEqual([

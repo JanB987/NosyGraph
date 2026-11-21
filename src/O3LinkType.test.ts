@@ -1,6 +1,7 @@
 import type { TFile } from "obsidian";
 import { describe, expect, it } from "vitest";
 import { O3LinkType } from "./O3LinkType";
+import { normalizeLinkTypePropertyKeys } from "./NoteTypePropertyKeys";
 
 function file(path: string): TFile {
   const name = path.split("/").pop() ?? path;
@@ -120,5 +121,34 @@ describe("O3LinkType baseline characterization", () => {
     expect(definition.validationErrors).toEqual([
       "writeProperty must be one of the configured read properties."
     ]);
+  });
+});
+
+describe("O3LinkType badge icon frontmatter", () => {
+  const lens = { property: ["parts", "deliverables"], linkType: "lens", writeProperty: "deliverables" };
+
+  it("defaults the property mapping and reads case-insensitive aliases without changing the payload", () => {
+    expect(normalizeLinkTypePropertyKeys({ property: "relations" }).linkTypeIcon).toBe("linkTypeIcon");
+    const note = file("LinkTypes/Scope.md");
+    const keys = { linkTypeIcon: " BadgeGlyph " };
+    expect(new O3LinkType(note, { ...lens, BADGEGLYPH: "  text:ABC  " }, keys).linkTypeIcon).toBe("text:ABC");
+    expect(new O3LinkType(note, { ...lens, LiNkTyPeIcOn: "👩🏽‍🔬" }, keys).linkTypeIcon).toBe("👩🏽‍🔬");
+  });
+
+  it.each([undefined, null, 7, true, ["telescope"], { icon: "telescope" }, "  "]
+    .map((linkTypeIcon) => ({ linkTypeIcon })))(
+    "ignores unsupported YAML value $linkTypeIcon without invalidating the definition", ({ linkTypeIcon }) => {
+      const definition = new O3LinkType(file("LinkTypes/Scope.md"), { ...lens, linkTypeIcon });
+      expect(definition.linkTypeIcon).toBeUndefined();
+      expect(definition.isValid).toBe(true);
+      expect(definition.validationErrors).toEqual([]);
+      expect(definition.writeProperty).toBe("deliverables");
+    }
+  );
+
+  it("retains the requested ID for host validation", () => {
+    const definition = new O3LinkType(file("LinkTypes/Scope.md"), { ...lens, linkTypeIcon: "telescoppe" });
+    expect(definition.linkTypeIcon).toBe("telescoppe");
+    expect(definition.isValid).toBe(true);
   });
 });

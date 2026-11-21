@@ -1,3 +1,4 @@
+import { queueGraphDocumentMutation } from "./GraphDocumentMutationQueue";
 import type { App, TFile } from "obsidian";
 import type { GraphPropertyKeys } from "./GraphPropertyKeys";
 import { O3GraphState } from "./O3GraphState";
@@ -17,6 +18,7 @@ export type O3GraphDocumentWriteReason =
 export interface O3GraphDocumentWriteOptions {
   reason: O3GraphDocumentWriteReason;
   forceEmptyOverwrite?: boolean;
+  requireExistingBlock?: boolean;
 }
 
 export class O3GraphDocumentStore {
@@ -25,8 +27,8 @@ export class O3GraphDocumentStore {
   private hasHydratedSuccessfully = false;
 
   constructor(
-    app: App,
-    file: TFile,
+    private readonly app: App,
+    private readonly file: TFile,
     graphPropertyKeys: Partial<GraphPropertyKeys>
   ) {
     this.stateStore = new O3GraphStateStore(app, file, graphPropertyKeys);
@@ -68,13 +70,14 @@ export class O3GraphDocumentStore {
       });
       return false;
     }
-    return this.stateStore.write(graphState, {
+    return queueGraphDocumentMutation(this.app, this.file.path, () => this.stateStore.write(graphState, {
       forceEmptyOverwrite: options.forceEmptyOverwrite === true || options.reason === "clear-graph-data",
+      requireExistingBlock: options.requireExistingBlock === true,
       allowNodeRemoval: options.reason === "badge-expansion"
         || options.reason === "note-truth-reconciliation"
         || options.reason === "clear-graph-data"
         || options.reason === "manual-migration"
-    });
+    }));
   }
 
   private shouldAllowWrite(options: O3GraphDocumentWriteOptions): boolean {

@@ -9,6 +9,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   type: string;
+  definitionId?: string;
 }
 
 export class GraphModel {

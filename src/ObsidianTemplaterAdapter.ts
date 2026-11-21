@@ -1,6 +1,7 @@
-import { FuzzySuggestModal, Notice, TFile, normalizePath, type App } from "obsidian";
+import { FuzzySuggestModal, Notice, TFile, normalizePath, type App, type TFolder } from "obsidian";
 
 interface TemplaterRuntime {
+  create_new_note_from_template?: (template: TFile, folder: TFolder, filename: string, open: boolean) => Promise<TFile | undefined>;
   write_template_to_file?: (template: TFile, target: TFile) => Promise<void>;
 }
 
@@ -76,6 +77,20 @@ export class ObsidianTemplaterAdapter {
     return typeof this.getPlugin()?.templater?.write_template_to_file === "function";
   }
 
+  canCreateNote(): boolean {
+    return typeof this.getPlugin()?.templater?.create_new_note_from_template === "function";
+  }
+
+  async createNote(template: TFile, folder: TFolder, filename: string): Promise<TFile | undefined> {
+    const runtime = this.getPlugin()?.templater;
+    if (typeof runtime?.create_new_note_from_template !== "function") throw new Error("Templater note creation API unavailable.");
+    return await runtime.create_new_note_from_template(template, folder, filename, false);
+  }
+
+  async chooseVaultTemplate(): Promise<TFile | null> {
+    return await this.pickTemplate(this.app.vault.getMarkdownFiles());
+  }
+
   async chooseTemplate(): Promise<TFile | null> {
     const plugin = this.getPlugin();
     if (!plugin) return null;
@@ -83,7 +98,15 @@ export class ObsidianTemplaterAdapter {
     const templates = this.app.vault.getMarkdownFiles()
       .filter((file) => !folder || file.path === folder || file.path.startsWith(`${folder}/`))
       .sort((a, b) => a.path.localeCompare(b.path));
-    if (templates.length === 0) return null;
+    return await this.pickTemplate(templates);
+  }
+
+  private async pickTemplate(templates: TFile[]): Promise<TFile | null> {
+    templates = [...templates].sort((a, b) => a.path.localeCompare(b.path));
+    if (templates.length === 0) {
+      new Notice("No Markdown templates found.");
+      return null;
+    }
     return await new Promise<TFile | null>((resolve) => {
       const picker = new TemplaterTemplatePicker(this.app, templates, resolve);
       picker.open();

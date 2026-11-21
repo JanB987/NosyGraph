@@ -10,6 +10,7 @@ import { BasesGraphView } from "./GraphView";
 import { DEFAULT_GRAPH_PROPERTY_KEYS } from "./GraphPropertyKeys";
 import { DEFAULT_NOTE_TYPE_IDENTIFIERS } from "./NoteTypeIdentifier";
 import { O3GraphState, type O3GraphRuntimeNodeSnapshot } from "./O3GraphState";
+import { reconcileRootSnapshots, reconcileEmbeddedRootMembership } from "./GraphRootSnapshotReconciliation";
 
 function snapshot(path: string, x = 20): O3GraphRuntimeNodeSnapshot {
   return { nodeId: path, path, x, y: 40, pinned: true, origin: { kind: "root" }, badges: { related: "expanded" } };
@@ -54,6 +55,39 @@ function fixture(defaults = false) {
 }
 
 describe("configured root links refresh open graphs and lenses", () => {
+  it("prunes removed roots and dependent expansions while retaining independent filters and layout", () => {
+    const child = { ...snapshot("Child.md"), origin: { kind: "expansion" as const, sourceNodeId: "A.md", linkType: "related" } };
+    const filter = { ...snapshot("Filter.md"), origin: { kind: "filter" as const } };
+    expect(reconcileRootSnapshots([snapshot("A.md"), snapshot("B.md", 123), child, filter], [snapshot("B.md")]))
+      .toEqual([snapshot("B.md", 123), filter]);
+  });
+
+  it.each([false, true])("keeps the last-member lens graph-capable on a fresh definition load (defaults=%s)", async defaults => {
+    const { view, graph, frontmatter } = fixture(defaults);
+    frontmatter.Members = [];
+    view.file = { path: "Parent.md" };
+    expect(view.isGraphFrontmatterExpandable(graph, frontmatter)).toBe(true);
+    const definition = await view.loadEmbeddedGraphDefinition(graph.path, []);
+    expect(definition.snapshots).toEqual([]);
+    // Recreate the cache as on reopening, with the stale persisted root still present.
+    const reopened = fixture(defaults);
+    reopened.frontmatter.Members = [];
+    reopened.view.file = { path: "Parent.md" };
+    expect((await reopened.view.loadEmbeddedGraphDefinition(graph.path, [])).snapshots).toEqual([]);
+  });
+
+  it("reconciles persisted nested lens memberships and prunes lenses introduced by removed roots", () => {
+    const entries = [{ originNodeId: "Parent", graphPath: "Other.md", expanded: true as const,
+      snapshots: [snapshot("Origin")], embeddedGraphs: [{ originNodeId: "Origin", graphPath: "Lens.md", expanded: true as const,
+        snapshots: [snapshot("A.md"), snapshot("B.md", 99)], embeddedGraphs: [
+          { originNodeId: "A.md", graphPath: "ChildLens.md", expanded: true as const }
+        ] }]
+    }];
+    const reconciled = reconcileEmbeddedRootMembership(entries, "Lens.md", [snapshot("B.md")]);
+    expect(reconciled[0].embeddedGraphs![0].snapshots).toEqual([snapshot("B.md", 99)]);
+    expect(reconciled[0].embeddedGraphs![0].embeddedGraphs).toEqual([]);
+    expect(reconcileEmbeddedRootMembership(entries, "Lens.md", [])[0].embeddedGraphs![0].snapshots).toEqual([]);
+  });
   it.each([false, true])("includes added YAML roots despite persisted Lens nodes (defaults=%s)", async (defaults) => {
     const { view, graph, a, b } = fixture(defaults);
     view.file = { path: "Parent.md" };

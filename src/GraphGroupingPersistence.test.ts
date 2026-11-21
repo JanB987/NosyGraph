@@ -38,6 +38,20 @@ function fixture() {
 }
 
 describe("graph-note grouping persistence", () => {
+  it("persists a validated last-root reconciliation and preserves note content after reopening", async () => {
+    const f = fixture();
+    const store = new O3GraphDocumentStore(f.app, file, {});
+    const state = await store.readState({ cached: false });
+    state.removeVisibleRoot("A.md");
+    // Ordinary writes continue to protect populated snapshots from accidental empty overwrites.
+    expect(await store.writeState(state, { reason: "viewport" })).toBe(false);
+    expect(await store.writeState(state, { reason: "note-truth-reconciliation", forceEmptyOverwrite: true })).toBe(true);
+    const reopened = await new O3GraphDocumentStore(f.app, file, {}).readState({ cached: false });
+    expect(reopened.toRuntimeNodeSnapshots()).toEqual([]);
+    expect(f.content().startsWith(f.prefix)).toBe(true);
+    expect(f.content().endsWith(f.suffix)).toBe(true);
+    expect(reopened.state.viewport).toEqual({ x: 10, y: 20, zoom: 0.5 });
+  });
   it("saves settings rules and restores them after reopening without changing markdown or topology", async () => {
     const f = fixture();
     const store = new O3GraphDocumentStore(f.app, file, {});

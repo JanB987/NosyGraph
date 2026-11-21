@@ -1,3 +1,4 @@
+import { normalizeLinkTypeBadgeIcon } from "../LinkTypeBadgeIcon";
 import type {
   LensLinkTypeDefinition,
   LinkDiscoveryDirection,
@@ -14,6 +15,7 @@ export interface LensLinkTypeDefinitionInput {
   property?: unknown;
   properties?: unknown;
   writeProperty?: unknown;
+  linkTypeIcon?: unknown;
   discoveryDirection?: unknown;
   pointerDirection?: unknown;
   color?: unknown;
@@ -63,6 +65,7 @@ export function validateLensLinkTypeDefinition(
   const id = normalizeText(input?.id) || definitionReference;
   const label = normalizeText(input?.label) || definitionReference;
   const iconKind: LinkTypeIconKind = "lens";
+  const linkTypeIcon = normalizeLinkTypeBadgeIcon(input?.linkTypeIcon);
   return {
     errors: [],
     definition: {
@@ -74,6 +77,7 @@ export function validateLensLinkTypeDefinition(
       writeProperty,
       semantic: "lens",
       iconKind,
+      ...(linkTypeIcon ? { linkTypeIcon } : {}),
       directionMode: "child",
       discoveryDirection,
       pointerDirection,

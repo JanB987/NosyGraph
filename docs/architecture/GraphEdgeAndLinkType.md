@@ -66,3 +66,5 @@ During migration, [LegacyGraphSnapshotAdapter](LegacyGraphSnapshotAdapter.md) ma
 ## Live visibility policy
 
 [GraphRenderVisibilityPolicy](GraphRenderVisibilityPolicy.md) separates node admission from line rendering in the live `GraphEngine`. Persistent graph-note mode can disable global LinkType discovery without hiding an eligible relationship whose two endpoint notes are already visible. It also applies a one-screen-pixel minimum to scaled relationship lines and delegates parent and duplicate-node relationships to their specialized paths.
+
+The live [relationship edge policy](../../src/graph-application/GraphRelationshipEdgePolicy.ts) resolves graph selections against the definitions enabled in that context. Explicit definition references retain their identity. A raw property can use a separately enabled ordinary definition, or the legacy property rule when the property is unregistered. Lens definitions provide viewport membership. Ordinary runtime edges carry the authorizing definition ID when one is available, so discovery, visible and overlay refresh, and replay can resolve the correct appearance and physics.

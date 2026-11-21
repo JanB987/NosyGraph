@@ -31,6 +31,7 @@ export interface LinkTypeDefinition {
   writeProperty?: string;
   semantic?: LinkTypeSemantic;
   iconKind?: LinkTypeIconKind;
+  linkTypeIcon?: string;
   discoveryDirection?: LinkDiscoveryDirection;
   pointerDirection?: LinkPointerDirection;
   layout: LinkTypeLayoutMode;
@@ -63,6 +64,7 @@ export interface LinkTypeBadgeDefinition {
   label: string;
   semantic: LinkTypeSemantic;
   iconKind: LinkTypeIconKind;
+  linkTypeIcon?: string;
   /** Lens badges may be visible on eligible unselected nodes. */
   showWhenUnselected: boolean;
   /** Ordinary badges require a relationship for the unselected exception. */

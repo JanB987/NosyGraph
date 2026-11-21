@@ -1,4 +1,12 @@
-import { requireApiVersion, type App } from "obsidian";
+import { requireApiVersion, type App, type Workspace } from "obsidian";
+
+export function requestStyleSettingsReparse(workspace: Pick<Workspace, "getLeavesOfType" | "trigger">): void {
+  // Style Settings 1.0.9 calls its view method on every matching leaf.
+  // Obsidian can report a matching leaf while the view is still deferred.
+  const waiting = workspace.getLeavesOfType("style-settings").some(({ view }) =>
+    !("setSettings" in view) || typeof view.setSettings !== "function");
+  if (!waiting) workspace.trigger("parse-style-settings");
+}
 
 /** Bases property IDs split at the first dot; property names may contain dots. */
 export function parseGraphPropertyId(key: string): { type: "note" | "file" | "formula"; name: string } | null {

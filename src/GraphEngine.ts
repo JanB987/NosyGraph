@@ -1,25 +1,41 @@
+import type { GraphCutChange } from "./ObsidianGraphNodeCutHost";
+import type { GraphCutDefinition, GraphCutOrigin, GraphNodeCutSelection } from "./graph-application/GraphNodeCutService";
+import { reconcileLensMembershipSnapshots, reconcileRootSnapshots } from "./GraphRootSnapshotReconciliation";
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
-import { App, Component, EventRef, Menu, TFile, setIcon } from "obsidian";
+import { App, Component, EventRef, Menu, Notice, TFile, getIcon } from "obsidian";
 import { extractInternalLinkCandidates, NONE_LINK_TYPE } from "./linkResolver";
 import { type GraphPropertyKeys, normalizeGraphPropertyKeys, readFrontmatterPropertyByKey } from "./GraphPropertyKeys";
 import { createGraphBadgeId } from "./graph-domain/GraphBadge";
 import { createGraphBadgeExpansionEdgeId } from "./graph-domain/GraphEdge";
 import type { GraphEdge as ModelGraphEdge } from "./GraphModel";
 import type { O3GraphEmbeddedGraphState, O3GraphEmbeddedLensState, O3GraphNodeOrigin, O3GraphRuntimeNodeSnapshot, O3GraphRuntimeState } from "./O3GraphState";
-import type { O3LinkType } from "./O3LinkType";
+import { O3LinkType } from "./O3LinkType";
+import { normalizeLensReadProperties } from "./link-types/LensLinkTypeDefinition";
+import type { LinkTypePropertyKeys } from "./NoteTypePropertyKeys";
+import type {
+  GraphBadgeLinkInputRequest, GraphBadgeMembershipContext, GraphBadgeMembershipDestination, GraphLinkBadgeDropMutationRequest, GraphLinkBadgeDropMutationResult,
+  GraphLinkMutationNodeRef, GraphLinkWriteDescriptor
+} from "./graph-application/GraphLinkMutation";
 import { O3NodeBadge } from "./O3NodeBadge";
+import { getLinkTypeBadgeIconKind, renderLinkTypeBadgeIcon } from "./LinkTypeBadgeIcon";
 import { setStyle } from "./domStyle";
 import { GraphController } from "./graph-application/GraphController";
 import { GraphBadgeToggleHandler } from "./graph-application/GraphBadgeToggleHandler";
 import { GraphBadgeExpansionCoordinator } from "./graph-application/GraphBadgeExpansionCoordinator";
 import { GraphLegacyExpansionService } from "./graph-application/GraphLegacyExpansionService";
 import { GraphRenderVisibilityPolicy } from "./graph-application/GraphRenderVisibilityPolicy";
+import {
+  allowsRelationshipEdges,
+  resolveRelationshipEdgeCandidates,
+  type RelationshipEdgeCandidate
+} from "./graph-application/GraphRelationshipEdgePolicy";
 import { isExpansionSourceAvailable } from "./graph-application/GraphExpansionRuntimeVisibility";
 import { GraphBadgeToggleShadowComparator } from "./graph-application/GraphBadgeToggleShadowComparator";
 import { GraphBadgeToggleShadowService } from "./graph-application/GraphBadgeToggleShadowService";
 import { GraphBadgeToggleService } from "./graph-application/GraphBadgeToggleService";
 import { GraphQueries } from "./graph-application/GraphQueries";
 import { GraphStore } from "./graph-application/GraphStore";
+import { graphTabSelection } from "./graph-application/GraphTabSession";
 import {
   GraphPhysicsShadowInputService,
   type GraphPhysicsShadowInputCapture
@@ -118,7 +134,10 @@ interface Edge {
   relationship?: "parent";
   mode?: "overlay" | "visible";
   origin?: string;
+  definitionId?: string;
 }
+
+type EdgeCandidate = RelationshipEdgeCandidate<O3LinkType>;
 
 type GraphLinkTarget = ObsidianGraphLinkTarget;
 
@@ -173,12 +192,44 @@ export interface EmbeddedGraphDefinition {
   colorSource?: "explicit" | "group" | "default";
   linkForce: number;
   snapshots: O3GraphRuntimeNodeSnapshot[];
+  sourceCenter?: { x: number; y: number };
   ancestry: string[];
   lens?: O3GraphEmbeddedLensState;
-  embeddedGraphs?: O3GraphEmbeddedGraphState[];
+  embeddedGraphs?: LiveEmbeddedGraphState[];
   linkTypes: O3LinkType[];
   visibleLinkTypes?: string[];
   visibleLinkTypeDefinitions?: O3LinkType[];
+}
+
+interface CutExpansionClaim {
+  sourceNodeId: string;
+  selector: string;
+  children: Set<string>;
+}
+
+interface LiveEmbeddedGraphState extends O3GraphEmbeddedGraphState {
+  sourceCenter?: { x: number; y: number };
+  embeddedGraphs?: LiveEmbeddedGraphState[];
+}
+
+export function restoreEmbeddedGraphDefinition(
+  definition: EmbeddedGraphDefinition,
+  saved: Partial<Pick<EmbeddedGraphDefinition, "snapshots" | "lens" | "sourceCenter" | "embeddedGraphs">>
+): EmbeddedGraphDefinition {
+  const isLens = definition.runtimeOnly && definition.linkTypeId;
+  const previous = saved.snapshots ?? definition.snapshots;
+  const snapshots = isLens
+    ? reconcileLensMembershipSnapshots(previous, definition.snapshots)
+    : reconcileRootSnapshots(previous, definition.snapshots);
+  const children = saved.embeddedGraphs ?? definition.embeddedGraphs;
+  const memberIds = new Set(snapshots.map(({ nodeId }) => nodeId));
+  return {
+    ...definition,
+    snapshots,
+    sourceCenter: saved.sourceCenter ?? definition.sourceCenter,
+    lens: saved.lens ?? definition.lens,
+    embeddedGraphs: isLens ? children?.filter(({ originNodeId }) => memberIds.has(originNodeId)) : children
+  };
 }
 
 interface EmbeddedGraphContainerState {
@@ -188,6 +239,7 @@ interface EmbeddedGraphContainerState {
   graphPath: string;
   persistenceOwnerPath: string;
   runtimeOnly?: boolean;
+  pendingEmbeddedGraphs?: LiveEmbeddedGraphState[];
   linkTypeId?: string;
   memberIds: Set<string>;
   interactionLocked?: boolean;
@@ -239,36 +291,6 @@ interface GraphIconImageCacheEntry {
   image: HTMLImageElement;
 }
 
-export interface GraphLinkMutationNodeRef {
-  nodeId: string;
-  path: string;
-}
-
-export interface GraphLinkBadgeDropMutationRequest {
-  target: GraphLinkMutationNodeRef;
-  sources: GraphLinkMutationNodeRef[];
-  property: string;
-  discoveryDirection: "incoming" | "outgoing" | "both";
-  /** All read properties belonging to a Lens definition. */
-  readProperties?: string[];
-  semantic?: "link" | "parent" | "lens";
-  definitionId?: string;
-}
-
-export interface GraphLinkBadgeDropMutationResult {
-  added: string[];
-  removed: string[];
-  skipped: string[];
-  selected?: string[];
-}
-
-export interface GraphBadgeLinkInputRequest {
-  target: GraphLinkMutationNodeRef;
-  property: string;
-  discoveryDirection: "incoming" | "outgoing" | "both";
-  graphCapableOwnerPath?: string;
-}
-
 export interface GraphNodeOpenRequest {
   nodeId: string;
   path: string;
@@ -289,9 +311,8 @@ interface MarqueeSelection {
 
 interface VisibleLinkTypeEdgeContext {
   sourceNodeIds: string[];
-  sourcePathByNodeId: Map<string, string>;
   targetNodeIdsByPath: Map<string, string[]>;
-  visibleLinkTypes: string[];
+  candidates: EdgeCandidate[];
 }
 
 export interface GraphUpdateOptions {
@@ -301,8 +322,11 @@ export interface GraphUpdateOptions {
   filterFilePaths?: string[];
   filterId?: string | null;
   overlayLinkTypes?: string[];
+  overlayLinkTypeDefinitions?: O3LinkType[];
   visibleLinkTypes?: string[];
   visibleLinkTypeDefinitions?: O3LinkType[];
+  edgeLinkTypeDefinitions?: O3LinkType[];
+  knownLinkTypeDefinitions?: O3LinkType[];
   visibleLinkTypeLineStyle?: GraphLineStyle;
   discoveredLinkLineStyle?: GraphLineStyle;
   graphBackgroundColor?: string | null;
@@ -361,6 +385,7 @@ export interface GraphEngineMenuOptions {
   onGraphLinkInputRequested?: (
     request: GraphBadgeLinkInputRequest
   ) => Promise<GraphLinkBadgeDropMutationResult | void> | GraphLinkBadgeDropMutationResult | void;
+  linkTypePropertyKeys?: LinkTypePropertyKeys;
   onNodeOpen?: (request: GraphNodeOpenRequest) => Promise<void> | void;
   onZoomIntoNode?: (request: GraphNodeZoomRequest) => Promise<void> | void;
   initialGroupingRules?: GroupingRule[];
@@ -383,6 +408,9 @@ export interface GraphEngineMenuOptions {
   ) => string | null;
   initialShowAllLinkTypeBadgesKey?: string;
   initialFreezeGraphKey?: string;
+  getMembershipOwnerPath?: () => string;
+  onCutSelectedNodes?: (selection: GraphNodeCutSelection[]) => Promise<void> | void;
+  canCutSelectedNodes?: (selection: GraphNodeCutSelection[]) => boolean;
   onCopySelectedNodeLinks?: () => Promise<void> | void;
   onAddRootNodeRequested?: (context?: { ownerPath?: string | null }) => Promise<void> | void;
   isGraphNote?: (path: string) => boolean;
@@ -534,9 +562,15 @@ export class GraphEngine {
   private nodeConnectionCountCache = new Map<string, number>();
   private nodeConnectionCountsDirty = true;
   private badgeExpansionRefreshTimers = new Map<string, number>();
+  private pendingBadgeClipboardRefreshes = new Map<string, Array<{ write: GraphLinkWriteDescriptor; expiresAt: number }>>();
+  private pendingBadgeMembershipLensRefreshes = new Map<string, Map<string, number>>();
+  private destroyed = false;
   private badgeYamlLinkPresenceCache = new Map<string, boolean>();
   private badgesDirty = true;
   private activeNodeBadgeLinkTypes: O3LinkType[] = [];
+  private edgeLinkTypeDefinitions?: O3LinkType[];
+  private overlayLinkTypeDefinitions?: O3LinkType[];
+  private knownLinkTypeDefinitions: O3LinkType[] = [];
   private visibleNodeBadgeLinkTypes: O3LinkType[] = [];
   private activeLinkTypePhysicsByProperty = new Map<string, { preferredDistance?: number; strength?: number }>();
   private activeLinkTypeDirectionByProperty = new Map<string, { direction: DirectionPlacement; cx: number; cy: number }>();
@@ -573,6 +607,7 @@ export class GraphEngine {
   private expandedByBadge: Map<string, Set<string>> = new Map();
   // ExpansionKey = `${sourceFile}::${linkTypeName}`
   private expansionNodes = new Map<string, Set<string>>();
+  private expansionDefinitionIds = new Map<string, string>();
   private nodeOwners = new Map<string, Set<string>>();
   // childExpansionKey -> parentExpansionKey (or null)
   private expansionParent = new Map<string, string | null>();
@@ -601,6 +636,74 @@ export class GraphEngine {
   private lastFocalNodeId: string | null = null;
   private isAltPressed = false;
   private readonly graphStore = new GraphStore();
+  private onGraphTabInteraction?: () => void;
+  private onGraphTabProjectionChange?: () => void;
+  private preferredGraphTabNodeId?: string;
+  private pendingGraphTabSelection?: ReturnType<GraphEngine["readGraphTabSelection"]>;
+
+  observeGraphTab(onInteraction: () => void, onChange: () => void): () => void {
+    this.onGraphTabInteraction = onInteraction;
+    this.onGraphTabProjectionChange = onChange;
+    const unsubscribe = this.graphStore.subscribeSelection(preferredId => {
+      this.preferredGraphTabNodeId = preferredId;
+      onChange();
+    });
+    return () => {
+      unsubscribe();
+      this.onGraphTabInteraction = undefined;
+      this.onGraphTabProjectionChange = undefined;
+    };
+  }
+
+  readGraphTabSelection() {
+    return graphTabSelection(this.getSelectedNodeRefs(), this.preferredGraphTabNodeId);
+  }
+
+  restoreGraphTabSelection(selection: ReturnType<GraphEngine["readGraphTabSelection"]>): void {
+    const ids = selection.notes.flatMap(note => note.instanceIds.filter(id => {
+      const node = this.nodeMap.get(id);
+      return node && this.getGraphNodeMutationRef(node)?.path === note.path;
+    }));
+    this.graphController.replaceSelection(ids);
+    this.pendingGraphTabSelection = ids.length < selection.notes.reduce((count, note) => count + note.instanceIds.length, 0)
+      ? selection : undefined;
+    this.badgesDirty = true;
+    this.requestRender();
+  }
+
+  clearGraphTabSelection(): void {
+    this.pendingGraphTabSelection = undefined;
+    this.graphController.clearSelection();
+  }
+
+  captureGraphTabLayout() {
+    return {
+      viewport: this.getViewportSnapshot(),
+      pins: this.nodes.filter(node => this.isNodePinned(node))
+        .map(node => ({ id: node.id, path: node.sourcePath, x: node.x, y: node.y })),
+      lenses: [...this.embeddedGraphContainers.values()].map(container => ({
+        originNodeId: container.origin, graphPath: container.graphPath, linkTypeId: container.linkTypeId,
+        ancestry: [...container.ancestry.slice(0, -1)], lens: this.getEmbeddedGraphLensStateForContainer(container)
+      }))
+    };
+  }
+
+  restoreGraphTabLayout(layout: ReturnType<GraphEngine["captureGraphTabLayout"]>): void {
+    this.applyGraphViewportState(layout.viewport);
+    for (const pin of layout.pins) {
+      const node = this.nodeMap.get(pin.id);
+      if (!node || node.sourcePath !== pin.path) continue;
+      node.x = pin.x;
+      node.y = pin.y;
+      this.pinNode(node, { persist: false });
+    }
+    this.requestRender();
+  }
+
+  private graphTabTopologyChanged(): void {
+    if (this.pendingGraphTabSelection) this.restoreGraphTabSelection(this.pendingGraphTabSelection);
+    if (this.onGraphTabProjectionChange && this.graphStore.getSelectedNodeCount()) this.onGraphTabProjectionChange();
+  }
   private readonly graphController: GraphController;
   private pinnedNodePaths = new Set<string>();
   private altDragFrozenNodeIds = new Set<string>();
@@ -757,14 +860,17 @@ export class GraphEngine {
         return file instanceof TFile ? file : undefined;
       },
       getSourcePath: (file) => file.path,
-      resolveTargets: (file, property) => this.linkResolver.resolveLinkedTargets(file, { property } as O3LinkType),
+      resolveTargets: (file, property, sourceNodeId) => {
+        const candidate = this.getExpansionEdgeCandidate(sourceNodeId, property);
+        return candidate ? this.resolveExpansionTargets(file, candidate) : [];
+      },
       getNode: (nodeId) => this.nodeMap.get(nodeId),
       ensureTarget: (target, sourceNodeId, property, anchorNode, preferExistingVisibleTarget) =>
         this.ensureExpansionTargetNode(target as GraphLinkTarget, sourceNodeId, property, {
           anchorNode,
           preferExistingVisibleTarget
         }),
-      isVisibleLinkType: (property) => this.visibleLinkTypes.has(property),
+      isVisibleLinkType: (property) => this.isVisibleEdgeProperty(property),
       isDuplicateNodesEnabled: (property) => this.activeLinkTypeDuplicateNodesByProperty.get(property) === true,
       addCurrentFile: (path) => this.currentFiles.add(path),
       removeCurrentFileIfUnowned: (path) => this.currentFiles.delete(path),
@@ -914,6 +1020,8 @@ export class GraphEngine {
               : linkType.semantic === "lens"
                 ? "lens" as const
                 : "link" as const,
+            iconKind: getLinkTypeBadgeIconKind(linkType),
+            linkTypeIcon: linkType.linkTypeIcon,
             duplicateNodes: linkType.linkDuplicateNodes === true
           }];
         }),
@@ -1106,6 +1214,9 @@ export class GraphEngine {
   }
 
   destroy() {
+    this.destroyed = true;
+    this.pendingBadgeClipboardRefreshes.clear();
+    this.pendingBadgeMembershipLensRefreshes.clear();
     if (this.animationFrame) {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = null;
@@ -1160,6 +1271,7 @@ export class GraphEngine {
     this.container?.removeEventListener("keydown", this.onContainerKeyDownBound);
     this.container?.removeEventListener("keyup", this.onContainerKeyUpBound);
     this.container?.removeEventListener("blur", this.onContainerBlurBound);
+    this.container?.removeEventListener("focusin", this.onGraphTabFocusBound);
 
     this.menuPanel?.remove();
     this.menuButton?.remove();
@@ -1228,6 +1340,9 @@ export class GraphEngine {
   private onContainerKeyDownBound = (e: KeyboardEvent) => this.onContainerKeyDown(e);
   private onContainerKeyUpBound = (e: KeyboardEvent) => this.onContainerKeyUp(e);
   private onContainerBlurBound = () => this.onContainerBlur();
+  private onGraphTabFocusBound = (event: FocusEvent) => {
+    if (event.target === this.container) this.onGraphTabInteraction?.();
+  };
 
   private initCanvas() {
     this.container.empty();
@@ -1265,6 +1380,7 @@ export class GraphEngine {
     this.container.addEventListener("keydown", this.onContainerKeyDownBound);
     this.container.addEventListener("keyup", this.onContainerKeyUpBound);
     this.container.addEventListener("blur", this.onContainerBlurBound);
+    this.container.addEventListener("focusin", this.onGraphTabFocusBound);
   }
 
   private onContainerKeyDown(e: KeyboardEvent): void {
@@ -1276,6 +1392,14 @@ export class GraphEngine {
       }
     }
     if (this.isEditableKeyboardTarget(e.target)) return;
+    this.pendingGraphTabSelection = undefined;
+    this.onGraphTabInteraction?.();
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && this.normalizeKeyboardKey(e.key) === "x") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) void this.menuOptions.onCutSelectedNodes?.(this.getSelectedNodeCutRefs());
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && this.normalizeKeyboardKey(e.key) === "c") {
       e.preventDefault();
       e.stopPropagation();
@@ -1581,6 +1705,9 @@ export class GraphEngine {
     this.rootFilePaths = new Set((options.rootFilePaths ?? files.map((f) => f.path)).map((path) => String(path ?? "").trim()).filter(Boolean));
     this.filterFilePaths = new Set((options.filterFilePaths ?? []).map((path) => String(path ?? "").trim()).filter(Boolean));
     this.currentFilterId = String(options.filterId ?? "").trim() || null;
+    this.edgeLinkTypeDefinitions = options.edgeLinkTypeDefinitions;
+    this.overlayLinkTypeDefinitions = options.overlayLinkTypeDefinitions;
+    this.refreshEmbeddedEdgeDefinitions(options.knownLinkTypeDefinitions ?? []);
     this.overlayLinkTypes = new Set((options.overlayLinkTypes ?? []).map((type) => this.normalizeLinkType(type)).filter(Boolean));
     this.visibleLinkTypes = new Set((options.visibleLinkTypes ?? []).map((type) => this.normalizeLinkType(type).toLowerCase()).filter(Boolean));
     this.visibleLinkTypeLineStyle = this.normalizeGraphLineStyle(options.visibleLinkTypeLineStyle, "dashed");
@@ -1590,6 +1717,9 @@ export class GraphEngine {
     this.visibleNodeBadgeLinkTypes = this.normalizeBadgeLinkTypeDefinitions(options.visibleLinkTypeDefinitions ?? []);
     for (const linkType of this.visibleNodeBadgeLinkTypes) {
       this.registerLinkTypeRuntimeConfig(linkType);
+    }
+    for (const badgeKey of this.expansionDefinitionIds.keys()) {
+      if (!embeddedBadgeKeys.has(badgeKey)) this.expansionDefinitionIds.delete(badgeKey);
     }
     this.expandedByBadge.clear();
     this.expansionNodes.clear();
@@ -1669,6 +1799,7 @@ export class GraphEngine {
         && to?.stateOwnerPath
         && from.embeddedInstanceId
         && from.embeddedInstanceId === to.embeddedInstanceId
+        && edge.mode !== "visible"
       );
     });
     this.edges = [];
@@ -1709,50 +1840,20 @@ export class GraphEngine {
     const discoveredTypes = this.lastDisableLinkTypeDiscovery
       ? new Set<string>()
       : this.collectDiscoveredTypes(linkTypeSourceFiles);
-    const includeNoneType = this.selectedLinkTypes.has(NONE_LINK_TYPE);
+    const selectedCandidates = this.getSelectedEdgeCandidates();
     const selectedTypeSourceNodeIds = this.lastDisableLinkTypeDiscovery
       ? new Set<string>()
       : this.collectSelectedTypeSourceNodeIds(linkTypeSourceFiles);
 
     for (const file of files) {
-      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
-
-      for (const [type, targets] of frontmatterByType.entries()) {
-        const duplicateMode = this.isLinkDuplicateNodesEnabled(type);
-        for (const targetPath of targets) {
-          if (!this.renderVisibilityPolicy.shouldRenderRelationshipEdge({
-            selected: this.selectedLinkTypes.has(type),
-            parentSemantic: this.getLinkTypeSemantic(type) === "parent",
-            duplicateNodes: duplicateMode,
-            discoveryEnabled: this.isLinkDiscoveryEnabled(type),
-            targetAlreadyVisible: fileSet.has(targetPath)
-          })) continue;
-          this.pushEdge(seen, file.path, targetPath, type);
-        }
-      }
-
-      if (!includeNoneType) continue;
-
-      const cache = this.app.metadataCache.getFileCache(file);
-      const links = cache?.links ?? [];
-      const frontmatterTargets = new Set<string>();
-      for (const targets of frontmatterByType.values()) {
-        for (const targetPath of targets) {
-          frontmatterTargets.add(targetPath);
-        }
-      }
-
-      for (const link of links) {
-        const target = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
-        if (!target) continue;
-        if (!fileSet.has(target.path)) continue;
-        if (frontmatterTargets.has(target.path)) continue;
-        this.pushEdge(seen, file.path, target.path, NONE_LINK_TYPE);
+      for (const edge of this.collectOrdinaryEdges(file, selectedCandidates, (path) => fileSet.has(path))) {
+        this.pushEdge(seen, edge.source, edge.target, edge.type, { definitionId: edge.definitionId });
       }
     }
 
     // Runtime badge expansions must remain visible even when link-type menu filters are active.
     const runtimeNodeIds = new Set(this.nodeMap.keys());
+    const replayPaths = new Map<string, Set<string>>();
     for (const [badgeKey, targetPaths] of this.expandedByBadge.entries()) {
       const separator = badgeKey.lastIndexOf("::");
       if (separator < 0) continue;
@@ -1760,23 +1861,24 @@ export class GraphEngine {
       const linkType = badgeKey.slice(separator + 2);
       if (!sourceNodeId || !linkType) continue;
       if (this.nodeMap.get(sourceNodeId)?.stateOwnerPath) continue;
-      if (this.getLinkTypeSemantic(linkType) === "parent") continue;
+      const candidate = this.getExpansionEdgeCandidate(sourceNodeId, linkType);
+      if (!candidate || this.getEdgeCandidateSemantic(candidate) === "parent") continue;
       const sourcePath = this.getSourcePathForNodeId(sourceNodeId);
       if (!sourcePath) continue;
       if (!isExpansionSourceAvailable(sourcePath, sourceNodeId, fileSet, runtimeNodeIds)) continue;
 
+      const eligibleTargets = this.getReplayRelationshipPaths(sourcePath, candidate, replayPaths);
+      const property = candidate.property;
+      const duplicateMode = candidate.definition?.linkDuplicateNodes ?? this.isLinkDuplicateNodesEnabled(property);
       for (const targetPath of targetPaths) {
-        const targetNodeId = this.isLinkDuplicateNodesEnabled(linkType)
-          ? this.resolveRuntimeTargetNodeId(sourceNodeId, targetPath, linkType, {
-              preferExistingVisibleTarget: this.visibleLinkTypes.has(this.normalizeLinkType(linkType))
+        if (eligibleTargets && !eligibleTargets.has(targetPath)) continue;
+        const targetNodeId = duplicateMode
+          ? this.resolveRuntimeTargetNodeId(sourceNodeId, targetPath, property, {
+              preferExistingVisibleTarget: this.isVisibleEdgeProperty(property)
             })
           : targetPath;
         if (!fileSet.has(targetPath) && !this.nodeMap.has(targetNodeId)) continue;
-        if (this.isLinkDuplicateNodesEnabled(linkType)) {
-          this.pushEdge(seen, sourceNodeId, targetNodeId, linkType);
-        } else {
-          this.pushEdge(seen, sourceNodeId, targetPath, linkType);
-        }
+        this.pushEdge(seen, sourceNodeId, targetNodeId, property, { definitionId: candidate.definition?.definitionId });
       }
     }
 
@@ -1794,9 +1896,12 @@ export class GraphEngine {
     const previousNodeIds = new Set(this.nodes.map((node) => node.id));
     this.syncNodes(visibleFiles);
     this.syncDuplicateNodesFromEdges();
-    this.edges.push(...embeddedEdges.filter((edge) =>
-      this.nodeMap.has(edge.from) && this.nodeMap.has(edge.to)
-    ));
+    for (const edge of embeddedEdges) {
+      if (!this.nodeMap.has(edge.from) || !this.nodeMap.has(edge.to)) continue;
+      const eligible = this.reconcileEmbeddedRelationshipEdge(edge, replayPaths);
+      if (eligible) this.edges.push(eligible);
+    }
+    for (const key of this.embeddedGraphContainers.keys()) this.addEmbeddedVisibleLinkTypeEdges(key);
     this.renderBadges();
     this.reapplyExpandedParentRequests();
     this.updateNodeColors();
@@ -2108,12 +2213,153 @@ export class GraphEngine {
     return `${from}::${to}::${type}::${linkType ?? ""}`;
   }
 
+  private getSelectedEdgeCandidates(): EdgeCandidate[] {
+    return this.resolveEdgeCandidates(this.selectedLinkTypes, this.edgeLinkTypeDefinitions ?? this.activeNodeBadgeLinkTypes);
+  }
+
+  private refreshEmbeddedEdgeDefinitions(definitions: O3LinkType[]): void {
+    const previousIds = new Set(this.knownLinkTypeDefinitions.map(({ definitionId }) => definitionId));
+    this.knownLinkTypeDefinitions = definitions;
+    if (!previousIds.size || !this.embeddedGraphContainers.size) return;
+    const current = new Map(definitions.map((definition) => [definition.definitionId, definition]));
+    const reconcile = (enabled: O3LinkType[]) => enabled.flatMap((definition) => {
+      const latest = current.get(definition.definitionId);
+      return latest ? [latest] : previousIds.has(definition.definitionId) ? [] : [definition];
+    });
+    for (const container of this.embeddedGraphContainers.values()) {
+      container.linkTypes = reconcile(container.linkTypes);
+      container.visibleLinkTypeDefinitions = reconcile(container.visibleLinkTypeDefinitions);
+    }
+  }
+
+  private resolveEdgeCandidates(selectors: Iterable<string>, enabled: readonly O3LinkType[] = []): EdgeCandidate[] {
+    return resolveRelationshipEdgeCandidates(selectors, enabled, [
+      ...enabled,
+      ...(this.activeNodeBadgeLinkTypes ?? []),
+      ...(this.visibleNodeBadgeLinkTypes ?? []),
+      ...(this.overlayLinkTypeDefinitions ?? []),
+      ...(this.knownLinkTypeDefinitions ?? [])
+    ]).map((candidate) =>
+      !candidate.definition && candidate.property === NONE_LINK_TYPE.toLowerCase()
+        ? { ...candidate, property: NONE_LINK_TYPE }
+        : candidate
+    );
+  }
+
+  private getExpansionEdgeCandidate(nodeId: string, selector: string): EdgeCandidate | undefined {
+    const instanceId = this.nodeMap.get(nodeId)?.embeddedInstanceId;
+    const container = instanceId ? this.embeddedGraphContainers.get(instanceId) : undefined;
+    const enabled = container
+      ? [...container.linkTypes, ...(container.visibleLinkTypeDefinitions ?? [])]
+      : [
+        ...(this.edgeLinkTypeDefinitions ?? this.activeNodeBadgeLinkTypes ?? []),
+        ...(this.visibleNodeBadgeLinkTypes ?? []),
+        ...(this.overlayLinkTypeDefinitions ?? [])
+      ];
+    const identity = this.expansionDefinitionIds.get(this.badgeKey(nodeId, this.normalizeLinkType(selector))) ?? selector;
+    return this.resolveEdgeCandidates([identity], enabled)[0];
+  }
+
+  private getEdgeCandidateSemantic(candidate: EdgeCandidate): "link" | "parent" {
+    const semantic = candidate.definition?.semantic;
+    return semantic ? (semantic === "parent" ? "parent" : "link") : this.getLinkTypeSemantic(candidate.property);
+  }
+
+  private getVisibleEdgeCandidates(container?: EmbeddedGraphContainerState): EdgeCandidate[] {
+    return container
+      ? this.resolveEdgeCandidates(container.visibleLinkTypes, [...container.linkTypes, ...(container.visibleLinkTypeDefinitions ?? [])])
+      : this.resolveEdgeCandidates(this.visibleLinkTypes, [
+        ...(this.edgeLinkTypeDefinitions ?? this.activeNodeBadgeLinkTypes ?? []),
+        ...(this.visibleNodeBadgeLinkTypes ?? [])
+      ]);
+  }
+
+  private isVisibleEdgeProperty(property: string): boolean {
+    return this.getVisibleEdgeCandidates().some((candidate) => candidate.property === property);
+  }
+
+  private collectCandidateTargetPaths(frontmatter: Map<string, Set<string>>, candidate: EdgeCandidate): Set<string> {
+    return new Set(candidate.readProperties.flatMap((property) => [...(frontmatter.get(property) ?? [])]));
+  }
+
+  private resolveExpansionTargets(file: TFile, candidate: EdgeCandidate): GraphLinkTarget[] {
+    if (!candidate.definition) return this.linkResolver.resolveLinkedTargets(file, { property: candidate.property } as O3LinkType);
+    const targets = new Map<string, GraphLinkTarget>();
+    for (const property of candidate.readProperties) {
+      for (const target of this.linkResolver.resolveLinkedTargets(file, {
+        property, linkDiscoveryDirection: candidate.definition.linkDiscoveryDirection
+      }, { includePropertyAliases: false })) targets.set(target.path, target);
+    }
+    return [...targets.values()];
+  }
+
+  private getReplayRelationshipPaths(
+    sourcePath: string, candidate: EdgeCandidate, cached?: Map<string, Set<string>>
+  ): Set<string> | null {
+    if (!candidate.definition && this.normalizeLinkType(candidate.property) === this.normalizeLinkType(NONE_LINK_TYPE)) return null;
+    const key = `${sourcePath}::${candidate.definition?.definitionId ?? candidate.property}`;
+    const previous = cached?.get(key);
+    if (previous) return previous;
+    const file = this.app.vault.getAbstractFileByPath(sourcePath);
+    const paths = new Set(file instanceof TFile ? this.resolveExpansionTargets(file, candidate).map(({ path }) => path) : []);
+    cached?.set(key, paths);
+    return paths;
+  }
+
+  private reconcileEmbeddedRelationshipEdge(edge: Edge, cached: Map<string, Set<string>>): Edge | null {
+    const candidate = this.getExpansionEdgeCandidate(edge.from, edge.definitionId ?? edge.linkType ?? edge.type);
+    const definitionId = candidate?.definition?.definitionId;
+    if (!candidate || (edge.definitionId && definitionId !== edge.definitionId)) return null;
+    const paths = this.getReplayRelationshipPaths(this.getSourcePathForNodeId(edge.from), candidate, cached);
+    if (paths && !paths.has(this.getSourcePathForNodeId(edge.to))) return null;
+    return definitionId === edge.definitionId ? edge : { ...edge, definitionId };
+  }
+
+  /** Shared by full graph rebuilds and metadata-driven canonical edge replacement. */
+  collectSelectedRelationshipEdges(file: TFile): ModelGraphEdge[] {
+    return this.collectOrdinaryEdges(file, this.getSelectedEdgeCandidates(), (path) => this.hasNode(path));
+  }
+
+  private collectOrdinaryEdges(
+    file: TFile, candidates: EdgeCandidate[], targetVisible: (path: string) => boolean
+  ): ModelGraphEdge[] {
+    if (candidates.length === 0) return [];
+    const frontmatter = this.linkResolver.collectFrontmatterLinksByType(file, false);
+    const edges = new Map<string, ModelGraphEdge>();
+    const add = (target: string, type: string, definitionId?: string) => {
+      const id = `${file.path}::${target}::${type}`;
+      if (!edges.has(id)) edges.set(id, { id, source: file.path, target, type, ...(definitionId ? { definitionId } : {}) });
+    };
+    for (const candidate of candidates) {
+      const { property, definition } = candidate;
+      if (property === NONE_LINK_TYPE) {
+        const frontmatterTargets = new Set([...frontmatter.values()].flatMap((targets) => [...targets]));
+        for (const link of this.app.metadataCache.getFileCache(file)?.links ?? []) {
+          const target = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+          if (target && !frontmatterTargets.has(target.path) && targetVisible(target.path)) add(target.path, property);
+        }
+        continue;
+      }
+      for (const target of this.collectCandidateTargetPaths(frontmatter, candidate)) {
+        if (!this.renderVisibilityPolicy.shouldRenderRelationshipEdge({
+          selected: true,
+          parentSemantic: this.getEdgeCandidateSemantic(candidate) === "parent",
+          duplicateNodes: definition?.linkDuplicateNodes ?? this.isLinkDuplicateNodesEnabled(property),
+          discoveryEnabled: definition ? definition.linkDiscovery !== false : this.isLinkDiscoveryEnabled(property),
+          targetAlreadyVisible: targetVisible(target)
+        })) continue;
+        add(target, property, definition?.definitionId);
+      }
+    }
+    return [...edges.values()];
+  }
+
   private pushEdge(
     seen: Set<string>,
     from: string,
     to: string,
     type: string,
-    options?: { linkType?: string; relationship?: "parent"; mode?: "overlay" | "visible" }
+    options?: { linkType?: string; relationship?: "parent"; mode?: "overlay" | "visible"; definitionId?: string }
   ) {
     const key = `${options?.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(from, to, type, options?.linkType)}`;
     if (seen.has(key)) return;
@@ -2122,6 +2368,7 @@ export class GraphEngine {
       from,
       to,
       type,
+      ...(options?.definitionId ? { definitionId: options.definitionId } : {}),
       ...(options?.linkType ? { linkType: options.linkType } : {}),
       ...(options?.relationship ? { relationship: options.relationship } : {}),
       ...(options?.mode ? { mode: options.mode } : {})
@@ -2139,6 +2386,8 @@ export class GraphEngine {
     return this.edges.some((edge) =>
       (this.getSourcePathForNodeId(edge.from) || edge.from) === fromPath
       && (this.getSourcePathForNodeId(edge.to) || edge.to) === toPath
+      && this.nodeMap.get(edge.from)?.embeddedInstanceId === this.nodeMap.get(from)?.embeddedInstanceId
+      && this.nodeMap.get(edge.to)?.embeddedInstanceId === this.nodeMap.get(to)?.embeddedInstanceId
       && this.normalizeLinkType(edge.linkType ?? edge.type) === normalizedType
     );
   }
@@ -2147,10 +2396,10 @@ export class GraphEngine {
     seen: Set<string>,
     from: string,
     to: string,
-    linkType: string
+    candidate: EdgeCandidate
   ): void {
-    if (this.hasSemanticEdge(from, to, linkType)) return;
-    this.pushEdge(seen, from, to, linkType, { mode: "visible" });
+    if (this.hasSemanticEdge(from, to, candidate.property)) return;
+    this.pushEdge(seen, from, to, candidate.property, { mode: "visible", definitionId: candidate.definition?.definitionId });
   }
 
   private removeVisibleSemanticEdges(from: string, to: string, linkType: string): void {
@@ -2166,6 +2415,8 @@ export class GraphEngine {
       return !(
         (this.getSourcePathForNodeId(edge.from) || edge.from) === fromPath
         && (this.getSourcePathForNodeId(edge.to) || edge.to) === toPath
+        && this.nodeMap.get(edge.from)?.embeddedInstanceId === this.nodeMap.get(from)?.embeddedInstanceId
+        && this.nodeMap.get(edge.to)?.embeddedInstanceId === this.nodeMap.get(to)?.embeddedInstanceId
         && this.normalizeLinkType(edge.linkType ?? edge.type) === normalizedType
       );
     });
@@ -2175,7 +2426,8 @@ export class GraphEngine {
   }
 
   private addOverlayEdges(seen: Set<string>, files: TFile[]): void {
-    if (this.overlayLinkTypes.size === 0) return;
+    const candidates = this.resolveEdgeCandidates(this.overlayLinkTypes, this.overlayLinkTypeDefinitions ?? this.activeNodeBadgeLinkTypes);
+    if (candidates.length === 0) return;
     const corePaths = new Set<string>([
       ...Array.from(this.rootFilePaths),
       ...Array.from(this.filterFilePaths)
@@ -2184,13 +2436,11 @@ export class GraphEngine {
 
     for (const file of files) {
       if (!corePaths.has(file.path)) continue;
-      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
-      for (const linkType of this.overlayLinkTypes) {
-        const targets = frontmatterByType.get(linkType);
-        if (!targets) continue;
-        for (const targetPath of targets) {
+      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file, false);
+      for (const candidate of candidates) {
+        for (const targetPath of this.collectCandidateTargetPaths(frontmatterByType, candidate)) {
           if (!corePaths.has(targetPath)) continue;
-          this.pushEdge(seen, file.path, targetPath, linkType, { mode: "overlay" });
+          this.pushEdge(seen, file.path, targetPath, candidate.property, { mode: "overlay", definitionId: candidate.definition?.definitionId });
         }
       }
     }
@@ -2200,7 +2450,7 @@ export class GraphEngine {
     if (this.visibleLinkTypes.size === 0) return;
     const context = this.buildVisibleLinkTypeEdgeContext(
       files.map((file) => file.path),
-      Array.from(this.visibleLinkTypes)
+      this.getVisibleEdgeCandidates()
     );
     this.addVisibleLinkTypeEdgesForContext(seen, context);
   }
@@ -2216,21 +2466,17 @@ export class GraphEngine {
     );
     const context = this.buildVisibleLinkTypeEdgeContext(
       Array.from(container.memberIds),
-      container.visibleLinkTypes
+      this.getVisibleEdgeCandidates(container)
     );
     this.addVisibleLinkTypeEdgesForContext(seen, context);
   }
 
   private buildVisibleLinkTypeEdgeContext(
     sourceNodeIdsRaw: Iterable<string>,
-    visibleLinkTypesRaw: Iterable<string>
+    candidates: EdgeCandidate[]
   ): VisibleLinkTypeEdgeContext {
     const sourceNodeIds: string[] = [];
-    const sourcePathByNodeId = new Map<string, string>();
     const targetNodeIdsByPath = new Map<string, string[]>();
-    const visibleLinkTypes = Array.from(visibleLinkTypesRaw ?? [])
-      .map((linkType) => this.normalizeLinkType(linkType))
-      .filter(Boolean);
 
     for (const nodeIdRaw of sourceNodeIdsRaw ?? []) {
       const nodeId = String(nodeIdRaw ?? "").trim();
@@ -2238,7 +2484,6 @@ export class GraphEngine {
       const sourcePath = this.getSourcePathForNodeId(nodeId) || nodeId;
       if (!sourcePath) continue;
       sourceNodeIds.push(nodeId);
-      sourcePathByNodeId.set(nodeId, sourcePath);
       const runtimeIds = targetNodeIdsByPath.get(sourcePath) ?? [];
       runtimeIds.push(nodeId);
       targetNodeIdsByPath.set(sourcePath, runtimeIds);
@@ -2246,9 +2491,8 @@ export class GraphEngine {
 
     return {
       sourceNodeIds,
-      sourcePathByNodeId,
       targetNodeIdsByPath,
-      visibleLinkTypes
+      candidates
     };
   }
 
@@ -2256,27 +2500,7 @@ export class GraphEngine {
     seen: Set<string>,
     context: VisibleLinkTypeEdgeContext
   ): void {
-    if (context.visibleLinkTypes.length === 0 || context.sourceNodeIds.length === 0) return;
-    for (const sourceNodeId of context.sourceNodeIds) {
-      const sourcePath = context.sourcePathByNodeId.get(sourceNodeId);
-      if (!sourcePath) continue;
-      const file = this.app.vault.getAbstractFileByPath(sourcePath);
-      if (!(file instanceof TFile)) continue;
-      const frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
-      for (const linkType of context.visibleLinkTypes) {
-        const targets = frontmatterByType.get(linkType);
-        if (!targets) continue;
-        for (const targetPath of targets) {
-          const targetNodeIds = context.targetNodeIdsByPath.get(targetPath) ?? [];
-          for (const targetNodeId of targetNodeIds) {
-            if (!this.isVisibleDuplicateEdgeOwnedBySource(sourceNodeId, targetNodeId, targetPath, linkType)) {
-              continue;
-            }
-            this.pushVisibleEdge(seen, sourceNodeId, targetNodeId, linkType);
-          }
-        }
-      }
-    }
+    this.addVisibleLinkTypeEdgesForSourceNodes(seen, context.sourceNodeIds, context.candidates, context.targetNodeIdsByPath);
   }
 
   /**
@@ -2287,16 +2511,12 @@ export class GraphEngine {
   private addVisibleLinkTypeEdgesForSourceNodes(
     seen: Set<string>,
     sourceNodeIds: Iterable<string>,
-    visibleLinkTypesRaw: Iterable<string>,
-    targetNodeIdsByPath: Map<string, string[]>,
-    sourceFrontmatterByPath: Map<string, Map<string, Set<string>>> = new Map()
+    candidates: EdgeCandidate[],
+    targetNodeIdsByPath: Map<string, string[]>
   ): void {
-    const visibleLinkTypes = Array.from(visibleLinkTypesRaw ?? [])
-      .map((linkType) => this.normalizeLinkType(linkType))
-      .filter(Boolean);
-    if (visibleLinkTypes.length === 0) return;
+    if (candidates.length === 0) return;
 
-    const frontmatterByPath = sourceFrontmatterByPath;
+    const frontmatterByPath = new Map<string, Map<string, Set<string>>>();
     for (const sourceNodeIdRaw of sourceNodeIds ?? []) {
       const sourceNodeId = String(sourceNodeIdRaw ?? "").trim();
       if (!sourceNodeId) continue;
@@ -2306,19 +2526,17 @@ export class GraphEngine {
       if (!frontmatterByType) {
         const file = this.app.vault.getAbstractFileByPath(sourcePath);
         if (!(file instanceof TFile)) continue;
-        frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file);
+        frontmatterByType = this.linkResolver.collectFrontmatterLinksByType(file, false);
         frontmatterByPath.set(sourcePath, frontmatterByType);
       }
-      for (const linkType of visibleLinkTypes) {
-        const targets = frontmatterByType.get(linkType);
-        if (!targets) continue;
-        for (const targetPath of targets) {
+      for (const candidate of candidates) {
+        for (const targetPath of this.collectCandidateTargetPaths(frontmatterByType, candidate)) {
           const targetNodeIds = targetNodeIdsByPath.get(targetPath) ?? [];
           for (const targetNodeId of targetNodeIds) {
-            if (!this.isVisibleDuplicateEdgeOwnedBySource(sourceNodeId, targetNodeId, targetPath, linkType)) {
+            if (!this.isVisibleDuplicateEdgeOwnedBySource(sourceNodeId, targetNodeId, targetPath, candidate)) {
               continue;
             }
-            this.pushVisibleEdge(seen, sourceNodeId, targetNodeId, linkType);
+            this.pushVisibleEdge(seen, sourceNodeId, targetNodeId, candidate);
           }
         }
       }
@@ -2329,9 +2547,10 @@ export class GraphEngine {
     sourceNodeId: string,
     targetNodeId: string,
     targetPath: string,
-    linkType: string
+    candidate: EdgeCandidate
   ): boolean {
-    if (!this.isLinkDuplicateNodesEnabled(linkType)) return true;
+    const linkType = candidate.property;
+    if (!(candidate.definition?.linkDuplicateNodes ?? this.isLinkDuplicateNodesEnabled(linkType))) return true;
 
     const sourceNode = this.nodeMap.get(sourceNodeId);
     const sourceIsDuplicate = Boolean(
@@ -2418,7 +2637,8 @@ export class GraphEngine {
       for (const fromNodeId of fromNodeIds) {
         for (const toNodeId of toNodeIds) {
           const before = this.edges.length;
-          this.pushVisibleEdge(seen, fromNodeId, toNodeId, linkType);
+          if (!this.isVisibleDuplicateEdgeOwnedBySource(fromNodeId, toNodeId, toPath, edgeScope.candidate)) continue;
+          this.pushVisibleEdge(seen, fromNodeId, toNodeId, edgeScope.candidate);
           changed = this.edges.length !== before || changed;
         }
       }
@@ -2431,18 +2651,20 @@ export class GraphEngine {
   }
 
   private removeVisibleSemanticEdgesForPaths(fromPath: string, toPath: string, linkType: string): boolean {
-    const normalizedFrom = String(fromPath ?? "").trim();
-    const normalizedTo = String(toPath ?? "").trim();
-    const normalizedType = this.normalizeLinkType(linkType);
-    if (!normalizedFrom || !normalizedTo || !normalizedType) return false;
+    const file = this.app.vault.getAbstractFileByPath(fromPath);
+    const frontmatter = file instanceof TFile ? this.linkResolver.collectFrontmatterLinksByType(file, false) : new Map();
+    const scopes = this.getVisibleEdgeScopesForLinkType(linkType);
     const before = this.edges.length;
     this.edges = this.edges.filter((edge) => {
-      if (edge.mode !== "visible") return true;
-      return !(
-        (this.getSourcePathForNodeId(edge.from) || edge.from) === normalizedFrom
-        && (this.getSourcePathForNodeId(edge.to) || edge.to) === normalizedTo
-        && this.normalizeLinkType(edge.linkType ?? edge.type) === normalizedType
+      if (edge.mode !== "visible" || this.getSourcePathForNodeId(edge.from) !== fromPath
+        || this.getSourcePathForNodeId(edge.to) !== toPath) return true;
+      const scope = scopes.find(({ candidate, nodeIdsByPath }) =>
+        candidate.property === (edge.linkType ?? edge.type)
+        && (!edge.definitionId || edge.definitionId === candidate.definition?.definitionId)
+        && nodeIdsByPath.get(fromPath)?.includes(edge.from)
+        && nodeIdsByPath.get(toPath)?.includes(edge.to)
       );
+      return !scope || scope.candidate.readProperties.some((property) => property !== linkType && frontmatter.get(property)?.has(toPath));
     });
     const changed = this.edges.length !== before;
     if (changed) {
@@ -2452,22 +2674,19 @@ export class GraphEngine {
     return changed;
   }
 
-  private getVisibleEdgeScopesForLinkType(linkType: string): Array<{ nodeIdsByPath: Map<string, string[]> }> {
+  private getVisibleEdgeScopesForLinkType(linkType: string): Array<{ nodeIdsByPath: Map<string, string[]>; candidate: EdgeCandidate }> {
     const normalizedType = this.normalizeLinkType(linkType).toLowerCase();
     if (!normalizedType) return [];
-    const scopes: Array<{ nodeIdsByPath: Map<string, string[]> }> = [];
-    if (this.visibleLinkTypes.has(normalizedType)) {
-      scopes.push({
-        nodeIdsByPath: this.buildNodeIdsBySourcePath(
-          this.nodes.filter((node) => !node.stateOwnerPath).map((node) => node.id)
-        )
-      });
-    }
+    const scopes: Array<{ nodeIdsByPath: Map<string, string[]>; candidate: EdgeCandidate }> = [];
+    const add = (candidates: EdgeCandidate[], getNodeIds: () => string[]) => {
+      const matching = candidates.filter((candidate) => candidate.readProperties.includes(normalizedType));
+      if (!matching.length) return;
+      const nodeIdsByPath = this.buildNodeIdsBySourcePath(getNodeIds());
+      for (const candidate of matching) scopes.push({ candidate, nodeIdsByPath });
+    };
+    add(this.getVisibleEdgeCandidates(), () => this.nodes.filter((node) => !node.stateOwnerPath).map((node) => node.id));
     for (const container of this.embeddedGraphContainers.values()) {
-      if (!container.visibleLinkTypes.includes(normalizedType)) continue;
-      scopes.push({
-        nodeIdsByPath: this.buildNodeIdsBySourcePath(Array.from(container.memberIds))
-      });
+      add(this.getVisibleEdgeCandidates(container), () => [...container.memberIds]);
     }
     return scopes;
   }
@@ -2495,17 +2714,15 @@ export class GraphEngine {
         .map((property) => this.normalizeLinkType(property).toLowerCase())
         .filter(Boolean)
     );
-    if (
-      changedProperties.size > 0
-      && !Array.from(this.visibleLinkTypes).some((linkType) => changedProperties.has(linkType))
-    ) {
-      return false;
-    }
+    const candidates = this.getVisibleEdgeCandidates();
+    if (changedProperties.size && candidates.length
+      && !candidates.some((candidate) => candidate.readProperties.some((property) => changedProperties.has(property)))) return false;
     const sourceNodeIds = this.nodes
       .filter((node) => !node.stateOwnerPath && node.sourcePath === path)
       .map((node) => node.id);
     if (sourceNodeIds.length === 0) return false;
     const sourceNodeIdSet = new Set(sourceNodeIds);
+    const before = this.edges.length;
     this.edges = this.edges.filter((edge) =>
       !(edge.mode === "visible" && sourceNodeIdSet.has(edge.from))
     );
@@ -2514,31 +2731,14 @@ export class GraphEngine {
         `${edge.mode === "overlay" ? "overlay" : "edge"}::${this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType)}`
       )
     );
-    const sourceFile = this.app.vault.getAbstractFileByPath(path);
-    if (!(sourceFile instanceof TFile)) return false;
-    const sourceFrontmatter = this.linkResolver.collectFrontmatterLinksByType(sourceFile);
-    const targetPaths = new Set<string>();
-    for (const linkType of this.visibleLinkTypes) {
-      for (const targetPath of sourceFrontmatter.get(linkType) ?? []) {
-        targetPaths.add(targetPath);
-      }
-    }
-    const targetNodeIdsByPath = new Map<string, string[]>();
-    if (targetPaths.size > 0) {
-      for (const node of this.nodes) {
-        if (node.stateOwnerPath || !targetPaths.has(node.sourcePath)) continue;
-        const ids = targetNodeIdsByPath.get(node.sourcePath) ?? [];
-        ids.push(node.id);
-        targetNodeIdsByPath.set(node.sourcePath, ids);
-      }
-    }
+    const remaining = this.edges.length;
     this.addVisibleLinkTypeEdgesForSourceNodes(
       seen,
       sourceNodeIds,
-      Array.from(this.visibleLinkTypes),
-      targetNodeIdsByPath,
-      new Map([[path, sourceFrontmatter]])
+      candidates,
+      this.buildNodeIdsBySourcePath(this.nodes.filter((node) => !node.stateOwnerPath).map((node) => node.id))
     );
+    if (before === remaining && remaining === this.edges.length) return false;
     this.nodeConnectionCountsDirty = true;
     this.reheatSimulation(0.08, "visible link refresh");
     return true;
@@ -2556,23 +2756,24 @@ export class GraphEngine {
         .filter(Boolean)
     );
     let refreshed = false;
+    const replayPaths = new Map<string, Set<string>>();
     for (const container of this.embeddedGraphContainers.values()) {
-      if (container.visibleLinkTypes.length === 0) continue;
-      if (
-        changedProperties.size > 0
-        && !container.visibleLinkTypes.some((linkType) => changedProperties.has(linkType))
-      ) {
-        continue;
-      }
-      const containsSource = Array.from(container.memberIds).some((nodeId) =>
-        this.nodeMap.get(nodeId)?.sourcePath === path
-      );
-      if (!containsSource) continue;
       const sourceNodeIds = Array.from(container.memberIds).filter((nodeId) =>
         this.nodeMap.get(nodeId)?.sourcePath === path
       );
       if (sourceNodeIds.length === 0) continue;
       const sourceNodeIdSet = new Set(sourceNodeIds);
+      this.edges = this.edges.flatMap((edge) => {
+        if (edge.mode === "visible" || !sourceNodeIdSet.has(edge.from) || !container.memberIds.has(edge.to)) return [edge];
+        const eligible = this.reconcileEmbeddedRelationshipEdge(edge, replayPaths);
+        if (eligible !== edge) refreshed = true;
+        return eligible ? [eligible] : [];
+      });
+      if (container.visibleLinkTypes.length === 0) continue;
+      const candidates = this.getVisibleEdgeCandidates(container);
+      if (changedProperties.size && candidates.length
+        && !candidates.some((candidate) => candidate.readProperties.some((property) => changedProperties.has(property)))) continue;
+      const before = this.edges.length;
       this.edges = this.edges.filter((edge) => {
         if (edge.mode !== "visible") return true;
         return !(sourceNodeIdSet.has(edge.from) && container.memberIds.has(edge.to));
@@ -2593,10 +2794,10 @@ export class GraphEngine {
       this.addVisibleLinkTypeEdgesForSourceNodes(
         seen,
         sourceNodeIds,
-        container.visibleLinkTypes,
+        candidates,
         targetNodeIdsByPath
       );
-      refreshed = true;
+      refreshed = refreshed || before !== this.edges.length || candidates.length > 0;
     }
     if (refreshed) {
       this.nodeConnectionCountsDirty = true;
@@ -2677,9 +2878,34 @@ export class GraphEngine {
   }
 
   private getEdgeVisualConfig(edge: Edge): LinkTypeVisualConfig {
+    const definition = this.getEdgeDefinition(edge);
+    if (definition) return this.getDefinitionEdgeVisualConfig(definition);
     const linkType = this.normalizeLinkType(edge.linkType ?? edge.type);
     return this.activeLinkTypeVisualByProperty.get(linkType) ?? {
       pointerDirection: edge.relationship === "parent" ? "outgoing" : "none"
+    };
+  }
+
+  private getEdgeDefinition(edge: Edge): O3LinkType | undefined {
+    if (!edge.definitionId) return undefined;
+    const matches = (definition: O3LinkType) => definition.definitionId === edge.definitionId && allowsRelationshipEdges(definition);
+    const instanceId = this.nodeMap.get(edge.from)?.embeddedInstanceId;
+    if (instanceId) {
+      const container = this.embeddedGraphContainers.get(instanceId);
+      return container?.linkTypes.find(matches) ?? container?.visibleLinkTypeDefinitions?.find(matches);
+    }
+    return this.activeNodeBadgeLinkTypes.find(matches)
+      ?? this.overlayLinkTypeDefinitions?.find(matches)
+      ?? this.visibleNodeBadgeLinkTypes.find(matches);
+  }
+
+  private getDefinitionEdgeVisualConfig(definition: O3LinkType): LinkTypeVisualConfig {
+    const color = this.normalizeLinkLineColor(definition.linkLineColor ?? definition.color);
+    const thickness = this.normalizeLinkLineThickness(definition.linkLineThickness);
+    return {
+      ...(color ? { color } : {}),
+      ...(Number.isFinite(thickness) ? { thickness } : {}),
+      pointerDirection: this.normalizePointerDirection(definition.pointerDirection)
     };
   }
 
@@ -2826,7 +3052,6 @@ export class GraphEngine {
 
   private isBadgeExpansionExpanded(expansionId: string): boolean {
     const raw = String(expansionId ?? "").trim();
-    if (this.expandedByBadge.has(raw)) return true;
     const separator = raw.lastIndexOf("::");
     if (separator <= 0) return false;
     const nodeId = raw.slice(0, separator);
@@ -2834,10 +3059,9 @@ export class GraphEngine {
     const definition = this.findRuntimeLinkTypeById(definitionId);
     if (definition?.semantic === "lens") {
       const graphPath = this.lensRuntimeGraphPath(this.linkTypeBadgeId(definition));
-      return this.embeddedGraphContainers.has(this.embeddedGraphKey(nodeId, graphPath))
-        || this.expandedByBadge.has(this.badgeKey(nodeId, this.linkTypeLegacyId(definition)));
+      return this.embeddedGraphContainers.has(this.embeddedGraphKey(nodeId, graphPath));
     }
-    return Boolean(definition && this.expandedByBadge.has(
+    return this.expandedByBadge.has(raw) || Boolean(definition && this.expandedByBadge.has(
       this.badgeKey(nodeId, this.linkTypeLegacyId(definition))
     ));
   }
@@ -2845,7 +3069,11 @@ export class GraphEngine {
   private findRuntimeLinkTypeById(definitionId: string): O3LinkType | undefined {
     const normalized = String(definitionId ?? "").trim();
     if (!normalized) return undefined;
-    const candidates = [
+    return this.getRuntimeLinkTypeDefinitions().find((candidate) => String(candidate.definitionId ?? "").trim() === normalized);
+  }
+
+  private getRuntimeLinkTypeDefinitions(): O3LinkType[] {
+    return [
       ...this.activeNodeBadgeLinkTypes,
       ...this.visibleNodeBadgeLinkTypes,
       ...Array.from(this.embeddedGraphContainers.values()).flatMap((container) => [
@@ -2853,7 +3081,31 @@ export class GraphEngine {
         ...(container.visibleLinkTypeDefinitions ?? [])
       ])
     ];
-    return candidates.find((candidate) => String(candidate.definitionId ?? "").trim() === normalized);
+  }
+
+  /** Update live badge glyphs and report whether the edit was confined to the icon property. */
+  refreshLinkTypeBadgeIcon(next: O3LinkType, registered?: O3LinkType): boolean {
+    const definitions = new Set(this.getRuntimeLinkTypeDefinitions()
+      .filter((definition) => definition.definitionId === next.definitionId));
+    if (registered?.definitionId === next.definitionId) definitions.add(registered);
+    const before = definitions.values().next().value;
+    if (!before) return false;
+
+    const redraw = [...definitions].some((definition) => definition.linkTypeIcon !== next.linkTypeIcon);
+    let requestChanged = false;
+    for (const definition of definitions) {
+      if (definition.applyBadgeIconFrom(next)) requestChanged = true;
+    }
+    if (redraw) {
+      const iconKind = getLinkTypeBadgeIconKind(before);
+      const badges = this.badgeOverlay?.querySelectorAll<HTMLElement>("[data-o3-badge-definition-id]");
+      for (const badge of Array.from(badges ?? [])) {
+        if (badge.dataset.o3BadgeDefinitionId !== next.definitionId) continue;
+        const icon = badge.querySelector<HTMLElement>(".o3-node-badge-icon");
+        if (icon) renderLinkTypeBadgeIcon(icon, iconKind, next.linkTypeIcon, getIcon);
+      }
+    }
+    return requestChanged && [...definitions].every((definition) => definition.hasSameDefinitionExceptBadgeIcon(next));
   }
 
   private isBadgeExpanded(sourcePath: string, linkType: string, definition?: O3LinkType): boolean {
@@ -2863,8 +3115,7 @@ export class GraphEngine {
     const resolvedDefinition = definition ?? this.findRuntimeLinkTypeById(type);
     if (resolvedDefinition?.semantic === "lens") {
       const graphPath = this.lensRuntimeGraphPath(this.linkTypeBadgeId(resolvedDefinition));
-      return this.embeddedGraphContainers.has(this.embeddedGraphKey(source, graphPath))
-        || this.expandedByBadge.has(this.badgeKey(source, this.linkTypeLegacyId(resolvedDefinition)));
+      return this.embeddedGraphContainers.has(this.embeddedGraphKey(source, graphPath));
     }
     return this.expandedByBadge.has(this.badgeKey(source, type));
   }
@@ -2931,12 +3182,6 @@ export class GraphEngine {
     if (!path) return false;
     const properties = this.getLinkTypeExpansionProperties(linkType);
     return properties.some((property) => this.hasBadgeYamlLinks(path, property));
-  }
-
-  private getLinkTypeIconKind(linkType: Pick<O3LinkType, "semantic" | "linkType">): "force" | "direction" | "parent" | "lens" {
-    if (linkType.semantic === "lens") return "lens";
-    if (linkType.semantic === "parent") return "parent";
-    return linkType.linkType === "Direction Based" ? "direction" : "force";
   }
 
   private normalizeBadgeColor(color: unknown): string {
@@ -3312,7 +3557,12 @@ export class GraphEngine {
 
   private getEdgePhysics(edge: Edge): { preferredDistance: number; strength: number } {
     const physicsKey = this.normalizeLinkType(edge.linkType ?? edge.type);
-    const fileConfig = this.activeLinkTypePhysicsByProperty.get(physicsKey);
+    const definition = this.getEdgeDefinition(edge);
+    const fileConfig = definition
+      ? (definition.linkType === "Direction Based" ? undefined : {
+          preferredDistance: definition.linkDistance, strength: definition.linkForce
+        })
+      : this.activeLinkTypePhysicsByProperty.get(physicsKey);
     const config = this.getLinkTypePhysicsConfig(physicsKey);
     return {
       preferredDistance: this.clamp(
@@ -3385,22 +3635,22 @@ export class GraphEngine {
   private setBadgeButtonVisualState(button: HTMLButtonElement, nodeId: string, linkType: string): void {
     const active = this.isParentExpansionActive(nodeId, linkType);
     const sourcePath = this.getSourcePathForNodeId(nodeId) ?? nodeId;
-    const linkTypeConfig = this.activeNodeBadgeLinkTypes.find((candidate) =>
-      this.normalizeLinkType(String(candidate.property ?? "")) === this.normalizeLinkType(linkType)
-    );
+    const node = this.nodeMap.get(nodeId);
+    const definitions = node ? this.getBadgeLinkTypesForNode(node) : this.activeNodeBadgeLinkTypes;
+    const linkTypeConfig = definitions.find((candidate) => this.linkTypeBadgeId(candidate) === linkType)
+      ?? definitions.find((candidate) => candidate.semantic === "parent" && this.linkTypeLegacyId(candidate) === linkType);
     const hasYamlLinks = this.hasBadgeYamlLinks(sourcePath, linkType);
     const baseColor = this.getBadgeBaseColor(linkType, linkTypeConfig?.color);
     const semantic = linkTypeConfig?.semantic ?? "parent";
-    const iconKind = this.getLinkTypeIconKind(linkTypeConfig ?? {
-      semantic: "parent",
-      linkType: "Force Based"
-    } as O3LinkType);
+    const iconKind = linkTypeConfig ? getLinkTypeBadgeIconKind(linkTypeConfig) : "parent";
     let iconElement = button.querySelector<HTMLElement>(".o3-node-badge-icon");
     if (!iconElement) {
       iconElement = button.createSpan({ cls: "o3-node-badge-icon" });
       button.createSpan({ cls: "o3-node-badge-label" });
     }
-    setIcon(iconElement, iconNameForBadgeKind(iconKind));
+    renderLinkTypeBadgeIcon(iconElement, iconKind, linkTypeConfig?.linkTypeIcon, getIcon);
+    if (linkTypeConfig?.definitionId) button.dataset.o3BadgeDefinitionId = linkTypeConfig.definitionId;
+    else delete button.dataset.o3BadgeDefinitionId;
     const labelElement = button.querySelector<HTMLElement>(".o3-node-badge-label");
     const compact = this.camera.zoom < this.badgeFarViewThreshold;
     const displayedLabel = compact ? this.getCompactBadgeLabel(linkType) : linkType;
@@ -4135,7 +4385,6 @@ export class GraphEngine {
         setStyle(button, "left", `${x}px`);
         setStyle(button, "top", `${y}px`);
         setStyle(button, "display", "block");
-        this.setBadgeButtonVisualState(button, node.id, linkType);
       }
     }
 
@@ -4210,12 +4459,11 @@ export class GraphEngine {
             return;
           }
           void this.graphController.executeBadge({ type, badgeId: expansionKey });
-        }, setIcon);
+        }, getIcon);
         badge.render();
         const badgeEl = anchor.querySelector(".o3-node-badge") as HTMLElement | null;
         if (badgeEl) {
           badgeEl.dataset.o3ExpansionKey = expansionKey;
-          badgeEl.classList.add(`o3-node-badge--${this.getLinkTypeIconKind(linkType)}`);
           badgeEl.dataset.o3BadgeDefinitionId = badgeIdentity;
           badgeEl.dataset.o3BadgeCompact = this.camera.zoom < this.badgeFarViewThreshold ? "true" : "false";
           this.setNodeBadgeVisualState(badgeEl, node.id, normalizedProperty, badgeLabel, {
@@ -4778,7 +5026,9 @@ export class GraphEngine {
 
   replaceEmbeddedGraphInstance(
     originNodeId: string,
-    definition: EmbeddedGraphDefinition
+    definition: EmbeddedGraphDefinition,
+    preserveLiveLayout = false,
+    reconcileCutMembership = false
   ): boolean {
     const graphPath = String(definition.graphPath ?? "").trim();
     if (!graphPath || !this.nodeMap.has(originNodeId)) return false;
@@ -4787,18 +5037,62 @@ export class GraphEngine {
     const previousDefinition = previousContainer
       ? this.getEmbeddedGraphDefinitionForContainer(previousContainer)
       : null;
+    const isLens = definition.runtimeOnly && definition.linkTypeId;
+    if (reconcileCutMembership && previousDefinition && previousContainer) {
+      previousDefinition.snapshots = this.preserveCutExpansionMemberships(previousContainer, previousDefinition.snapshots, definition.snapshots);
+      if (!isLens) definition = { ...definition, snapshots: reconcileRootSnapshots(previousDefinition.snapshots, definition.snapshots) };
+    }
     const previousLens = previousDefinition?.lens ?? this.getEmbeddedGraphLensState(originNodeId, graphPath);
-    if ((definition.snapshots ?? []).length === 0) return false;
+    const replacement = isLens && previousDefinition
+      ? restoreEmbeddedGraphDefinition(definition, previousDefinition)
+      : {
+        ...definition,
+        lens: preserveLiveLayout ? previousLens ?? definition.lens : definition.lens ?? previousLens,
+        ...(preserveLiveLayout && previousDefinition ? {
+          embeddedGraphs: previousDefinition.embeddedGraphs, sourceCenter: previousDefinition.sourceCenter
+        } : {})
+      };
     this.collapseEmbeddedGraph(originNodeId, graphPath, { preserveFocus: true });
-    const replaced = this.expandEmbeddedGraph(originNodeId, {
-      ...definition,
-      lens: definition.lens ?? previousLens
-    });
+    const replaced = this.expandEmbeddedGraph(originNodeId, replacement);
     if (replaced) return true;
     if (previousDefinition) {
-      this.expandEmbeddedGraph(originNodeId, previousDefinition);
+      const rollback = isLens
+        ? restoreEmbeddedGraphDefinition({ ...previousDefinition, snapshots: definition.snapshots }, previousDefinition)
+        : previousDefinition;
+      this.expandEmbeddedGraph(originNodeId, rollback);
     }
     return false;
+  }
+
+  private preserveCutExpansionMemberships(
+    container: EmbeddedGraphContainerState, previous: O3GraphRuntimeNodeSnapshot[], configured: O3GraphRuntimeNodeSnapshot[]
+  ): O3GraphRuntimeNodeSnapshot[] {
+    const reachable = new Set(configured.filter(snapshot => snapshot.origin.kind !== "expansion")
+      .map(snapshot => this.embeddedRuntimeNodeId(container.key, snapshot.nodeId)));
+    const claims = new Map<string, CutExpansionClaim[]>();
+    for (const claim of this.collectCutExpansionClaims().values()) {
+      if (!container.memberIds.has(claim.sourceNodeId)) continue;
+      const list = claims.get(claim.sourceNodeId) ?? [];
+      list.push(claim);
+      claims.set(claim.sourceNodeId, list);
+    }
+    const owned = new Map<string, O3GraphNodeOrigin>();
+    for (const sourceId of reachable) {
+      const source = this.nodeMap.get(sourceId);
+      if (!source?.embeddedSourceNodeId) continue;
+      for (const claim of claims.get(sourceId) ?? []) {
+        for (const childId of claim.children) {
+          if (!container.memberIds.has(childId) || reachable.has(childId)) continue;
+          reachable.add(childId);
+          owned.set(childId, { kind: "expansion", sourceNodeId: source.embeddedSourceNodeId, linkType: claim.selector });
+        }
+      }
+    }
+    return previous.map(snapshot => {
+      const origin = owned.get(this.embeddedRuntimeNodeId(container.key, snapshot.nodeId));
+      if (!origin) return snapshot;
+      return { ...snapshot, origin, relationshipProperties: undefined };
+    });
   }
 
   private getEmbeddedGraphDefinitionForContainer(container: EmbeddedGraphContainerState): EmbeddedGraphDefinition {
@@ -4811,6 +5105,7 @@ export class GraphEngine {
       colorSource: container.colorSource,
       linkForce: container.linkForce,
       snapshots: this.getEmbeddedGraphSnapshotsForContainer(container),
+      sourceCenter: { x: container.sourceCenterX, y: container.sourceCenterY },
       ancestry: [...container.ancestry],
       lens: this.getEmbeddedGraphLensStateForContainer(container),
       embeddedGraphs: this.getEmbeddedGraphChildStates(container),
@@ -4820,10 +5115,10 @@ export class GraphEngine {
     };
   }
 
-  private getEmbeddedGraphChildStates(container: EmbeddedGraphContainerState): O3GraphEmbeddedGraphState[] {
+  private getEmbeddedGraphChildStates(container: EmbeddedGraphContainerState): LiveEmbeddedGraphState[] {
     const children = Array.from(this.embeddedGraphContainers.values())
       .filter((candidate) => container.memberIds.has(candidate.origin));
-    return children.map((child) => {
+    const liveChildren = children.map((child) => {
       const origin = this.nodeMap.get(child.origin);
       return {
         graphPath: child.graphPath,
@@ -4832,12 +5127,14 @@ export class GraphEngine {
         ...(child.linkTypeId ? { linkTypeId: child.linkTypeId } : {}),
         lens: this.getEmbeddedGraphLensStateForContainer(child),
         snapshots: this.getEmbeddedGraphSnapshotsForContainer(child),
+        sourceCenter: { x: child.sourceCenterX, y: child.sourceCenterY },
         embeddedGraphs: this.getEmbeddedGraphChildStates(child)
       };
     }).filter((entry) => entry.originNodeId.length > 0);
+    return [...liveChildren, ...(container.pendingEmbeddedGraphs ?? [])];
   }
 
-  refreshEmbeddedRelationshipsForSourcePath(pathRaw: string): boolean {
+  refreshEmbeddedRelationshipsForSourcePath(pathRaw: string, changedProperties: string[] = []): boolean {
     const path = String(pathRaw ?? "").trim();
     if (!path) return false;
     let refreshed = false;
@@ -4848,14 +5145,15 @@ export class GraphEngine {
     )) {
       const activeLinkTypes = this.getLinkTypesForNode(node).filter((linkType) => {
         const property = this.normalizeLinkType(String(linkType.property ?? ""));
-        return property && this.expandedByBadge.has(this.badgeKey(node.id, property));
+        return property && this.expandedByBadge.has(this.badgeKey(node.id, property))
+          && (!changedProperties.length || linkType.properties.some((key) => changedProperties.includes(key)));
       });
       for (const linkType of activeLinkTypes) {
-        this.refreshEmbeddedBadgeExpansionAfterMutation(node, linkType);
+        this.refreshEmbeddedBadgeExpansionAfterMutation(node, linkType, true);
         refreshed = true;
       }
     }
-    if (this.refreshOpenLensDefinitionsForSourcePath(path)) {
+    if (this.refreshOpenLensDefinitionsForSourcePath(path, changedProperties)) {
       refreshed = true;
     }
     return refreshed;
@@ -4867,43 +5165,194 @@ export class GraphEngine {
    * target snapshots are replaced. Missing definitions are closed in memory,
    * while the graph-state entry remains available for a later recovery.
    */
-  refreshOpenLensDefinitionsForSourcePath(pathRaw: string): boolean {
+  refreshOpenLensDefinitionsForSourcePath(pathRaw: string, changedProperties: string[] = [], definitionId?: string, reconcileCutMembership = false): boolean {
     const path = String(pathRaw ?? "").trim();
     if (!path) return false;
     let refreshed = false;
     for (const container of Array.from(this.embeddedGraphContainers.values())) {
       if (!container.runtimeOnly || container.originSourcePath !== path || !container.linkTypeId) continue;
-      if (this.refreshOpenLensContainer(container)) refreshed = true;
+      if (definitionId && container.linkTypeId !== definitionId) continue;
+      if (changedProperties.length && !container.linkTypes.some((definition) =>
+        definition.definitionId === container.linkTypeId
+        && normalizeLensReadProperties(definition.properties ?? definition.property)
+          .some((key) => changedProperties.includes(key))
+      )) continue;
+      if (this.embeddedGraphContainers.get(container.key) === container
+        && this.refreshOpenLensContainer(container, reconcileCutMembership)) refreshed = true;
     }
     return refreshed;
   }
 
+  /** Reconcile active ownership in place so independent owners and surviving layout stay intact. */
+  reconcileAfterPropertyCut(changes: readonly GraphCutChange[]): boolean {
+    const byPath = new Map(changes.map(change => [change.file.path, change.properties]));
+    const readsChanged = (path: string, properties: readonly string[]) =>
+      properties.some(property => byPath.get(path)?.has(this.normalizeLinkType(property)));
+    for (const { file } of changes) {
+      this.updateLinkDiscoveryIndexForFile(file);
+      this.parentLinkTypeCache.delete(file.path);
+    }
+    const claims = this.collectCutExpansionClaims();
+    const lost = new Set<string>();
+    let changed = false;
+    for (const [id, claim] of claims) {
+      const source = this.nodeMap.get(claim.sourceNodeId);
+      if (!source) continue;
+      const candidate = this.getCutExpansionCandidate(source, claim.selector, id);
+      if (!candidate || this.normalizeLinkType(candidate.property) === this.normalizeLinkType(NONE_LINK_TYPE)) continue;
+      const direction = candidate.definition?.linkDiscoveryDirection ?? "outgoing";
+      const outgoingChanged = direction !== "incoming" && readsChanged(source.sourcePath, candidate.readProperties);
+      const relevant = [...claim.children].filter(childId => {
+        const child = this.nodeMap.get(childId);
+        return child && (outgoingChanged || direction !== "outgoing" && readsChanged(child.sourcePath, candidate.readProperties));
+      });
+      if (!relevant.length) continue;
+      const file = this.app.vault.getAbstractFileByPath(source.sourcePath);
+      const paths = new Set(file instanceof TFile ? this.resolveExpansionTargets(file, candidate).map(target => target.path) : []);
+      for (const childId of relevant) {
+        const child = this.nodeMap.get(childId);
+        if (!child || paths.has(child.sourcePath)) continue;
+        changed = true;
+        lost.add(childId);
+        claim.children.delete(childId);
+        this.expansionNodes.get(id)?.delete(childId);
+        const ownership = this.nodeOwners.get(childId);
+        ownership?.delete(id);
+        if (!ownership?.size) this.nodeOwners.delete(childId);
+        if (child.expandedVia) {
+          child.expandedVia = child.expandedVia.filter(ref => this.badgeKey(ref.origin, ref.linkType) !== id);
+        }
+        this.edges = this.edges.filter(edge => !(edge.from === source.id && edge.to === childId
+          && this.normalizeLinkType(edge.linkType ?? edge.type) === this.normalizeLinkType(candidate.property)
+          && (!edge.definitionId || !candidate.definition || edge.definitionId === candidate.definition.definitionId)));
+      }
+      if (this.expandedByBadge.has(id)) {
+        this.expandedByBadge.set(id, new Set([...claim.children].flatMap(child => this.nodeMap.get(child)?.sourcePath ?? [])));
+      }
+    }
+    if (changed) {
+      const owners = new Map<string, Array<[string, CutExpansionClaim]>>();
+      const children = new Map<string, Set<string>>();
+      for (const entry of claims) {
+        const [, claim] = entry;
+        const outgoing = children.get(claim.sourceNodeId) ?? new Set<string>();
+        children.set(claim.sourceNodeId, outgoing);
+        for (const child of claim.children) {
+          outgoing.add(child);
+          const active = owners.get(child) ?? [];
+          owners.set(child, active);
+          active.push(entry);
+        }
+      }
+      const reachable = new Set(this.nodes.filter(node =>
+        node.embeddedInstanceId ? node.embeddedRoot || node.embeddedOrigin?.kind === "filter"
+          : node.id === node.sourcePath && (this.rootFilePaths.has(node.sourcePath) || this.filterFilePaths.has(node.sourcePath))
+      ).map(node => node.id));
+      for (const source of reachable) for (const child of children.get(source) ?? []) reachable.add(child);
+      for (const source of lost) for (const child of children.get(source) ?? []) lost.add(child);
+      for (const childId of lost) {
+        const node = this.nodeMap.get(childId);
+        if (!node) continue;
+        if (reachable.has(childId)) {
+          const replacement = owners.get(childId)?.find(([, claim]) => reachable.has(claim.sourceNodeId));
+          const source = replacement && this.nodeMap.get(replacement[1].sourceNodeId);
+          if (replacement && source && node.embeddedOrigin?.kind === "expansion") {
+            node.embeddedOrigin = { ...node.embeddedOrigin, sourceNodeId: source.embeddedSourceNodeId ?? source.sourcePath,
+              linkType: replacement[1].selector };
+          }
+          continue;
+        }
+        if (node.embeddedInstanceId) this.embeddedGraphContainers.get(node.embeddedInstanceId)?.memberIds.delete(childId);
+        this.removeNodeById(childId);
+      }
+      for (const [id, claim] of claims) {
+        if (this.nodeMap.has(claim.sourceNodeId)) continue;
+        this.expandedByBadge.delete(id);
+        this.expansionNodes.delete(id);
+        this.expansionParent.delete(id);
+        this.expansionDefinitionIds.delete(id);
+        for (const child of claim.children) this.nodeOwners.get(child)?.delete(id);
+      }
+      this.edges = this.edges.filter(edge => this.nodeMap.has(edge.from) && this.nodeMap.has(edge.to));
+      this.reconcileCurrentFilesFromVisibleState();
+      this.rebuildEdges();
+    }
+    for (const { file, properties } of changes) {
+      changed = this.refreshOpenLensDefinitionsForSourcePath(file.path, [...properties], undefined, true) || changed;
+      this.refreshMetadataRelationshipEdges(file);
+    }
+    this.removeStaleCutSelection();
+    return changed;
+  }
+
+  private revalidateEmbeddedCutSnapshots(
+    candidates: O3GraphRuntimeNodeSnapshot[], enabledDefinitions: O3LinkType[], replayPaths: Map<string, Set<string>>
+  ): O3GraphRuntimeNodeSnapshot[] {
+    const valid = candidates.filter(snapshot => snapshot.path && snapshot.nodeId);
+    const surviving = new Map(valid.filter(snapshot => snapshot.origin.kind !== "expansion").map(snapshot => [snapshot.nodeId, snapshot]));
+    const byParent = new Map<string, O3GraphRuntimeNodeSnapshot[]>();
+    for (const snapshot of valid) {
+      if (snapshot.origin.kind !== "expansion") continue;
+      const children = byParent.get(snapshot.origin.sourceNodeId) ?? [];
+      children.push(snapshot);
+      byParent.set(snapshot.origin.sourceNodeId, children);
+    }
+    for (const source of surviving.values()) {
+      for (const child of byParent.get(source.nodeId) ?? []) {
+        if (child.origin.kind !== "expansion" || surviving.has(child.nodeId)) continue;
+        const matches = this.resolveEdgeCandidates([child.origin.linkType], enabledDefinitions);
+        // Keep legacy entries whose original definition cannot be identified safely.
+        const candidate = matches.length === 1 ? matches[0] : undefined;
+        const paths = candidate ? this.getReplayRelationshipPaths(source.path, candidate, replayPaths) : null;
+        if (!paths || paths.has(child.path)) surviving.set(child.nodeId, child);
+      }
+      for (const [selector, status] of Object.entries(source.badges)) {
+        if (status !== "expanded") continue;
+        const matches = this.resolveEdgeCandidates([selector], enabledDefinitions);
+        const candidate = matches.length === 1 ? matches[0] : undefined;
+        if (!candidate || candidate.definition?.linkDuplicateNodes) continue;
+        const paths = this.getReplayRelationshipPaths(source.path, candidate, replayPaths);
+        if (!paths?.size) continue;
+        for (const child of valid) {
+          if (surviving.has(child.nodeId) || child.origin.kind !== "expansion" || child.nodeId !== child.path || !paths.has(child.path)) continue;
+          surviving.set(child.nodeId, { ...child, origin: { kind: "expansion", sourceNodeId: source.nodeId, linkType: candidate.property } });
+        }
+      }
+    }
+    return valid.flatMap(snapshot => surviving.get(snapshot.nodeId) ?? []);
+  }
+
+  getOpenCutLensSnapshots() {
+    return [...this.embeddedGraphContainers.keys()].flatMap(id => this.getEmbeddedGraphPersistenceSnapshot(id) ?? []);
+  }
+
+  removeStaleCutSelection(): void {
+    this.graphController.replaceSelection(this.graphStore.getSelectedNodeIds().filter(id => this.nodeMap.has(id)));
+    this.badgesDirty = true;
+    this.requestRender();
+  }
   /** Refreshes every open runtime Lens after LinkType registry changes. */
   refreshOpenLensDefinitions(): void {
     for (const container of Array.from(this.embeddedGraphContainers.values())) {
       if (!container.runtimeOnly || !container.linkTypeId) continue;
+      if (this.embeddedGraphContainers.get(container.key) !== container) continue;
       this.refreshOpenLensContainer(container);
     }
   }
 
-  private refreshOpenLensContainer(container: EmbeddedGraphContainerState): boolean {
+  private refreshOpenLensContainer(container: EmbeddedGraphContainerState, reconcileCutMembership = false): boolean {
     const origin = this.nodeMap.get(container.origin);
     const linkType = this.findRuntimeLinkTypeById(container.linkTypeId ?? "");
     if (!origin || !linkType) {
       this.collapseEmbeddedGraph(container.origin, container.graphPath);
       return true;
     }
-    const previous = this.getEmbeddedGraphDefinitionForContainer(container);
     const definition = this.buildLensEmbeddedGraphDefinition(origin, linkType, container.ancestry);
     if (!definition) {
       this.collapseEmbeddedGraph(container.origin, container.graphPath);
       return true;
     }
-    const replaced = this.replaceEmbeddedGraphInstance(container.origin, {
-      ...definition,
-      lens: previous.lens,
-      embeddedGraphs: previous.embeddedGraphs
-    });
+    const replaced = this.replaceEmbeddedGraphInstance(container.origin, definition, false, reconcileCutMembership);
     if (!replaced) return false;
     const refreshedContainer = this.embeddedGraphContainers.get(container.key);
     if (refreshedContainer) this.notifyEmbeddedGraphLensChanged(refreshedContainer);
@@ -4945,7 +5394,7 @@ export class GraphEngine {
         const expanded = this.expandedByBadge.has(this.badgeKey(node.id, property))
           || this.isParentExpansionActive(node.id, property);
         if (!expanded) continue;
-        this.refreshBadgeExpansionAfterMutation(node.id, node.sourcePath, property);
+        this.refreshBadgeExpansionAfterMutation(node.id, node.sourcePath, property, true);
         refreshed = true;
       }
     }
@@ -4954,6 +5403,10 @@ export class GraphEngine {
 
   clearEmbeddedGraphRuntime(options?: { preserveFocus?: boolean }): void {
     for (const container of Array.from(this.embeddedGraphContainers.values())) {
+      if (container.runtimeOnly && container.linkTypeId) {
+        this.collapseEmbeddedGraph(container.origin, container.graphPath, options);
+        continue;
+      }
       this.edges = this.edges.filter((edge) => !container.memberIds.has(edge.from) && !container.memberIds.has(edge.to));
       for (const nodeId of container.memberIds) {
         this.removeNodeById(nodeId);
@@ -5002,12 +5455,11 @@ export class GraphEngine {
       ancestry,
       ...(originNode.stateOwnerPath ? { ownerGraphPath: originNode.stateOwnerPath } : {})
     });
-    if (!definition || definition.snapshots.length === 0) {
+    if (!definition) {
       console.warn("[GraphEngine] Graph lens did not open: embedded graph definition empty", {
         originNodeId,
         graphPath,
         hasDefinition: Boolean(definition),
-        snapshots: definition?.snapshots.length ?? 0
       });
       return false;
     }
@@ -5105,37 +5557,27 @@ export class GraphEngine {
     const visibleLinkTypes = parentContainer?.visibleLinkTypes ?? Array.from(this.visibleLinkTypes);
     const visibleLinkTypeDefinitions = parentContainer?.visibleLinkTypeDefinitions
       ?? this.visibleNodeBadgeLinkTypes;
-    const sourceSnapshotId = originNode.sourcePath;
+    const ownerPath = (parentContainer
+      ? this.getEmbeddedGraphPersistenceContext(parentContainer).ownerGraphPath
+      : originNode.stateOwnerPath) ?? this.menuOptions.getMembershipOwnerPath?.();
     const targets = this.resolveLensTargets(sourceFile, linkType);
-    const snapshots: O3GraphRuntimeNodeSnapshot[] = [{
-      nodeId: sourceSnapshotId,
-      path: originNode.sourcePath,
-      x: 0,
-      y: 0,
-      pinned: false,
-      origin: { kind: "root" },
-      badges: { [this.linkTypeLegacyId(linkType)]: "expanded" }
-    }];
-    targets.forEach(({ target, properties }, index) => {
-      const angle = (Math.PI * 2 * index) / Math.max(1, targets.length);
+    const snapshots: O3GraphRuntimeNodeSnapshot[] = targets.map(({ target, properties }, index) => {
+      const angle = (Math.PI * 2 * index) / targets.length;
       const distance = 120;
-      snapshots.push({
+      return {
         nodeId: target.path,
         path: target.path,
         x: Math.cos(angle) * distance,
         y: Math.sin(angle) * distance,
         pinned: false,
-        origin: {
-          kind: "expansion",
-          sourceNodeId: sourceSnapshotId,
-          linkType: this.linkTypeLegacyId(linkType)
-        },
+        origin: { kind: "root" },
         badges: {},
-        ...(properties.length > 0 ? { relationshipProperties: properties } : {})
-      });
+        relationshipProperties: properties
+      };
     });
     return {
       graphPath,
+      ...(ownerPath ? { persistenceOwnerPath: ownerPath } : {}),
       runtimeOnly: true,
       linkTypeId: definitionId,
       color: linkType.color ?? "#6e96dc",
@@ -5152,11 +5594,12 @@ export class GraphEngine {
   }
 
   private resolveLensTargets(sourceFile: TFile, linkType: O3LinkType): LensResolvedTarget[] {
-    const properties = this.getLinkTypeExpansionProperties(linkType);
+    const properties = normalizeLensReadProperties(linkType.properties ?? linkType.property);
     const byPath = new Map<string, LensResolvedTarget>();
     for (const property of properties) {
-      const configured = { ...linkType, property } as O3LinkType;
-      for (const target of this.linkResolver.resolveLinkedTargets(sourceFile, configured)) {
+      const configured = { property, linkDiscoveryDirection: linkType.linkDiscoveryDirection };
+      for (const target of this.linkResolver.resolveLinkedTargets(sourceFile, configured, { includePropertyAliases: false })) {
+        if (target.missing) continue;
         const existing = byPath.get(target.path);
         if (existing) {
           if (!existing.properties.includes(property)) existing.properties.push(property);
@@ -5176,23 +5619,24 @@ export class GraphEngine {
     const originNodeId = String(originNodeIdRaw ?? "").trim();
     const graphPath = String(definition.graphPath ?? "").trim();
     const originNode = this.nodeMap.get(originNodeId);
-    if (!originNode || !graphPath || definition.snapshots.length === 0) return false;
+    if (!originNode || !graphPath) return false;
     const ancestry = Array.from(new Set((definition.ancestry ?? []).map((path) => String(path ?? "").trim()).filter(Boolean)));
     if (ancestry.includes(graphPath)) return false;
 
     const key = this.embeddedGraphKey(originNodeId, graphPath);
     if (this.embeddedGraphContainers.has(key)) return true;
-    const snapshots = definition.snapshots.filter((snapshot) => snapshot.path && snapshot.nodeId);
-    if (snapshots.length === 0) return false;
-    for (const linkType of [
+    const enabledDefinitions = [
       ...(definition.linkTypes ?? []),
       ...(definition.visibleLinkTypeDefinitions ?? [])
-    ]) {
-      this.registerLinkTypeRuntimeConfig(linkType);
-    }
+    ];
+    const expansionCandidate = (selector: string) => this.resolveEdgeCandidates([selector], enabledDefinitions)[0];
+    const replayPaths = new Map<string, Set<string>>();
 
-    const sourceCenterX = snapshots.reduce((sum, snapshot) => sum + Number(snapshot.x || 0), 0) / snapshots.length;
-    const sourceCenterY = snapshots.reduce((sum, snapshot) => sum + Number(snapshot.y || 0), 0) / snapshots.length;
+    const snapshots = this.revalidateEmbeddedCutSnapshots(definition.snapshots, enabledDefinitions, replayPaths);
+    const sourceCenterX = definition.sourceCenter?.x
+      ?? snapshots.reduce((sum, snapshot) => sum + Number(snapshot.x || 0), 0) / Math.max(1, snapshots.length);
+    const sourceCenterY = definition.sourceCenter?.y
+      ?? snapshots.reduce((sum, snapshot) => sum + Number(snapshot.y || 0), 0) / Math.max(1, snapshots.length);
     const viewportWidth = this.getEmbeddedGraphViewportWidth(originNode);
     const viewportHeight = this.getEmbeddedGraphViewportHeight(originNode);
     const containerCenterX = originNode.x;
@@ -5256,13 +5700,19 @@ export class GraphEngine {
       for (const [linkTypeRaw, status] of Object.entries(snapshot.badges ?? {})) {
         if (status !== "expanded") continue;
         const linkType = this.normalizeLinkType(linkTypeRaw);
-        if (!linkType) continue;
-        const badgeKey = this.badgeKey(runtimeSourceId, linkType);
-        const childSnapshots = snapshots.filter((candidate) =>
-          candidate.origin.kind === "expansion"
-          && candidate.origin.sourceNodeId === snapshot.nodeId
-          && this.normalizeLinkType(candidate.origin.linkType) === linkType
-        );
+        const candidates = this.resolveEdgeCandidates([linkType], enabledDefinitions);
+        const candidate = candidates[0];
+        if (!candidate) continue;
+        const paths = candidates.length === 1 ? this.getReplayRelationshipPaths(snapshot.path, candidate, replayPaths) : null;
+        const badgeKey = this.badgeKey(runtimeSourceId, candidate.property);
+        const childSnapshots = snapshots.filter(child => {
+          if (child.nodeId === snapshot.nodeId || (paths && !paths.has(child.path))) return false;
+          if (child.origin.kind === "expansion" && child.origin.sourceNodeId === snapshot.nodeId
+            && this.normalizeLinkType(child.origin.linkType) === linkType) return true;
+          // A merged runtime member can also be owned by another active badge.
+          return Boolean(paths && child.nodeId === child.path && candidate.definition?.linkDuplicateNodes !== true);
+        });
+        if (candidates.length === 1 && candidate.definition) this.expansionDefinitionIds.set(badgeKey, candidate.definition.definitionId);
         this.expandedByBadge.set(badgeKey, new Set(childSnapshots.map((candidate) => candidate.path)));
         this.expansionNodes.set(badgeKey, new Set(
           childSnapshots
@@ -5278,22 +5728,28 @@ export class GraphEngine {
       const from = runtimeIdBySourceId.get(snapshot.origin.sourceNodeId);
       const to = runtimeIdBySourceId.get(snapshot.nodeId);
       if (!from || !to) continue;
-      this.removeVisibleSemanticEdges(from, to, snapshot.origin.linkType);
-      if (this.hasEdge(from, to, snapshot.origin.linkType)) continue;
-      const relationship = this.getLinkTypeSemantic(snapshot.origin.linkType) === "parent"
+      const candidate = expansionCandidate(snapshot.origin.linkType);
+      if (!candidate) continue;
+      const paths = this.getReplayRelationshipPaths(this.getSourcePathForNodeId(from), candidate, replayPaths);
+      if (paths && !paths.has(snapshot.path)) continue;
+      const property = candidate.property;
+      this.removeVisibleSemanticEdges(from, to, property);
+      if (this.hasEdge(from, to, property)) continue;
+      const relationship = this.getEdgeCandidateSemantic(candidate) === "parent"
         ? "parent" as const
         : undefined;
       this.edges.push({
         from,
         to,
-        type: snapshot.origin.linkType,
-        linkType: snapshot.origin.linkType,
+        type: property,
+        linkType: property,
+        ...(candidate.definition ? { definitionId: candidate.definition.definitionId } : {}),
         ...(relationship ? { relationship, origin: from } : {})
       });
       if (relationship) {
         this.expandedParentRequests.set(
-          this.buildExpandedParentRequestKey(from, snapshot.origin.linkType),
-          { origin: from, linkType: snapshot.origin.linkType }
+          this.buildExpandedParentRequestKey(from, property),
+          { origin: from, linkType: property }
         );
       }
     }
@@ -5353,30 +5809,36 @@ export class GraphEngine {
     for (const nested of definition.embeddedGraphs ?? []) {
       const nestedOriginId = runtimeIdBySourceId.get(nested.originNodeId);
       if (!nestedOriginId) continue;
+      const nestedOrigin = this.nodeMap.get(nestedOriginId);
+      if (!nestedOrigin) continue;
+      const nestedAncestry = [
+        ...(nestedOrigin.embeddedAncestry ?? []),
+        ...(nestedOrigin.stateOwnerPath ? [nestedOrigin.stateOwnerPath] : [])
+      ];
+      if (nested.linkTypeId) {
+        const child = this.getLensEmbeddedGraphDefinition(nestedOriginId, nested.linkTypeId, nestedAncestry);
+        if (child) this.expandEmbeddedGraph(nestedOriginId, restoreEmbeddedGraphDefinition(child, nested));
+        continue;
+      }
+      (containerState.pendingEmbeddedGraphs ??= []).push(nested);
       window.setTimeout(() => {
         void (async () => {
-          const nestedOrigin = this.nodeMap.get(nestedOriginId);
-          if (!nestedOrigin) return;
+          if (this.destroyed || this.embeddedGraphContainers.get(key) !== containerState
+            || !this.nodeMap.has(nestedOriginId)) return;
           const nestedDefinition = await this.menuOptions.onEmbeddedGraphExpansionRequested?.({
             originNodeId: nestedOriginId,
             graphPath: nested.graphPath,
-            ancestry: [
-              ...(nestedOrigin.embeddedAncestry ?? []),
-              ...(nestedOrigin.stateOwnerPath ? [nestedOrigin.stateOwnerPath] : [])
-            ],
-            ...(nestedOrigin.stateOwnerPath ? { ownerGraphPath: nestedOrigin.stateOwnerPath } : {}),
-            ...(nested.linkTypeId ? { linkTypeId: nested.linkTypeId } : {})
+            ancestry: nestedAncestry,
+            ...(nestedOrigin.stateOwnerPath ? { ownerGraphPath: nestedOrigin.stateOwnerPath } : {})
           });
-          if (!nestedDefinition) return;
-          this.expandEmbeddedGraph(nestedOriginId, {
-            ...nestedDefinition,
-            snapshots: nested.snapshots ?? nestedDefinition.snapshots,
-            lens: nested.lens ?? nestedDefinition.lens,
-            embeddedGraphs: nested.embeddedGraphs ?? nestedDefinition.embeddedGraphs
-          });
-        })();
+          if (this.destroyed || this.embeddedGraphContainers.get(key) !== containerState
+            || !this.nodeMap.has(nestedOriginId)) return;
+          containerState.pendingEmbeddedGraphs = containerState.pendingEmbeddedGraphs?.filter((entry) => entry !== nested);
+          if (nestedDefinition) this.expandEmbeddedGraph(nestedOriginId, restoreEmbeddedGraphDefinition(nestedDefinition, nested));
+        })().catch((error) => console.error("[GraphEngine] Failed to restore a nested graph:", error));
       }, 0);
     }
+    this.graphTabTopologyChanged();
     return true;
   }
 
@@ -5409,6 +5871,14 @@ export class GraphEngine {
       }
     }
     this.edges = this.edges.filter((edge) => !container.memberIds.has(edge.from) && !container.memberIds.has(edge.to));
+    for (const badgeKey of this.expandedByBadge.keys()) {
+      const nodeId = badgeKey.slice(0, badgeKey.lastIndexOf("::"));
+      if (!container.memberIds.has(nodeId)) continue;
+      this.expandedByBadge.delete(badgeKey);
+      this.expansionNodes.delete(badgeKey);
+      this.expansionDefinitionIds.delete(badgeKey);
+      this.expansionParent.delete(badgeKey);
+    }
     for (const nodeId of container.memberIds) {
       this.removeNodeById(nodeId);
     }
@@ -5687,6 +6157,7 @@ export class GraphEngine {
     for (const node of this.nodes) {
       this.nodeMap.set(node.id, node);
     }
+    this.graphTabTopologyChanged();
   }
 
   private getInitialPositionForNewNode(path: string): { x: number; y: number } {
@@ -5898,8 +6369,7 @@ export class GraphEngine {
     return String(node?.runtimeId ?? "").trim() || normalizedNodeId;
   }
 
-  private applyGraphViewportState(): void {
-    const viewport = this.graphState?.viewport;
+  private applyGraphViewportState(viewport = this.graphState?.viewport): void {
     if (!viewport) return;
 
     const zoom = Number(viewport.zoom);
@@ -5951,13 +6421,17 @@ export class GraphEngine {
     }
   }
 
-  private emitViewportChanged(options?: { isFinal?: boolean }): void {
-    if (this.suppressViewportChangedEvents) return;
-    const current = {
+  getViewportSnapshot(): { x: number; y: number; zoom: number } {
+    return {
       x: this.camera.x,
       y: this.camera.y,
       zoom: this.camera.zoom
     };
+  }
+
+  private emitViewportChanged(options?: { isFinal?: boolean }): void {
+    if (this.suppressViewportChangedEvents) return;
+    const current = this.getViewportSnapshot();
     const last = this.lastEmittedViewport;
     if (
       last
@@ -7138,7 +7612,10 @@ export class GraphEngine {
       if (edge.mode === "overlay") continue;
       const property = this.normalizeLinkType(edge.linkType ?? edge.type);
       if (!property) continue;
-      const config = this.activeLinkTypeDirectionByProperty.get(property);
+      const definition = this.getEdgeDefinition(edge);
+      const config = definition
+        ? this.getDefinitionDirectionConfig(definition)
+        : this.activeLinkTypeDirectionByProperty.get(property);
       if (!config) continue;
       if (!this.nodeMap.has(edge.from) || !this.nodeMap.has(edge.to)) continue;
       directionSourceIds.add(edge.from);
@@ -8770,6 +9247,7 @@ export class GraphEngine {
   // =========================
 
   private onWheel(e: WheelEvent) {
+    this.onGraphTabInteraction?.();
 
     e.preventDefault();
 
@@ -8840,6 +9318,8 @@ export class GraphEngine {
   }
 
   selectAllNodes(): number {
+    this.pendingGraphTabSelection = undefined;
+    this.onGraphTabInteraction?.();
     const next = new Set(
       this.nodes
         .map((node) => String(node.id ?? "").trim())
@@ -8855,8 +9335,10 @@ export class GraphEngine {
     e.preventDefault();
     e.stopPropagation();
     this.container.focus();
+    this.pendingGraphTabSelection = undefined;
+    this.onGraphTabInteraction?.();
 
-    const clickedNode = this.findNodeAtScreenPosition(e.clientX, e.clientY);
+    const clickedNode = this.findActualNodeAtScreenPosition(e.clientX, e.clientY);
     if (clickedNode && !this.graphStore.isNodeSelected(clickedNode.id)) {
       this.selectOnlyNode(clickedNode.id);
     }
@@ -8889,6 +9371,14 @@ export class GraphEngine {
               void this.menuOptions.onCopySelectedNodeLinks?.();
             });
         });
+      }
+
+      if (this.menuOptions.onCutSelectedNodes) {
+        const selection = this.getSelectedNodeCutRefs();
+        menu.addItem(item => item.setTitle(selectedNodes.length === 1 ? "Cut node" : "Cut nodes")
+          .setIcon("scissors")
+          .setDisabled(this.menuOptions.canCutSelectedNodes?.(selection) === false)
+          .onClick(() => { void this.menuOptions.onCutSelectedNodes?.(selection); }));
       }
 
       const nodeToOpen = clickedNode ?? (selectedNodes.length === 1 ? selectedNodes[0] : null);
@@ -8949,6 +9439,7 @@ export class GraphEngine {
 
       const removableEmbeddedRoots = selectedNodes.filter((node) =>
         node.embeddedRoot && node.embeddedDefinitionPath
+        && !this.embeddedGraphContainers.get(node.embeddedInstanceId ?? "")?.runtimeOnly
       );
       if (removableEmbeddedRoots.length > 0 && this.menuOptions.onEmbeddedRootRemoveRequested) {
         menu.addItem((item) => {
@@ -9408,7 +9899,8 @@ export class GraphEngine {
       const renderedCenter = this.getRenderedNodeCenter(node);
       const sx = (renderedCenter.x + this.camera.x) * this.camera.zoom;
       const sy = (renderedCenter.y + this.camera.y) * this.camera.zoom;
-      if (sx >= left && sx <= right && sy >= top && sy <= bottom) {
+      if (sx >= left && sx <= right && sy >= top && sy <= bottom
+        && this.isNodeInSelectableRegion(node, renderedCenter.x, renderedCenter.y)) {
         next.add(node.id);
       }
     }
@@ -9564,6 +10056,8 @@ export class GraphEngine {
     this.clearNodeHoverPreview();
     this.clearTopologyUpdateFreeze();
     this.container.focus();
+    this.pendingGraphTabSelection = undefined;
+    this.onGraphTabInteraction?.();
     this.isAltPressed = e.altKey;
 
     this.dragPointerClient = { x: e.clientX, y: e.clientY };
@@ -9651,7 +10145,7 @@ export class GraphEngine {
     const embeddedContainer = this.findEmbeddedContainerAtScreenPosition(e.clientX, e.clientY);
     if (embeddedContainer) {
       this.focusGraphLens(embeddedContainer);
-      const embeddedClickedNode = this.findNodeAtScreenPosition(e.clientX, e.clientY, new Set(), { ignoreLockedEmbeddedContainers: true });
+      const embeddedClickedNode = this.findActualNodeAtScreenPosition(e.clientX, e.clientY);
       if (embeddedClickedNode?.embeddedInstanceId === embeddedContainer.key) {
         this.pressedNode = embeddedClickedNode;
         if (e.shiftKey) {
@@ -9684,7 +10178,7 @@ export class GraphEngine {
       return;
     }
 
-    this.pressedNode = this.findNodeAtScreenPosition(e.clientX, e.clientY, new Set(), { ignoreLockedEmbeddedContainers: true });
+    this.pressedNode = this.findActualNodeAtScreenPosition(e.clientX, e.clientY);
     if (this.pressedNode) {
       if (e.shiftKey) {
         this.toggleNodeSelection(this.pressedNode.id);
@@ -9929,7 +10423,7 @@ export class GraphEngine {
       } else if (this.pressedNode && !this.didPan) {
         this.selectOnlyNode(this.pressedNode.id);
       } else if (this.isPanning && !this.didPan) {
-        const clickedNode = this.findNodeAtScreenPosition(e.clientX, e.clientY);
+        const clickedNode = this.findActualNodeAtScreenPosition(e.clientX, e.clientY);
         if (clickedNode) {
           this.selectOnlyNode(clickedNode.id);
         } else {
@@ -9965,7 +10459,7 @@ export class GraphEngine {
 
   private onDoubleClick(e: MouseEvent): void {
     if (e.button !== 0) return;
-    const node = this.findNodeAtScreenPosition(e.clientX, e.clientY);
+    const node = this.findActualNodeAtScreenPosition(e.clientX, e.clientY);
     if (!node) return;
     this.selectOnlyNode(node.id);
     void this.openNodeFile(node);
@@ -9978,7 +10472,7 @@ export class GraphEngine {
       return;
     }
 
-    const node = this.findNodeAtScreenPosition(e.clientX, e.clientY) ?? this.pressedNode;
+    const node = this.findActualNodeAtScreenPosition(e.clientX, e.clientY);
     if (!node) {
       e.preventDefault();
       return;
@@ -10447,10 +10941,9 @@ export class GraphEngine {
     if (!targetRef || sourceRefs.length === 0) return;
 
     const badgeLinkType = target.linkType;
-    const resolvedLinkType = this.getBadgeLinkTypesForNode(targetNode).find((linkType) =>
-      this.linkTypeBadgeId(linkType) === badgeLinkType
-      || this.normalizeLinkType(String(linkType.property ?? "")) === badgeLinkType
-    );
+    const definitions = this.getBadgeLinkTypesForNode(targetNode);
+    const resolvedLinkType = definitions.find((candidate) => this.linkTypeBadgeId(candidate) === badgeLinkType)
+      ?? definitions.find((candidate) => this.linkTypeLegacyId(candidate) === badgeLinkType);
     const propertyKey = resolvedLinkType
       ? this.normalizeLinkType(String(
           resolvedLinkType.writeProperty
@@ -10469,7 +10962,7 @@ export class GraphEngine {
       property: propertyKey,
       discoveryDirection,
       ...(resolvedLinkType ? {
-        readProperties: this.getLinkTypeExpansionProperties(resolvedLinkType),
+        readProperties: resolvedLinkType.properties,
         semantic: resolvedLinkType.semantic,
         definitionId: this.linkTypeBadgeId(resolvedLinkType)
       } : {})
@@ -10496,7 +10989,7 @@ export class GraphEngine {
       } else {
         this.syncVisibleLinkTypeEdgesAfterBadgeMutation(
           targetRef.path,
-          badgeLinkType,
+          resolvedLinkType?.writeProperty ?? badgeLinkType,
           discoveryDirection,
           result
         );
@@ -10506,7 +10999,10 @@ export class GraphEngine {
   }
 
   requestBadgeLinkInput(sourceNodeId: string, linkType: O3LinkType): void {
-    void this.openBadgeLinkInput(sourceNodeId, linkType);
+    void this.openBadgeLinkInput(sourceNodeId, linkType).catch((error) => {
+      console.error("[GraphEngine] Failed to complete badge link input:", error);
+      new Notice("Failed to complete graph link input.");
+    });
   }
 
   private async openBadgeLinkInput(sourceNodeId: string, linkType: O3LinkType): Promise<void> {
@@ -10514,46 +11010,198 @@ export class GraphEngine {
     if (!targetNode) return;
 
     const targetRef = this.getGraphNodeMutationRef(targetNode);
-    const badgeLinkType = String(linkType.property ?? linkType.key ?? "").trim().toLowerCase();
-    const propertyKey = targetNode.embeddedInstanceId || linkType.semantic === "lens"
-      ? this.normalizeLinkType(String(
-          linkType.writeProperty
-          ?? linkType.properties?.[0]
-          ?? linkType.property
-          ?? ""
-        ))
-      : this.getLinkTypeWriteProperty(badgeLinkType);
-    if (!targetRef || !propertyKey) return;
+    if (!targetRef) return;
+    const badgeLinkType = this.linkTypeLegacyId(linkType);
+    const write = this.getBadgeLinkWriteDescriptor(targetRef, linkType);
+    const targetContext = targetNode.embeddedInstanceId;
+    const definitionFile = linkType.file;
+    const membership = this.getBadgeMembershipContext(targetNode, targetRef.path);
 
     const result = await this.menuOptions.onGraphLinkInputRequested?.({
       target: targetRef,
-      property: propertyKey,
-      discoveryDirection: linkType.linkDiscoveryDirection,
-      ...(targetNode.embeddedDefinitionPath
-        ? { graphCapableOwnerPath: targetNode.embeddedDefinitionPath }
-        : {})
+      write,
+      membership,
+      isCurrent: () => {
+        if (!write || this.destroyed) return false;
+        const node = this.nodeMap.get(sourceNodeId);
+        if (!node || node.embeddedInstanceId !== targetContext
+          || this.getGraphNodeMutationRef(node)?.path !== targetRef.path) return false;
+        if (!targetContext && membership.kind === "note"
+          && this.menuOptions.getMembershipOwnerPath?.().trim() !== membership.ownerPath) return false;
+        const current = this.getPersistableBadgeLinkTypesForNode(node).find(
+          (candidate) => this.linkTypeBadgeId(candidate) === write.definitionId
+        );
+        if (!current || !this.matchesBadgeLinkWriteDescriptor(write, current)) return false;
+        if (!(definitionFile instanceof TFile)) return true;
+        if (this.app.vault.getAbstractFileByPath(write.definitionId ?? "") !== definitionFile) return false;
+        const frontmatter = this.app.metadataCache.getFileCache(definitionFile)?.frontmatter;
+        return this.matchesBadgeLinkWriteDescriptor(
+          write, new O3LinkType(definitionFile, frontmatter, this.menuOptions.linkTypePropertyKeys)
+        );
+      }
     });
+    if (result?.origin !== "single-note-input" || !result.added.length || this.destroyed || linkType.semantic === "lens") return;
+    const current = this.nodeMap.get(sourceNodeId);
+    if (!current || current.sourcePath !== targetRef.path || current.embeddedInstanceId !== targetContext) return;
+    if (current.embeddedInstanceId) {
+      this.refreshEmbeddedBadgeExpansionAfterMutation(current, linkType);
+    } else {
+      this.refreshBadgeExpansionAfterMutation(current.id, targetRef.path, badgeLinkType);
+    }
+  }
 
+  private getBadgeMembershipContext(node: GraphNode, referencePath: string): GraphBadgeMembershipContext {
+    if (!node.embeddedInstanceId) {
+      const ownerPath = this.menuOptions.getMembershipOwnerPath?.().trim();
+      return ownerPath ? { kind: "note", ownerPath, referencePath }
+        : { kind: "unavailable", reason: "The graph has no backing note." };
+    }
+    const instanceId = node.embeddedInstanceId;
+    const container = this.embeddedGraphContainers.get(instanceId);
+    if (!container) return { kind: "unavailable", reason: "The enclosing graph is unavailable." };
+    if (!container.runtimeOnly && !container.linkTypeId) {
+      return { kind: "note", ownerPath: container.graphPath, referencePath, instanceId };
+    }
+    const origin = this.nodeMap.get(container.origin);
+    const definition = container.linkTypes.find((entry) => entry.definitionId === container.linkTypeId);
+    if (!origin || !definition || definition.semantic !== "lens") {
+      return { kind: "unavailable", reason: "The enclosing Lens source or definition is unavailable." };
+    }
+    return {
+      kind: "lens", ownerPath: origin.sourcePath, referencePath, instanceId,
+      definitionId: definition.definitionId,
+      readProperties: normalizeLensReadProperties(definition.properties ?? definition.property),
+      provenance: [...(node.relationshipProperties ?? [])]
+    };
+  }
+
+  private getBadgeLinkWriteDescriptor(target: GraphLinkMutationNodeRef, linkType: O3LinkType): GraphLinkWriteDescriptor | null {
+    const readProperties = linkType.properties?.filter((property) => typeof property === "string" && property.trim())
+      .map((property) => property.trim()) ?? [];
+    const property = linkType.writeProperty?.trim();
+    if (linkType.isValid === false || !property || !readProperties.includes(property)) return null;
+    return Object.freeze({
+      target: Object.freeze({ ...target }),
+      property,
+      discoveryDirection: linkType.linkDiscoveryDirection,
+      readProperties: Object.freeze(readProperties),
+      semantic: linkType.semantic,
+      definitionId: this.linkTypeBadgeId(linkType)
+    });
+  }
+
+  private matchesBadgeLinkWriteDescriptor(write: GraphLinkWriteDescriptor, linkType: O3LinkType): boolean {
+    const current = this.getBadgeLinkWriteDescriptor(write.target, linkType);
+    return current !== null && current.definitionId === write.definitionId && current.property === write.property
+      && current.discoveryDirection === write.discoveryDirection && current.semantic === write.semantic
+      && JSON.stringify([...(current.readProperties ?? [])].sort()) === JSON.stringify([...(write.readProperties ?? [])].sort());
+  }
+
+  refreshAfterBadgeClipboardBatch(write: GraphLinkWriteDescriptor, result: GraphLinkBadgeDropMutationResult): void {
+    if (this.destroyed || !result.changedFilePaths?.length) return;
+    const now = Date.now();
+    for (const [path, pending] of this.pendingBadgeClipboardRefreshes) {
+      const current = pending.filter(({ expiresAt }) => expiresAt > now);
+      if (current.length) this.pendingBadgeClipboardRefreshes.set(path, current);
+      else this.pendingBadgeClipboardRefreshes.delete(path);
+    }
     this.linkResolver.clearIncomingLinkIndex();
-    this.registerRecentGraphLinkMutationTargets(
-      targetRef.path,
-      badgeLinkType,
-      result?.added ?? [],
-      result?.removed ?? []
-    );
-    this.parentLinkTypeCache.delete(targetRef.path);
-    this.badgesDirty = true;
-    const changed = !result || (result.added.length + result.removed.length > 0);
-    if (changed) {
-      if (linkType.semantic === "lens") {
-        this.refreshLensViewportAfterMutation(targetNode, linkType);
-      } else if (targetNode.embeddedInstanceId) {
-        this.refreshEmbeddedBadgeExpansionAfterMutation(targetNode, linkType);
-      } else {
-        this.refreshBadgeExpansionAfterMutation(targetNode.id, targetRef.path, badgeLinkType);
+    for (const path of result.changedFilePaths) {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile)) continue;
+      this.updateLinkDiscoveryIndexForFile(file);
+      if (path !== write.target.path && this.hasVisibleNodeForSourcePath(path)) {
+        this.refreshOuterRelationshipsForSourcePath(path, [write.property]);
+        this.refreshEmbeddedRelationshipsForSourcePath(path, [write.property]);
+      }
+      const pending = this.pendingBadgeClipboardRefreshes.get(path) ?? [];
+      pending.push({ write, expiresAt: now + this.recentGraphLinkMutationTargetTtlMs });
+      this.pendingBadgeClipboardRefreshes.set(path, pending);
+    }
+    this.refreshBadgeClipboardTarget(write, result);
+  }
+
+  refreshAfterEnclosingLensMembership(destination: GraphBadgeMembershipDestination): void {
+    const { ownerPath, lensDefinitionId } = destination;
+    if (this.destroyed || !lensDefinitionId) return;
+    const now = Date.now();
+    for (const [path, definitions] of this.pendingBadgeMembershipLensRefreshes) {
+      for (const [id, expiresAt] of definitions) if (expiresAt < now) definitions.delete(id);
+      if (!definitions.size) this.pendingBadgeMembershipLensRefreshes.delete(path);
+    }
+    const pending = this.pendingBadgeMembershipLensRefreshes.get(ownerPath) ?? new Map<string, number>();
+    pending.set(lensDefinitionId, now + this.recentGraphLinkMutationTargetTtlMs);
+    this.pendingBadgeMembershipLensRefreshes.set(ownerPath, pending);
+    this.refreshOpenLensDefinitionsForSourcePath(ownerPath, [], lensDefinitionId);
+  }
+
+  reconcileBadgeClipboardMetadata(file: TFile): void {
+    const lensRefreshes = this.pendingBadgeMembershipLensRefreshes.get(file.path);
+    if (lensRefreshes) {
+      this.pendingBadgeMembershipLensRefreshes.delete(file.path);
+      this.updateLinkDiscoveryIndexForFile(file);
+      for (const [definitionId, expiry] of lensRefreshes) {
+        if (Date.now() <= expiry) this.refreshOpenLensDefinitionsForSourcePath(file.path, [], definitionId);
       }
     }
-    this.reheatSimulation(0.2, "badge link input");
+    const pending = this.pendingBadgeClipboardRefreshes.get(file.path);
+    if (!pending) return;
+    this.pendingBadgeClipboardRefreshes.delete(file.path);
+    this.updateLinkDiscoveryIndexForFile(file);
+    const current = pending.filter(({ expiresAt }) => expiresAt >= Date.now());
+    if (!current.length) return;
+    const properties = [...new Set(current.map(({ write }) => write.property))];
+    this.refreshVisibleLinkTypeEdgesForSourcePath(file.path, properties);
+    this.refreshEmbeddedVisibleLinkTypeEdgesForSourcePath(file.path, properties);
+    this.refreshOuterRelationshipsForSourcePath(file.path, properties);
+    this.refreshEmbeddedRelationshipsForSourcePath(file.path, properties);
+    for (const { write } of current) {
+      this.refreshBadgeClipboardTarget(write);
+    }
+  }
+
+  private refreshBadgeClipboardTarget(write: GraphLinkWriteDescriptor, result?: GraphLinkBadgeDropMutationResult): void {
+    const path = write.target.path;
+    const syncedProperties = new Set<string>();
+    for (const node of this.nodes) {
+      if (node.sourcePath !== path) continue;
+      const definition = this.getPersistableBadgeLinkTypesForNode(node).find(
+        (candidate) => this.matchesBadgeLinkWriteDescriptor(write, candidate)
+      );
+      if (!definition) continue;
+      const property = this.linkTypeLegacyId(definition);
+      if (result && !syncedProperties.has(property)) {
+        syncedProperties.add(property);
+        this.registerRecentGraphLinkMutationTargets(path, property, result.added, result.removed);
+        this.syncVisibleLinkTypeEdgesAfterBadgeMutation(path, write.property, write.discoveryDirection, result);
+      }
+      if (definition.semantic === "lens") {
+        const key = this.embeddedGraphKey(node.id, this.lensRuntimeGraphPath(this.linkTypeBadgeId(definition)));
+        if (this.embeddedGraphContainers.has(key)) {
+          this.scheduleBadgeExpansionRefresh(key, () => {
+            const container = this.embeddedGraphContainers.get(key);
+            if (container) this.refreshOpenLensContainer(container);
+          });
+        }
+      } else if (this.expandedByBadge.has(this.badgeKey(node.id, property))
+        || this.isParentExpansionActive(node.id, property)) {
+        if (node.embeddedInstanceId) this.refreshEmbeddedBadgeExpansionAfterMutation(node, definition, true);
+        else this.refreshBadgeExpansionAfterMutation(node.id, path, property, true);
+      }
+    }
+    this.badgesDirty = true;
+    this.requestRender();
+    if (result && syncedProperties.size) this.reheatSimulation(0.2, "badge clipboard links");
+  }
+
+  private scheduleBadgeExpansionRefresh(key: string, refresh: () => void): void {
+    const existing = this.badgeExpansionRefreshTimers.get(key);
+    if (existing !== undefined) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
+      this.badgeExpansionRefreshTimers.delete(key);
+      refresh();
+    }, 250);
+    this.badgeExpansionRefreshTimers.set(key, timer);
   }
 
   private refreshLensViewportAfterMutation(sourceNode: GraphNode, linkType: O3LinkType): void {
@@ -10564,16 +11212,17 @@ export class GraphEngine {
       this.requestRender();
       return;
     }
-    this.collapseEmbeddedGraph(sourceNode.id, graphPath);
-    window.setTimeout(() => {
-      void this.toggleLensLinkType(sourceNode, linkType);
-    }, 300);
+    this.scheduleBadgeExpansionRefresh(key, () => {
+      const container = this.embeddedGraphContainers.get(key);
+      if (container) this.refreshOpenLensContainer(container);
+    });
   }
 
   private refreshBadgeExpansionAfterMutation(
     originNodeIdRaw: string,
     originPath: string,
-    linkType: string
+    linkType: string,
+    onlyIfExpanded = false
   ): void {
     const originNodeId = String(originNodeIdRaw ?? "").trim();
     const normalizedOrigin = String(originPath ?? "").trim();
@@ -10583,6 +11232,8 @@ export class GraphEngine {
 
     const refresh = async () => {
       this.badgeExpansionRefreshTimers.delete(refreshKey);
+      if (onlyIfExpanded && !this.expandedByBadge.has(this.badgeKey(originNodeId, normalizedLinkType))
+        && !this.isParentExpansionActive(originNodeId, normalizedLinkType)) return;
       const previousNodeIds = this.getCurrentNodeIdSet();
       const expandedBadges = this.captureOuterExpandedBadges();
       const expandedParents = Array.from(this.expandedParentRequests.values())
@@ -10593,9 +11244,13 @@ export class GraphEngine {
           return {
             originNodeId: container.origin,
             originSourcePath: origin?.sourcePath ?? container.graphPath,
+            parentInstanceId: origin?.embeddedInstanceId,
             originX: origin?.x ?? (container.left + container.right) / 2,
             originY: origin?.y ?? (container.top + container.bottom) / 2,
             graphPath: container.graphPath,
+            lensDefinition: container.runtimeOnly && container.linkTypeId
+              ? this.getEmbeddedGraphDefinitionForContainer(container)
+              : undefined,
             ancestryDepth: container.ancestry.length
           };
         })
@@ -10676,6 +11331,7 @@ export class GraphEngine {
           claimedEmbeddedOrigins.add(embedded.originNodeId);
           continue;
         }
+        if (embedded.parentInstanceId && !this.nodeMap.has(embedded.originNodeId)) continue;
         const restoredOriginId = this.nodeMap.has(embedded.originNodeId)
           ? embedded.originNodeId
           : this.nodes
@@ -10691,7 +11347,16 @@ export class GraphEngine {
               )[0]?.id;
         if (!restoredOriginId) continue;
         claimedEmbeddedOrigins.add(restoredOriginId);
-        await this.toggleEmbeddedGraph(restoredOriginId);
+        if (embedded.lensDefinition?.linkTypeId) {
+          const definition = this.getLensEmbeddedGraphDefinition(
+            restoredOriginId, embedded.lensDefinition.linkTypeId, embedded.lensDefinition.ancestry
+          );
+          if (definition) {
+            this.expandEmbeddedGraph(restoredOriginId, restoreEmbeddedGraphDefinition(definition, embedded.lensDefinition));
+          }
+        } else {
+          await this.toggleEmbeddedGraph(restoredOriginId);
+        }
       }
       this.freezeExistingNodesForTopologyUpdate(previousNodeIds);
       void this.menuOptions.onGraphRuntimeChanged?.();
@@ -10774,7 +11439,8 @@ export class GraphEngine {
 
   private refreshEmbeddedBadgeExpansionAfterMutation(
     sourceNode: GraphNode,
-    linkType: O3LinkType
+    linkType: O3LinkType,
+    onlyIfExpanded = false
   ): void {
     const instanceId = sourceNode.embeddedInstanceId;
     const ownerPath = sourceNode.stateOwnerPath;
@@ -10786,6 +11452,8 @@ export class GraphEngine {
       this.badgeExpansionRefreshTimers.delete(refreshKey);
       const currentNode = this.nodeMap.get(sourceNode.id);
       if (!currentNode?.embeddedInstanceId) return;
+      const badgeKey = this.badgeKey(currentNode.id, property);
+      if (onlyIfExpanded && !this.expandedByBadge.has(badgeKey)) return;
       const expandedBadges = this.captureEmbeddedExpandedBadges(instanceId);
       const positions = new Map(
         this.nodes
@@ -10800,7 +11468,6 @@ export class GraphEngine {
             }
           ])
       );
-      const badgeKey = this.badgeKey(currentNode.id, property);
       if (this.expandedByBadge.has(badgeKey)) {
         this.toggleEmbeddedNodeExpansion(currentNode, linkType, false);
       }
@@ -10966,11 +11633,9 @@ export class GraphEngine {
 
     const world = { x: mouseX / this.camera.zoom - this.camera.x, y: mouseY / this.camera.zoom - this.camera.y };
     const topLens = this.getTopGraphLensAtWorldPoint(world.x, world.y);
-    if (topLens && this.isWorldPointInGraphLensTitleBar(world.x, world.y, this.getGraphLensBounds(topLens))) return null;
     for (const node of this.nodes) {
       if (excludeNodeIds.has(node.id)) continue;
-      if (topLens && node.embeddedInstanceId !== topLens.key) continue;
-      if (!this.isRenderedPointInsideNodeLens(node, world.x, world.y)) continue;
+      if (!this.isNodeInSelectableRegion(node, world.x, world.y, topLens)) continue;
       const renderedCenter = this.getRenderedNodeCenter(node);
       const sx = (renderedCenter.x + this.camera.x) * this.camera.zoom;
       const sy = (renderedCenter.y + this.camera.y) * this.camera.zoom;
@@ -10987,6 +11652,11 @@ export class GraphEngine {
     }
 
     return bestNode;
+  }
+
+  private isNodeInSelectableRegion(node: GraphNode, x: number, y: number, lens = this.getTopGraphLensAtWorldPoint(x, y)): boolean {
+    if (lens && (node.embeddedInstanceId !== lens.key || this.isWorldPointInGraphLensTitleBar(x, y, this.getGraphLensBounds(lens)))) return false;
+    return this.isRenderedPointInsideNodeLens(node, x, y);
   }
 
   private async openNodeFile(node: GraphNode, newTab = false): Promise<void> {
@@ -11112,6 +11782,7 @@ export class GraphEngine {
   }
 
   private registerLinkTypeRuntimeConfig(linkType: O3LinkType): void {
+    if (!allowsRelationshipEdges(linkType)) return;
     const property = this.normalizeLinkType(String(linkType.property ?? ""));
     if (!property) return;
     if (linkType.semantic === "parent") {
@@ -11126,22 +11797,10 @@ export class GraphEngine {
     this.activeLinkTypeDuplicateNodesByProperty.set(property, duplicateNodes);
     this.activeLinkTypeDiscoveryByProperty.set(property, duplicateNodes ? false : (linkType.linkDiscovery !== false));
     this.activeLinkTypeDiscoveryDirectionByProperty.set(property, linkType.linkDiscoveryDirection);
-    const color = this.normalizeLinkLineColor(linkType.linkLineColor ?? linkType.color);
-    const thickness = this.normalizeLinkLineThickness(linkType.linkLineThickness);
-    this.activeLinkTypeVisualByProperty.set(property, {
-      ...(color ? { color } : {}),
-      ...(Number.isFinite(thickness) ? { thickness } : {}),
-      pointerDirection: this.normalizePointerDirection(linkType.pointerDirection)
-    });
-    if (linkType.linkType === "Direction Based") {
-      const direction = this.normalizeDirectionPlacement(linkType.linkDirection);
-      const cx = Number(linkType.linkXAxis);
-      const cy = Number(linkType.linkYAxis);
-      this.activeLinkTypeDirectionByProperty.set(property, {
-        direction,
-        cx: Number.isFinite(cx) ? Math.abs(cx) || 120 : 120,
-        cy: Number.isFinite(cy) ? Math.abs(cy) || 120 : 120
-      });
+    this.activeLinkTypeVisualByProperty.set(property, this.getDefinitionEdgeVisualConfig(linkType));
+    const directionConfig = this.getDefinitionDirectionConfig(linkType);
+    if (directionConfig) {
+      this.activeLinkTypeDirectionByProperty.set(property, directionConfig);
     } else {
       const preferredDistance = Number(linkType.linkDistance);
       const strength = Number(linkType.linkForce);
@@ -11150,6 +11809,17 @@ export class GraphEngine {
         ...(Number.isFinite(strength) ? { strength } : {})
       });
     }
+  }
+
+  private getDefinitionDirectionConfig(linkType: O3LinkType) {
+    if (linkType.linkType !== "Direction Based") return undefined;
+    const cx = Number(linkType.linkXAxis);
+    const cy = Number(linkType.linkYAxis);
+    return {
+      direction: this.normalizeDirectionPlacement(linkType.linkDirection),
+      cx: Number.isFinite(cx) ? Math.abs(cx) || 120 : 120,
+      cy: Number.isFinite(cy) ? Math.abs(cy) || 120 : 120
+    };
   }
 
   isBadgeExpansionActive(sourcePath: string, linkType: string): boolean {
@@ -11164,6 +11834,7 @@ export class GraphEngine {
     linkType: O3LinkType,
     persist = true
   ): void {
+    if (!allowsRelationshipEdges(linkType)) return;
     const property = this.normalizeLinkType(String(linkType.property ?? ""));
     const instanceId = sourceNode.embeddedInstanceId;
     const ownerPath = sourceNode.stateOwnerPath;
@@ -11192,6 +11863,9 @@ export class GraphEngine {
           if (edge.from !== parentId || !container.memberIds.has(edge.to)) continue;
           const child = this.nodeMap.get(edge.to);
           if (!child || child.embeddedRoot || removedNodeIds.has(child.id)) continue;
+          if (container.runtimeOnly && container.linkTypeId
+            && (child.embeddedOrigin?.kind !== "expansion"
+              || child.embeddedOrigin.sourceNodeId !== this.nodeMap.get(parentId)?.embeddedSourceNodeId)) continue;
           removedNodeIds.add(child.id);
           queue.push(child.id);
         }
@@ -11208,10 +11882,12 @@ export class GraphEngine {
           if (!expansionKey.startsWith(`${childId}::`)) continue;
           this.expandedByBadge.delete(expansionKey);
           this.expansionNodes.delete(expansionKey);
+          this.expansionDefinitionIds.delete(expansionKey);
           this.expansionParent.delete(expansionKey);
         }
       }
       this.expansionNodes.delete(badgeKey);
+      this.expansionDefinitionIds.delete(badgeKey);
       this.expandedByBadge.delete(badgeKey);
       this.expansionParent.delete(badgeKey);
       this.expandedParentRequests.delete(this.buildExpandedParentRequestKey(sourceNode.id, property));
@@ -11229,7 +11905,9 @@ export class GraphEngine {
 
     const sourceFile = this.app.vault.getAbstractFileByPath(sourceNode.sourcePath);
     if (!(sourceFile instanceof TFile)) return;
-    const targets = this.linkResolver.resolveLinkedTargets(sourceFile, linkType);
+    const candidate = this.resolveEdgeCandidates([this.linkTypeBadgeId(linkType)], [linkType])[0];
+    if (!candidate) return;
+    const targets = this.resolveExpansionTargets(sourceFile, candidate);
     const targetPaths = new Set<string>();
     const childIds = new Set<string>();
     const addedOrUpdatedNodeIds: string[] = [sourceNode.id];
@@ -11247,7 +11925,9 @@ export class GraphEngine {
       let child = this.nodeMap.get(childId);
       if (!child) {
         const angle = this.deterministicAngle(`${sourceNode.id}::${target.path}::${property}`);
-        const distance = this.activeLinkTypePhysicsByProperty.get(property)?.preferredDistance ?? 120;
+        const distance = linkType.linkType !== "Direction Based" && Number.isFinite(linkType.linkDistance)
+          ? linkType.linkDistance
+          : 120;
         child = {
           id: childId,
           sourcePath: target.path,
@@ -11290,11 +11970,13 @@ export class GraphEngine {
           to: childId,
           type: property,
           linkType: property,
+          ...(linkType.definitionId ? { definitionId: linkType.definitionId } : {}),
           ...(relationship ? { relationship, origin: sourceNode.id } : {})
         });
       }
     }
     this.expansionNodes.set(badgeKey, childIds);
+    if (linkType.definitionId) this.expansionDefinitionIds.set(badgeKey, linkType.definitionId);
     this.expandedByBadge.set(badgeKey, targetPaths);
     this.expansionParent.set(badgeKey, null);
     if (linkType.semantic === "parent") {
@@ -11386,6 +12068,7 @@ export class GraphEngine {
     linkType: O3LinkType,
     sourceNodeId?: string
   ): Promise<void> {
+    if (!allowsRelationshipEdges(linkType)) return;
     const property = this.normalizeLinkType(String(linkType.property ?? ""));
     if (!property) return;
 
@@ -11417,7 +12100,7 @@ export class GraphEngine {
       if (!this.expandedByBadge.has(badgeKey)) {
         const source = this.app.vault.getAbstractFileByPath(sourcePath);
         if (!(source instanceof TFile)) continue;
-        const toggleEvent = this.expandBadgeRuntime(source, property, runtimeSourceNodeId);
+        const toggleEvent = this.expandBadgeRuntime(source, this.linkTypeBadgeId(linkType), runtimeSourceNodeId);
         if (!toggleEvent) continue;
         firstToggleEvent = firstToggleEvent ?? toggleEvent;
       }
@@ -11524,14 +12207,17 @@ export class GraphEngine {
     propertyRaw: string,
     expansionSourceNodeIdRaw: string
   ): BadgeExpansionRuntimeEvent | null {
-    const property = this.normalizeLinkType(propertyRaw);
     const expansionSourceNodeId = String(expansionSourceNodeIdRaw ?? "").trim() || source.path;
-    if (!property || !expansionSourceNodeId) return null;
+    const candidate = this.getExpansionEdgeCandidate(expansionSourceNodeId, propertyRaw);
+    if (!candidate) return null;
+    const property = candidate.property;
 
     const badgeKey = this.badgeKey(expansionSourceNodeId, property);
     if (this.expandedByBadge.has(badgeKey)) return null;
-
-    const targets = this.linkResolver.resolveLinkedTargets(source, { property } as O3LinkType);
+    if (candidate.definition && this.normalizeLinkType(propertyRaw) === this.normalizeLinkType(candidate.definition.definitionId)) {
+      this.expansionDefinitionIds.set(badgeKey, candidate.definition.definitionId);
+    }
+    const targets = this.resolveExpansionTargets(source, candidate);
     const targetPaths = new Set<string>();
     if (!this.expansionNodes.has(badgeKey)) {
       this.expansionNodes.set(badgeKey, new Set<string>());
@@ -11554,7 +12240,7 @@ export class GraphEngine {
       const anchorNode = this.nodeMap.get(expansionSourceNodeId) ?? null;
       const childNodeId = this.ensureExpansionTargetNode(target, expansionSourceNodeId, property, {
         anchorNode,
-        preferExistingVisibleTarget: this.visibleLinkTypes.has(property)
+        preferExistingVisibleTarget: this.isVisibleEdgeProperty(property)
       });
       this.expansionNodes.get(badgeKey)!.add(childNodeId);
       if (!this.nodeOwners.has(childNodeId)) {
@@ -11579,7 +12265,18 @@ export class GraphEngine {
     linkTypeName: string,
     options: { persist?: boolean; sourceNodeId?: string } = {}
   ): void {
-    this.legacyExpansionService.toggle(sourceFile, linkTypeName, options);
+    const sourceId = options.sourceNodeId ?? (typeof sourceFile === "string" ? sourceFile : sourceFile.path);
+    const candidate = this.getExpansionEdgeCandidate(sourceId, linkTypeName);
+    if (!candidate) return;
+    const key = this.badgeKey(sourceId, candidate.property);
+    if (!this.expandedByBadge.has(key) && candidate.definition
+      && this.normalizeLinkType(linkTypeName) === this.normalizeLinkType(candidate.definition.definitionId)) {
+      this.expansionDefinitionIds.set(key, candidate.definition.definitionId);
+    }
+    this.legacyExpansionService.toggle(sourceFile, candidate.property, options);
+    for (const badgeKey of this.expansionDefinitionIds.keys()) {
+      if (!this.expandedByBadge.has(badgeKey)) this.expansionDefinitionIds.delete(badgeKey);
+    }
   }
 
   private requestRender(): void {
@@ -12365,6 +13062,7 @@ export class GraphEngine {
       linkType?: string;
       relationship?: "parent";
       origin?: string;
+      definitionId?: string;
     },
     options?: { allowNodeCreation?: boolean }
   ): boolean {
@@ -12373,7 +13071,10 @@ export class GraphEngine {
     const type = String(edgeData?.type ?? "").trim();
     const allowCreation = options?.allowNodeCreation ?? false;
     if (!from || !to || !type) return false;
-    if (!this.nodeMap.has(from)) return false;
+    const source = this.nodeMap.get(from);
+    if (!source || source.embeddedInstanceId !== this.nodeMap.get(to)?.embeddedInstanceId) return false;
+    const candidate = this.getExpansionEdgeCandidate(from, edgeData.definitionId ?? edgeData.linkType ?? type);
+    if (!candidate || (edgeData.definitionId && candidate.definition?.definitionId !== edgeData.definitionId)) return false;
 
     if (!this.nodeMap.has(to)) {
       if (!allowCreation) return false;
@@ -12387,14 +13088,17 @@ export class GraphEngine {
     const key = this.buildEdgeKey(from, to, type, edgeData.linkType);
     const exists = this.edges.some(edge =>
       this.buildEdgeKey(edge.from, edge.to, edge.type, edge.linkType) === key
+      && !edge.mode
       && edge.relationship === edgeData.relationship
     );
     if (exists) return false;
 
+    this.removeVisibleSemanticEdges(from, to, candidate.property);
     this.edges.push({
       from,
       to,
       type,
+      ...(candidate.definition ? { definitionId: candidate.definition.definitionId } : {}),
       ...(edgeData.linkType ? { linkType: edgeData.linkType } : {}),
       ...(edgeData.relationship ? { relationship: edgeData.relationship } : {}),
       ...(edgeData.origin ? { origin: edgeData.origin } : {})
@@ -12409,15 +13113,12 @@ export class GraphEngine {
     if (!this.hasNode(normalizedPath)) return;
 
     const previousNodeIds = this.getCurrentNodeIdSet();
-    // Canonical edges are replaced here. Visible and overlay edges have their
-    // own scoped refresh paths and must survive an unrelated metadata update;
-    // removing them here makes a grouping/status change look like lost links.
+    // Keep independent visible edges and explicit expansions while refreshing discovery.
     const before = this.edges.length;
     this.edges = this.edges.filter((edge) =>
-      edge.relationship === "parent"
+      edge.from !== normalizedPath
       || edge.mode === "visible"
-      || edge.mode === "overlay"
-      || edge.from !== normalizedPath
+      || (edge.mode !== "overlay" && this.isCurrentExpansionEdge(edge))
     );
     const removedCanonicalEdges = this.edges.length !== before;
     if (removedCanonicalEdges) this.nodeConnectionCountsDirty = true;
@@ -12426,10 +13127,14 @@ export class GraphEngine {
       changed = this.addEdge(
         edge.source,
         edge.target,
-        { type: edge.type },
+        { type: edge.type, definitionId: edge.definitionId },
         { allowNodeCreation: false }
       ) || changed;
     }
+    const sourceFile = this.app.vault.getAbstractFileByPath(normalizedPath);
+    const beforeOverlay = this.edges.length;
+    if (sourceFile instanceof TFile) this.addOverlayEdges(new Set(), [sourceFile]);
+    changed = this.edges.length !== beforeOverlay || changed;
 
     if (!changed) return;
     this.renderBadges();
@@ -12440,6 +13145,24 @@ export class GraphEngine {
       this.reheatSimulation(0.08, "incremental edges update");
       this.lastSimulationReheat = now;
     }
+  }
+
+  private isCurrentExpansionEdge(edge: Edge): boolean {
+    const candidate = this.getExpansionEdgeCandidate(edge.from, edge.definitionId ?? edge.linkType ?? edge.type);
+    if (!candidate || (edge.definitionId && candidate.definition?.definitionId !== edge.definitionId)) return false;
+    if (edge.relationship === "parent") return this.getEdgeCandidateSemantic(candidate) === "parent";
+    const targetPath = this.getSourcePathForNodeId(edge.to);
+    if (!this.expandedByBadge.get(this.badgeKey(edge.from, candidate.property))?.has(targetPath)) return false;
+    const paths = this.getReplayRelationshipPaths(this.getSourcePathForNodeId(edge.from), candidate);
+    return !paths || paths.has(targetPath);
+  }
+
+  refreshMetadataRelationshipEdges(file: TFile): void {
+    if (this.hasOuterVisibleNodeForSourcePath(file.path)) {
+      this.updateEdges(file.path, this.collectSelectedRelationshipEdges(file));
+    }
+    this.refreshVisibleLinkTypeEdgesForSourcePath(file.path);
+    this.refreshEmbeddedVisibleLinkTypeEdgesForSourcePath(file.path);
   }
 
   removeNode(path: string): void {
@@ -12564,6 +13287,106 @@ export class GraphEngine {
       .filter((ref): ref is GraphLinkMutationNodeRef => Boolean(ref));
   }
 
+  getSelectedNodeCutRefs(): GraphNodeCutSelection[] {
+    const claimsByChild = new Map<string, Array<[string, CutExpansionClaim]>>();
+    for (const [id, claim] of this.collectCutExpansionClaims()) {
+      for (const child of claim.children) {
+        const claims = claimsByChild.get(child) ?? [];
+        claims.push([id, claim]);
+        claimsByChild.set(child, claims);
+      }
+    }
+    return this.getSelectedNodes().map(node => {
+      const path = this.getGraphNodeMutationRef(node)?.path ?? node.sourcePath ?? node.id;
+      const contextId = node.embeddedInstanceId;
+      let origin: GraphCutOrigin;
+      const direct = contextId ? node.embeddedRoot || node.embeddedOrigin?.kind === "root"
+        : node.id === path && this.rootFilePaths.has(path);
+      if (direct) {
+        const membership = this.getBadgeMembershipContext(node, path);
+        if (membership.kind === "unavailable") {
+          origin = membership;
+        } else if (membership.kind === "note") {
+          origin = { kind: "graph-membership", ownerPath: membership.ownerPath };
+        } else {
+          origin = {
+            kind: "lens-membership", ownerPath: membership.ownerPath, provenance: membership.provenance,
+            definition: { definitionId: membership.definitionId, readProperties: membership.readProperties, semantic: "lens", direction: "outgoing" }
+          };
+        }
+      } else {
+        const owners: Extract<GraphCutOrigin, { kind: "relationship-expansion" }>["owners"][number][] = [];
+        const unavailable: string[] = [];
+        for (const [expansionId, claim] of claimsByChild.get(node.id) ?? []) {
+          const source = this.nodeMap.get(claim.sourceNodeId);
+          if (!source || source.embeddedInstanceId !== contextId) {
+            unavailable.push("An introducing expansion no longer has a source in this graph context.");
+            continue;
+          }
+          const candidate = this.getCutExpansionCandidate(source, claim.selector, expansionId);
+          if (this.normalizeLinkType(claim.selector) === this.normalizeLinkType(NONE_LINK_TYPE)) {
+            unavailable.push("This expansion is backed by note-body links.");
+          } else if (!candidate) {
+            unavailable.push(`The introducing expansion "${claim.selector}" is ambiguous or its definition is unavailable.`);
+          } else {
+            owners.push({ expansionId, sourceNodeId: source.id, sourcePath: source.sourcePath,
+              ...(candidate.definition ? { definition: this.cutDefinition(candidate.definition, candidate.readProperties) }
+                : { rawProperty: candidate.property }) });
+          }
+        }
+        origin = owners.length || unavailable.length
+          ? { kind: "relationship-expansion", owners, unavailable }
+          : { kind: "unavailable", reason: node.embeddedOrigin?.kind === "filter" || this.filterFilePaths.has(path)
+            ? "This instance is supplied only by a Base or graph filter."
+            : node.embeddedOrigin?.kind === "expansion"
+              ? "The introducing expansion is no longer available."
+              : "This instance has no property membership. Note-body links cannot be cut." };
+      }
+      return { nodeId: node.id, path, contextId, origin };
+    });
+  }
+
+  private cutDefinition(definition: O3LinkType, readProperties: readonly string[]): GraphCutDefinition {
+    return { definitionId: definition.definitionId, readProperties: [...readProperties],
+      semantic: definition.semantic, direction: definition.linkDiscoveryDirection };
+  }
+
+  private getCutExpansionCandidate(source: GraphNode, selector: string, expansionId: string): EdgeCandidate | undefined {
+    const exact = this.expansionDefinitionIds.get(expansionId) ?? selector;
+    const container = source.embeddedInstanceId ? this.embeddedGraphContainers.get(source.embeddedInstanceId) : undefined;
+    const definitions = container
+      ? [...container.linkTypes, ...container.visibleLinkTypeDefinitions]
+      : [...(this.edgeLinkTypeDefinitions ?? this.activeNodeBadgeLinkTypes), ...this.visibleNodeBadgeLinkTypes,
+        ...(this.overlayLinkTypeDefinitions ?? [])];
+    const candidates = this.resolveEdgeCandidates([exact], definitions);
+    return candidates.length === 1 ? candidates[0] : undefined;
+  }
+
+  private collectCutExpansionClaims(): Map<string, CutExpansionClaim> {
+    const claims = new Map<string, CutExpansionClaim>();
+    for (const [id, children] of this.expansionNodes) {
+      if (!this.expandedByBadge.has(id)) continue;
+      const separator = id.lastIndexOf("::");
+      if (separator > 0) claims.set(id, { sourceNodeId: id.slice(0, separator), selector: id.slice(separator + 2), children: new Set(children) });
+    }
+    for (const node of this.nodes) {
+      for (const { origin, linkType, type } of node.expandedVia ?? []) {
+        if (type !== "parent" || !this.isParentExpansionActive(origin, linkType)) continue;
+        const id = this.badgeKey(origin, linkType);
+        const claim = claims.get(id) ?? { sourceNodeId: origin, selector: linkType, children: new Set<string>() };
+        claim.children.add(node.id);
+        claims.set(id, claim);
+      }
+    }
+    return claims;
+  }
+
+  hasGraphKeyboardFocus(): boolean {
+    const document = this.container.ownerDocument;
+    if (!document.hasFocus()) return false;
+    const focused = document.activeElement;
+    return !!focused && this.container.contains(focused) && !this.isEditableKeyboardTarget(focused);
+  }
   getSelectedNodeCount(): number {
     return this.graphStore.getSelectedNodeCount();
   }
@@ -12627,8 +13450,8 @@ export class GraphEngine {
     const originFile = this.app.vault.getAbstractFileByPath(sourcePath);
     if (!(originFile instanceof TFile)) return [];
 
-    return this.linkResolver.resolveLinkedTargets(originFile, { property: normalizedLinkType } as O3LinkType)
-      .map((target) => target.path);
+    const candidate = this.getExpansionEdgeCandidate(normalizedOrigin, normalizedLinkType);
+    return candidate ? this.resolveExpansionTargets(originFile, candidate).map(({ path }) => path) : [];
   }
 
   expandParentLinks(originPath: string, linkType: string): boolean {
@@ -12647,7 +13470,12 @@ export class GraphEngine {
     const sourcePath = this.getSourcePathForNodeId(normalizedOrigin) || normalizedOrigin;
     const originFile = this.app.vault.getAbstractFileByPath(sourcePath);
     if (!(originFile instanceof TFile)) return false;
-    const targets = this.linkResolver.resolveLinkedTargets(originFile, { property: normalizedLinkType } as O3LinkType);
+    const candidate = this.getExpansionEdgeCandidate(normalizedOrigin, normalizedLinkType);
+    if (!candidate || (candidate.definition && candidate.definition.semantic !== "parent")) {
+      this.expandedParentRequests.delete(requestKey);
+      return false;
+    }
+    const targets = this.resolveExpansionTargets(originFile, candidate);
     if (targets.length === 0) {
       this.expandedParentRequests.delete(requestKey);
       return false;
@@ -12656,7 +13484,7 @@ export class GraphEngine {
     for (const target of targets) {
       const targetNodeId = this.ensureExpansionTargetNode(target, normalizedOrigin, normalizedLinkType, {
         anchorNode: originNode,
-        preferExistingVisibleTarget: this.visibleLinkTypes.has(normalizedLinkType),
+        preferExistingVisibleTarget: this.isVisibleEdgeProperty(normalizedLinkType),
         expandedVia: {
           type: "parent",
           linkType: normalizedLinkType,
@@ -12674,6 +13502,7 @@ export class GraphEngine {
         type: "parent",
         origin: normalizedOrigin,
         linkType: normalizedLinkType,
+        ...(candidate.definition ? { definitionId: candidate.definition.definitionId } : {}),
         relationship: "parent"
       });
       this.nodeConnectionCountsDirty = true;
@@ -13110,7 +13939,8 @@ export class GraphEngine {
     return tagName === "input"
       || tagName === "textarea"
       || tagName === "select"
-      || target.isContentEditable;
+      || target.isContentEditable
+      || Boolean(target.closest(".cm-editor, .metadata-property, [contenteditable=true], input, textarea, select"));
   }
 
   getLinkTypeMenuSize(): LinkTypeMenuSize {
@@ -13130,8 +13960,9 @@ export class GraphEngine {
   getRuntimeNodeSnapshots(): O3GraphRuntimeNodeSnapshot[] {
     return this.nodes.filter((node) => !node.stateOwnerPath).map((node) => {
       const owner = this.getPrimaryNodeOwner(node.id);
-      const origin = owner
-        ? {
+      const origin = node.id === node.sourcePath && this.rootFilePaths.has(node.sourcePath)
+        ? { kind: "root" as const }
+        : owner ? {
             kind: "expansion" as const,
             sourceNodeId: owner.sourceNodeId,
             linkType: owner.linkType,
@@ -13322,7 +14153,8 @@ export class GraphEngine {
           color: this.getBadgeBaseColor(legacyLinkTypeId, linkType.color),
           state: expanded ? "expanded" : "collapsed",
           semantic,
-          iconKind: this.getLinkTypeIconKind(linkType),
+          iconKind: getLinkTypeBadgeIconKind(linkType),
+          ...(linkType.linkTypeIcon ? { linkTypeIcon: linkType.linkTypeIcon } : {}),
           hasRelationships: this.hasBadgeYamlLinksForLinkType(node.sourcePath, linkType),
           duplicateNodes: linkType.linkDuplicateNodes === true,
           ...(expanded && (this.expansionNodes.has(id) || this.expansionNodes.has(this.badgeKey(node.id, legacyLinkTypeId)))
@@ -13446,7 +14278,7 @@ export class GraphEngine {
           restVelocityThreshold: this.restVelocityThreshold,
           nodeRadius: this.nodeRadius
         },
-        activeLinkTypes: this.activeNodeBadgeLinkTypes.map((linkType) => ({
+        activeLinkTypes: this.activeNodeBadgeLinkTypes.filter(allowsRelationshipEdges).map((linkType) => ({
           property: linkType.property,
           linkType: linkType.linkType,
           linkDistance: linkType.linkDistance,
@@ -13594,15 +14426,6 @@ export class GraphEngine {
 
   private createElement<K extends keyof HTMLElementTagNameMap>(tagName: K): HTMLElementTagNameMap[K] {
     return createEl(tagName);
-  }
-}
-
-function iconNameForBadgeKind(kind: "force" | "direction" | "parent" | "lens"): string {
-  switch (kind) {
-    case "direction": return "arrow-right";
-    case "parent": return "git-branch";
-    case "lens": return "scan-search";
-    case "force": return "zap";
   }
 }
 

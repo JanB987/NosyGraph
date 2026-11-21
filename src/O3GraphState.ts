@@ -775,12 +775,13 @@ export class O3GraphState {
     originNodeIdRaw: string,
     graphPathRaw: string,
     snapshotsRaw: O3GraphRuntimeNodeSnapshot[],
-    parentChainRaw: O3GraphEmbeddedGraphState[] = []
+    parentChainRaw: O3GraphEmbeddedGraphState[] = [],
+    reconcileMembership = false
   ): boolean {
     const originNodeId = String(originNodeIdRaw ?? "").trim();
     const graphPath = String(graphPathRaw ?? "").trim();
     const snapshots = this.normalizeEmbeddedSnapshots(snapshotsRaw);
-    if (!originNodeId || !graphPath || snapshots.length === 0) return false;
+    if (!originNodeId || !graphPath) return false;
     const parentChain = this.normalizeEmbeddedGraphChain(parentChainRaw);
     let entry: O3GraphEmbeddedGraphState | undefined;
     if (parentChain.length === 0) {
@@ -799,10 +800,22 @@ export class O3GraphState {
         candidate.originNodeId === originNodeId && candidate.graphPath === graphPath
       );
     }
-    if (!entry) return false;
-    if (JSON.stringify(entry.snapshots ?? []) === JSON.stringify(snapshots)) return false;
-    entry.snapshots = snapshots;
-    return true;
+    if (!entry || (!reconcileMembership && !entry.linkTypeId && snapshots.length === 0)) return false;
+    const snapshotsChanged = JSON.stringify(entry.snapshots ?? []) !== JSON.stringify(snapshots);
+    if (snapshotsChanged) {
+      if (snapshots.length > 0) entry.snapshots = snapshots;
+      else delete entry.snapshots;
+    }
+    if ((reconcileMembership || entry.linkTypeId) && entry.embeddedGraphs?.length) {
+      const memberIds = new Set(snapshots.map(({ nodeId }) => nodeId));
+      const children = entry.embeddedGraphs.filter(({ originNodeId }) => memberIds.has(originNodeId));
+      if (children.length !== entry.embeddedGraphs.length) {
+        if (children.length > 0) entry.embeddedGraphs = children;
+        else delete entry.embeddedGraphs;
+        return true;
+      }
+    }
+    return snapshotsChanged;
   }
 
   listExpandedEmbeddedGraphs(): O3GraphEmbeddedGraphState[] {

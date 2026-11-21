@@ -1,6 +1,7 @@
 import type {
   LinkTypeDefinition,
 } from "./types.js";
+import { normalizeLinkTypeBadgeIcon } from "../LinkTypeBadgeIcon";
 import type { VaultIndex } from "../indexer/VaultIndex.js";
 import {
   createGraphLinkTypeEdge,
@@ -17,8 +18,10 @@ export function normalizeLinkTypeDefinition(
     return undefined;
   }
 
+  const linkTypeIcon = normalizeLinkTypeBadgeIcon(linkType?.linkTypeIcon);
   return {
     ...normalized,
+    ...(linkTypeIcon ? { linkTypeIcon } : {}),
     layout: "force",
   };
 }

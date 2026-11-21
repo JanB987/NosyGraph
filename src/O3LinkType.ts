@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { TFile } from "obsidian";
+import { normalizeLinkTypeBadgeIcon } from "./LinkTypeBadgeIcon";
 import {
   DEFAULT_LINK_TYPE_PROPERTY_KEYS,
   type LinkTypePropertyKeys,
@@ -26,6 +27,9 @@ export class O3LinkType {
   linkDiscoveryDirection: "incoming" | "outgoing" | "both";
   pointerDirection: "incoming" | "outgoing" | "none";
   color?: string;
+  linkTypeIcon?: string;
+  #badgeIconSource: unknown;
+  #frontmatterWithoutBadgeIcon: string | undefined;
   linkLineColor?: string;
   linkLineThickness?: number;
   recursive: boolean;
@@ -43,6 +47,9 @@ export class O3LinkType {
       readConfiguredProperty(fm, keys, DEFAULT_LINK_TYPE_PROPERTY_KEYS, key);
     this.file = file;
     this.definitionId = String(file.path ?? "").trim();
+    this.#badgeIconSource = read("linkTypeIcon");
+    this.linkTypeIcon = normalizeLinkTypeBadgeIcon(this.#badgeIconSource);
+    this.#frontmatterWithoutBadgeIcon = frontmatterWithoutBadgeIcon(fm, keys);
     this.key = String(read("key") ?? file.basename).trim();
     this.properties = O3LinkType.normalizeProperties(read("property"), read("properties"));
     const explicitWriteProperty = String(read("writeProperty") ?? "").trim().toLowerCase();
@@ -105,6 +112,19 @@ export class O3LinkType {
     this.linkDiscovery = this.linkDuplicateNodes ? false : (read("linkDiscovery") === false ? false : true);
   }
 
+  hasSameDefinitionExceptBadgeIcon(other: O3LinkType): boolean {
+    return this.definitionId === other.definitionId
+      && this.#frontmatterWithoutBadgeIcon !== undefined
+      && this.#frontmatterWithoutBadgeIcon === other.#frontmatterWithoutBadgeIcon;
+  }
+
+  applyBadgeIconFrom(other: O3LinkType): boolean {
+    const changed = !Object.is(this.#badgeIconSource, other.#badgeIconSource);
+    this.#badgeIconSource = other.#badgeIconSource;
+    this.linkTypeIcon = other.linkTypeIcon;
+    return changed;
+  }
+
   private static normalizeProperties(rawProperty: unknown, rawAdditionalProperties: unknown): string[] {
     const out: string[] = [];
     const seen = new Set<string>();
@@ -159,6 +179,21 @@ export class O3LinkType {
       .trim()
       .toLowerCase()
       .replace(/\s+/g, "_");
+  }
+}
+
+function frontmatterWithoutBadgeIcon(frontmatter: unknown, keys: LinkTypePropertyKeys): string | undefined {
+  if (!frontmatter || typeof frontmatter !== "object") return undefined;
+  const omittedKeys = new Set(["position", keys.linkTypeIcon.toLowerCase(), DEFAULT_LINK_TYPE_PROPERTY_KEYS.linkTypeIcon.toLowerCase()]);
+  const properties = Object.keys(frontmatter)
+    .filter((key) => !omittedKeys.has(key.trim().toLowerCase()))
+    .sort()
+    .map((key) => [key, Reflect.get(frontmatter, key)]);
+  try {
+    return JSON.stringify(properties);
+  } catch {
+    // Fall back to the normal definition reload if metadata cannot be compared.
+    return undefined;
   }
 }
 /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- Re-enable dynamic-data lint rules after this module. */

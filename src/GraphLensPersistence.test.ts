@@ -82,7 +82,7 @@ describe("Lens open/close persistence ordering", () => {
     const origin = { id: "A.md", sourcePath: "Lens.md" };
     const engine = Object.assign(Object.create(GraphEngine.prototype), {
       nodeMap: new Map([[origin.id, origin]]), embeddedGraphContainers: new Map(),
-      lockedEmbeddedGraphContainerKeys: new Set(), edges: [], camera: {},
+      lockedEmbeddedGraphContainerKeys: new Set(), edges: [], camera: {}, expandedByBadge: new Map(),
       container: { focus: vi.fn() }, clearNodeHoverPreview: vi.fn(), clearTopologyUpdateFreeze: vi.fn(),
       requestRender: vi.fn(), removeNodeById: vi.fn(),
       getEmbeddedGraphLensState: vi.fn(() => ({ lensWidth: 400, lensHeight: 300 })),
@@ -214,5 +214,68 @@ describe("Lens open/close persistence ordering", () => {
     } finally {
       error.mockRestore();
     }
+  });
+});
+
+describe("Cut snapshot persistence", () => {
+  it("saves the empty parent-owned Lens and keeps sibling state, geometry, and the note body", async () => {
+    const graphFile = Object.assign(new TFile(), { path: "Graph.md", extension: "md" });
+    const scope = { originNodeId: "A.md", graphPath: "__nosygraph_lens__/Scope.md", expanded: true as const,
+      linkTypeId: "Scope.md", lens: { lensWidth: 420, viewZoom: 0.75 } };
+    const node = (path: string): import("./O3GraphState").O3GraphRuntimeNodeSnapshot =>
+      ({ nodeId: path, path, x: 100, y: 50, pinned: true, origin: { kind: "root" }, badges: {} });
+    const original = new O3GraphState(graphFile);
+    original.migrateToCurrentLayout([node("A.md"), node("Keep.md")]);
+    original.setEmbeddedGraphExpansion(scope.originNodeId, scope.graphPath, true, scope.lens, [], scope.linkTypeId);
+    original.setEmbeddedGraphSnapshots(scope.originNodeId, scope.graphPath, [node("B.md")]);
+    original.setEmbeddedGraphExpansion("B.md", "Nested.md", true, { lensWidth: 360 }, [scope]);
+    const prefix = '---\n{"type":"[[Graph Note]]","rootNodes":["[[A]]","[[Keep]]"]}\n---\nKeep this body.\n\n';
+    const fence = String.fromCharCode(96).repeat(3);
+    let markdown = prefix + fence + "o3graph\n" + JSON.stringify(original.toPersistedState()) + "\n" + fence;
+    const app = { vault: {
+      read: async () => markdown,
+      process: async (_file: TFile, write: (content: string) => string) => { markdown = write(markdown); return markdown; }
+    } } as unknown as App;
+    const store = new O3GraphDocumentStore(app, graphFile, {});
+    const state = await store.readState({ cached: false });
+    const snapshot = {
+      ownerGraphPath: graphFile.path, originNodeId: scope.originNodeId, graphPath: scope.graphPath, parentChain: [],
+      snapshots: [] as ReturnType<O3GraphState["toRuntimeNodeSnapshots"]>
+    };
+    const view = Object.assign(Object.create(BasesGraphView.prototype), {
+      app, file: graphFile, graphState: state, graphDocumentStore: store, hasCompletedInitialGraphRuntimeHydration: true,
+      cutDirtyOwners: new Set<string>(), isPersistentGraphNotePath: vi.fn(async path => path === graphFile.path),
+      engine: { getRuntimeNodeSnapshots: () => [node("A.md"), node("Keep.md")], getOpenCutLensSnapshots: () => [snapshot] }
+    });
+    view.stageCutRuntime(graphFile, [{ ...snapshot, snapshots: [node("B.md")] }], [node("A.md"), node("Keep.md")]);
+    const savedOwners = new Set<string>();
+    await view.persistAfterCut([], savedOwners);
+    const reopened = await store.readState({ cached: false });
+    expect(savedOwners).toEqual(new Set(["Graph.md"]));
+    expect(reopened.listExpandedEmbeddedGraphs()).toEqual([scope]);
+    expect(reopened.toRuntimeNodeSnapshots()).toEqual([node("A.md"), node("Keep.md")]);
+    expect(markdown.startsWith(prefix)).toBe(true);
+  });
+
+  it("does not recreate a state block removed just before a Cut reconciliation write", async () => {
+    const graphFile = Object.assign(new TFile(), { path: "Graph.md", extension: "md" });
+    const original = new O3GraphState(graphFile);
+    const fence = String.fromCharCode(96).repeat(3);
+    let markdown = "Graph body\n" + fence + "o3graph\n" + JSON.stringify(original.toPersistedState()) + "\n" + fence;
+    const app = { vault: {
+      read: async () => markdown,
+      process: async (_file: TFile, write: (content: string) => string) => {
+        markdown = "The user's changed body.";
+        markdown = write(markdown);
+        return markdown;
+      }
+    } } as unknown as App;
+    const store = new O3GraphDocumentStore(app, graphFile, {});
+    const state = await store.readState({ cached: false });
+    state.state.viewport = { x: 10, y: 10, zoom: 2 };
+    await expect(store.writeState(state, {
+      reason: "note-truth-reconciliation", requireExistingBlock: true, forceEmptyOverwrite: true
+    })).rejects.toThrow("state block was removed");
+    expect(markdown).toBe("The user's changed body.");
   });
 });

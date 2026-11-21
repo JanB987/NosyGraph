@@ -166,9 +166,10 @@ Lens badge toggles now route through the canonical LinkType definition identity
 and use the existing embedded graph lifecycle to open a dedicated runtime
 viewport. Each Lens definition gets its own definition-keyed pseudo path, so
 same-property Lens definitions can be open independently and can coexist with
-the existing graph-capable-note lens. The viewport contains the source node
-and the de-duplicated outgoing targets resolved across all configured read
-properties; incoming Lens definitions remain deliberately unsupported.
+the existing graph-capable-note lens. The viewport contains the deduplicated
+outgoing notes resolved across the configured read properties. The external
+source node anchors and owns the viewport. A Lens can have zero or one direct
+member. Outgoing discovery remains the supported Lens mode.
 
 The existing embedded viewport layout, selection, dragging, and rendering
 machinery are reused. Lens Alt-click input and body-drop mutations now use the
@@ -176,8 +177,8 @@ resolved write property; a Lens removal clears matching links from every read
 property. An open Lens viewport is refreshed after a successful mutation.
 Graph-note persistence now stores the Lens definition identity and viewport
 state. Rename reconciliation is included in Iteration 7. Runtime Lens paths
-remain internal pseudo paths; only the canonical LinkType identity is written
-to graph-note state.
+are internal viewport keys. The saved canonical LinkType identity resolves the
+definition during restoration.
 
 ## Iteration 7 implementation status
 
@@ -308,6 +309,51 @@ the Obsidian resolver into Lens runtime snapshots and through graph-state save
 and restore, so duplicate target resolution no longer loses its source
 properties. Existing ordinary expansion snapshots remain compatible because
 the field is optional.
+
+## Target-only Lens viewports
+
+Each direct target is a local root in the viewport. The Lens definition ID
+identifies the viewport, and the external source continues to own open/close
+state and membership writes. The viewport inherits its existing visible
+relationship rules.
+
+The Lens definition supplies membership and the source-to-frame connector.
+Ordinary node-to-node edges and relationship springs require an ordinary
+relationship rule enabled in that graph context. A Force or Direction
+definition can independently read one of the Lens's properties. Listing
+the Lens definition under Visible or Overlay LinkTypes does not produce
+ordinary edges. See the [edge isolation checklist](LensLinkTypeEdgeIsolationPlan.md#manual-testing).
+
+Refresh and restore resolve the current direct members before reusing saved
+positions, pins, badge states, and lens geometry. Older target snapshots are
+promoted to local roots. A nested lens or expanded descendant survives when
+its origin still exists in that viewport. A relationship explicitly expanded
+from a member can still show the external source's note as a descendant.
+
+### Manual regression checklist
+
+Use a test graph note and a Lens definition with `key: scope-lens`,
+`linkType: lens`, `properties: [scope, deliverables]`, and
+`writeProperty: scope`. Add A as a graph root and give it these properties.
+Create the corresponding B, C, and Extra notes. Configure `related` as a
+visible relationship and give B a `related` link to C for the edge check.
+
+```yaml
+scope: ["[[B]]", "[[A]]", "[[Missing]]"]
+deliverables: ["[[B]]", "[[C]]"]
+scope-lens: ["[[Extra]]"]
+```
+
+| Action | Expected result |
+| --- | --- |
+| Open A's Lens LinkType badge. | B and C each appear once in the lens. A anchors the frame from outside. The ordinary B–C edge is visible. |
+| Edit both read properties until they contain no resolved targets, then add only C. | The live lens goes from empty to exactly one direct member. Pan, zoom, fit, maximize, and restore work in both states. |
+| Reopen or restart with a saved legacy parent-plus-target lens still open. | The saved A copy and its dependent branches disappear. Surviving member positions and pins, expanded badges, and viewport geometry are restored. Closing with the badge and opening it again uses current targets. |
+| Expand an ordinary badge on B to reach another note or A. Open a nested Lens on B, then refresh A's membership while retaining B. | Explicit descendants, including A when expanded from B, and B's nested lens survive. Collapsing the ordinary badge removes its descendants and retains direct targets and B's nested lens. Removing B from both read properties removes its branch. |
+| With A linked to B only, use Alt-click input on an ordinary relationship badge on B. Use single-note, clipboard, and create-note input with separate targets. | The badge writes its normal property on B. With membership On, the input also adds the new note to A's `scope` and the lens updates. With membership Off, only the primary write occurs. |
+| Add and remove a member via the Lens body and its badge. Check a member's context menu. | The configured write property receives adds, toggle removal clears matching links from all read properties, and the lens refreshes. The note-backed Remove embedded root action is absent for local Lens members. |
+| Open two Lens definitions sharing read properties. Repeat in a second pane and a rendered embed. | Each definition keeps independent viewport state. Each opened viewport shows current targets. Where the embed loads a saved nested lens, the same legacy cleanup applies. |
+| Check default and custom badge icons, then open the older graph-capable-note lens icon. | Badge appearance and Alt-click input work as before. The older icon opens that note's configured graph contents and retains its note-backed root actions. |
 
 ## Iteration 1 acceptance
 

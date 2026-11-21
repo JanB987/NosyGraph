@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment -- Obsidian DOM helper return types are validated by runtime element creation in this small badge wrapper. */
-import { O3LinkType } from "./O3LinkType";
+import type { O3LinkType } from "./O3LinkType";
+import { getLinkTypeBadgeIconKind, renderLinkTypeBadgeIcon, type LinkTypeBadgeIconLookup } from "./LinkTypeBadgeIcon";
 import { setStyle } from "./domStyle";
-
-export type O3NodeBadgeIconRenderer = (element: HTMLElement, iconName: string) => void;
 
 export type O3NodeBadgeIntent =
   | "toggle-badge"
@@ -38,26 +37,18 @@ export class O3NodeBadge {
     private nodeElement: HTMLElement,
     private linkType: O3LinkType,
     private onIntent: (intent: O3NodeBadgeIntent, modifiers?: O3NodeBadgeModifiers) => void,
-    private iconRenderer: O3NodeBadgeIconRenderer = (element, iconName) => {
-      element.dataset.o3Icon = iconName;
-    }
+    private getIcon: LinkTypeBadgeIconLookup
   ) {}
 
   render(): void {
     const badgeElement = this.nodeElement.createDiv();
     badgeElement.addClass("o3-node-badge");
-    const iconKind = this.linkType.semantic === "lens"
-      ? "lens"
-      : this.linkType.semantic === "parent"
-        ? "parent"
-        : this.linkType.linkType === "Direction Based"
-          ? "direction"
-          : "force";
+    const iconKind = getLinkTypeBadgeIconKind(this.linkType);
     badgeElement.addClass(`o3-node-badge--${iconKind}`);
     badgeElement.dataset.o3BadgeSemantic = this.linkType.semantic;
     badgeElement.dataset.o3BadgeIcon = iconKind;
     const iconElement = badgeElement.createSpan({ cls: ["o3-node-badge-icon", `o3-node-badge-icon--${iconKind}`] });
-    this.iconRenderer(iconElement, iconNameForKind(iconKind));
+    renderLinkTypeBadgeIcon(iconElement, iconKind, this.linkType.linkTypeIcon, this.getIcon);
     badgeElement.createSpan({
       cls: "o3-node-badge-label",
       text: this.linkType.key
@@ -76,15 +67,6 @@ export class O3NodeBadge {
       };
       this.onIntent(resolveO3NodeBadgeIntent(modifiers), modifiers);
     });
-  }
-}
-
-function iconNameForKind(kind: "force" | "direction" | "parent" | "lens"): string {
-  switch (kind) {
-    case "direction": return "arrow-right";
-    case "parent": return "git-branch";
-    case "lens": return "scan-search";
-    case "force": return "zap";
   }
 }
 

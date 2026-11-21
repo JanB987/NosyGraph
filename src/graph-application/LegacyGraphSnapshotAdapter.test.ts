@@ -82,6 +82,8 @@ describe("LegacyGraphSnapshotAdapter", () => {
           color: "#4488cc",
           state: "expanded",
           semantic: "link",
+          iconKind: "force",
+          linkTypeIcon: "text:★",
           hasRelationships: true,
           duplicateNodes: false,
           expansionId: "A.md::parts"
@@ -149,5 +151,9 @@ describe("LegacyGraphSnapshotAdapter", () => {
     expect(snapshot.lenses[0].bounds).not.toBe(legacy.lenses[0].bounds);
     expect(snapshot.badges).toEqual(legacy.badges);
     expect(snapshot.badges).not.toBe(legacy.badges);
+    expect(snapshot.badges[0]).toMatchObject({ iconKind: "force", linkTypeIcon: "text:★" });
+    legacy.badges[0].linkTypeIcon = "telescope";
+    expect(adapter.getSnapshot().badges[0].linkTypeIcon).toBe("telescope");
+    expect(snapshot.badges[0].linkTypeIcon).toBe("text:★");
   });
 });

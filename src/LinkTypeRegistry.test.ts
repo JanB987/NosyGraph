@@ -96,6 +96,27 @@ describe("LinkTypeRegistry explicit graph references", () => {
       .toHaveLength(1);
   });
 
+  it("reads the current icon from the definition on each registry hydration", async () => {
+    registry.setPropertyKeys({ linkTypeIcon: "badgeGlyph" });
+    referenced.frontmatter.BADGEGLYPH = "telescope";
+    await registry.load();
+    await registry.loadReferencedFiles([referenced.file]);
+    const previous = registry.getByPath(referenced.file.path);
+    expect(previous?.linkTypeIcon).toBe("telescope");
+
+    referenced.frontmatter.BADGEGLYPH = "text:★";
+    await registry.load();
+    await registry.loadReferencedFiles([referenced.file]);
+    const reloaded = registry.getByPath(referenced.file.path);
+    expect(reloaded?.definitionId).toBe(previous?.definitionId);
+    expect(reloaded?.linkTypeIcon).toBe("text:★");
+
+    delete referenced.frontmatter.BADGEGLYPH;
+    await registry.load();
+    await registry.loadReferencedFiles([referenced.file]);
+    expect(registry.getByPath(referenced.file.path)?.linkTypeIcon).toBeUndefined();
+  });
+
   it("indexes every read property and keeps same-property Lens definitions distinct", async () => {
     const firstLens = lensDefinition("System/LinkTypes/First Lens.md", "parts");
     const secondLens = lensDefinition("System/LinkTypes/Second Lens.md", "parts");

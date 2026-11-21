@@ -44,6 +44,6 @@ export class GraphBadgeExpansionCoordinator<
       if (sourceNode) this.runtime.expandParent(sourceNode, property);
       return;
     }
-    this.runtime.toggleLinkType(sourceFile, property, sourceNodeId);
+    this.runtime.toggleLinkType(sourceFile, linkType.definitionId || property, sourceNodeId);
   }
 }

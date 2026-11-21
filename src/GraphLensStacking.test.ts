@@ -22,7 +22,7 @@ function fixture() {
       ["origin-a", { id: "origin-a" }], ["origin-b", { id: "origin-b" }],
       [nodeA.id, nodeA], [nodeB.id, nodeB], [outer.id, outer]
     ]),
-    nodes: [nodeA, nodeB, outer], edges: [],
+    nodes: [nodeA, nodeB, outer], edges: [], expandedByBadge: new Map(),
     camera: { x: 0, y: 0, zoom: 1 }, nodeRadius: 6,
     canvas: { width: 400, height: 300, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
     container: { focus: vi.fn() },

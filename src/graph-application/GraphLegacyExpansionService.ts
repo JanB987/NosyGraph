@@ -25,7 +25,7 @@ export interface GraphLegacyExpansionServiceOptions<TNode extends GraphLegacyExp
   rootFilePaths: ReadonlySet<string>;
   getFile(source: TFile | string): TFile | undefined;
   getSourcePath(file: TFile): string;
-  resolveTargets(file: TFile, property: string): readonly GraphLegacyExpansionTarget[];
+  resolveTargets(file: TFile, property: string, sourceNodeId: string): readonly GraphLegacyExpansionTarget[];
   getNode(nodeId: string): TNode | undefined;
   ensureTarget(
     target: GraphLegacyExpansionTarget,
@@ -116,7 +116,7 @@ export class GraphLegacyExpansionService<TNode extends GraphLegacyExpansionNode,
       }
       changed = true;
     } else {
-      const targets = this.options.resolveTargets(source, property);
+      const targets = this.options.resolveTargets(source, property, expansionSourceNodeId);
       const targetPaths = new Set<string>();
       const expansionNodes = this.options.expansionNodes.get(badgeKey) ?? new Set<string>();
       this.options.expansionNodes.set(badgeKey, expansionNodes);

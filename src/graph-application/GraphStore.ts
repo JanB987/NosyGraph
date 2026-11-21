@@ -57,6 +57,7 @@ export class GraphStore implements GraphSnapshotSource {
   private expansions: Map<ExpansionId, GraphExpansion>;
   private lenses: Map<LensId, GraphLens>;
   private readonly selectedNodeIds = new Set<NodeInstanceId>();
+  private readonly selectionListeners = new Set<(preferredId?: NodeInstanceId) => void>();
   private revision = 0;
 
   constructor(snapshot: GraphSnapshot = emptyGraphSnapshot()) {
@@ -143,15 +144,26 @@ export class GraphStore implements GraphSnapshotSource {
     this.badges = nextBadges;
     this.expansions = nextExpansions;
     this.lenses = nextLenses;
+    const selectionChanged = !this.selectionEquals(nextSelectedNodeIds);
     this.selectedNodeIds.clear();
     for (const nodeId of nextSelectedNodeIds) this.selectedNodeIds.add(nodeId);
     const changeCount = countGraphChanges(changeSet);
     if (changeCount > 0) this.revision += 1;
+    if (selectionChanged) this.notifySelection();
     return { applied: true, changeCount };
   }
 
   getSelectedNodeIds(): readonly NodeInstanceId[] {
     return Array.from(this.selectedNodeIds);
+  }
+
+  subscribeSelection(listener: (preferredId?: NodeInstanceId) => void): () => void {
+    this.selectionListeners.add(listener);
+    return () => { this.selectionListeners.delete(listener); };
+  }
+
+  private notifySelection(preferredId?: NodeInstanceId): void {
+    for (const listener of this.selectionListeners) listener(preferredId);
   }
 
   getSelectedNodeCount(): number {
@@ -169,6 +181,7 @@ export class GraphStore implements GraphSnapshotSource {
     this.selectedNodeIds.clear();
     this.selectedNodeIds.add(normalized);
     this.revision += 1;
+    this.notifySelection(normalized);
     return true;
   }
 
@@ -181,6 +194,7 @@ export class GraphStore implements GraphSnapshotSource {
       this.selectedNodeIds.add(normalized);
     }
     this.revision += 1;
+    this.notifySelection(this.selectedNodeIds.has(normalized) ? normalized : undefined);
     return true;
   }
 
@@ -194,6 +208,7 @@ export class GraphStore implements GraphSnapshotSource {
     this.selectedNodeIds.clear();
     for (const nodeId of next) this.selectedNodeIds.add(nodeId);
     this.revision += 1;
+    this.notifySelection();
     return true;
   }
 
@@ -201,6 +216,7 @@ export class GraphStore implements GraphSnapshotSource {
     if (this.selectedNodeIds.size === 0) return false;
     this.selectedNodeIds.clear();
     this.revision += 1;
+    this.notifySelection();
     return true;
   }
 

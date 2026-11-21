@@ -1,43 +1,106 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-assertion -- NosyGraph parses Obsidian frontmatter, Bases data, and persisted graph JSON whose shapes are validated at runtime. */
 import { TFile, type App } from "obsidian";
-import { extractInternalLinkCandidates } from "./linkResolver";
-
-export interface GraphLinkMutationNodeRef {
-  nodeId: string;
-  path: string;
-}
-
-export interface GraphLinkBadgeDropMutationRequest {
-  target: GraphLinkMutationNodeRef;
-  sources: GraphLinkMutationNodeRef[];
-  property: string;
-  discoveryDirection: "incoming" | "outgoing" | "both";
-}
-
-export interface GraphLinkBadgeDropMutationResult {
-  added: string[];
-  removed: string[];
-  skipped: string[];
-  selected?: string[];
-}
+import { getGraphMarkdownFile, graphPropertyContainsNote } from "./ObsidianGraphNoteLinkPaste";
+import { queueGraphDocumentMutation } from "./GraphDocumentMutationQueue";
+import type {
+  GraphLinkBadgeDropMutationRequest, GraphLinkBadgeDropMutationResult, GraphLinkMutationNodeRef
+} from "./graph-application/GraphLinkMutation";
 
 export class ObsidianGraphLinkMutationHandler {
   constructor(private readonly app: App) {}
 
   async applyBadgeDrop(request: GraphLinkBadgeDropMutationRequest): Promise<GraphLinkBadgeDropMutationResult> {
-    return this.applyBadgeLinkMutation(request, "toggle");
+    return this.applyBadgeLinkToggle(request);
   }
 
   async applyBadgeLinkAdd(request: GraphLinkBadgeDropMutationRequest): Promise<GraphLinkBadgeDropMutationResult> {
-    return this.applyBadgeLinkMutation(request, "add");
+    const result: GraphLinkBadgeDropMutationResult & Required<Pick<
+      GraphLinkBadgeDropMutationResult, "alreadyPresent" | "changedFilePaths" | "failed"
+    >> = {
+      added: [], removed: [], skipped: [], alreadyPresent: [], changedFilePaths: [], failed: [], origin: request.origin
+    };
+    const incoming = request.discoveryDirection === "incoming";
+    const property = request.property.trim();
+    const target = getGraphMarkdownFile(this.app, request.target.path);
+    if (!target || !property) {
+      result.skipped.push(...request.sources.map(({ path }) => path));
+      return result;
+    }
+    const targetPath = request.target.path;
+    if (request.sources.some(({ path }) => path === targetPath)) result.skipped.push(targetPath);
+    const sources = this.normalizeSources(request.sources, targetPath).flatMap(({ path }) => {
+      const file = getGraphMarkdownFile(this.app, path);
+      if (file) return [{ path, file }];
+      result.skipped.push(path);
+      return [];
+    });
+    const readProperties = this.getReadProperties(request);
+    type Source = (typeof sources)[number];
+    const write = async (file: TFile, filePath: string, entries: Source[]) => {
+      // Publish callback results only after processFrontMatter has completed successfully.
+      const added: string[] = [];
+      const alreadyPresent: string[] = [];
+      const skipped: string[] = [];
+      try {
+        await queueGraphDocumentMutation(this.app, filePath, async () => {
+          const identitiesMatch = () => getGraphMarkdownFile(this.app, targetPath) === target
+            && getGraphMarkdownFile(this.app, filePath) === file;
+          if (!identitiesMatch()) {
+            throw new Error("The destination note changed. Paste again to review it.");
+          }
+          await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+            added.length = alreadyPresent.length = skipped.length = 0;
+            if (!identitiesMatch()) {
+              throw new Error("The destination note changed. Paste again to review it.");
+            }
+            const key = this.findFrontmatterPropertyKey(frontmatter, property) ?? property;
+            const references: string[] = [];
+            for (const entry of entries) {
+              if (getGraphMarkdownFile(this.app, entry.path) !== entry.file) {
+                skipped.push(entry.path);
+                continue;
+              }
+              const referenceFile = incoming ? target : entry.file;
+              const referencePath = incoming ? targetPath : entry.path;
+              if (this.findMatchingPropertyKeys(frontmatter, readProperties, referencePath, filePath).length) {
+                alreadyPresent.push(entry.path);
+                continue;
+              }
+              references.push(this.toMarkdownLinkReference(referenceFile, filePath));
+              added.push(entry.path);
+            }
+            if (references.length) {
+              this.appendFrontmatterLinks(frontmatter, key, references, request.origin === "clipboard-batch");
+            }
+          });
+        });
+      } catch (error) {
+        if (!request.origin) throw error;
+        const reason = error instanceof Error ? error.message : String(error);
+        result.failed.push(...entries.map(({ path }) => ({ path, filePath, reason })));
+        return;
+      }
+      result.added.push(...added);
+      result.alreadyPresent.push(...alreadyPresent);
+      result.skipped.push(...skipped, ...alreadyPresent);
+      if (added.length) result.changedFilePaths.push(filePath);
+    };
+    if (incoming) {
+      for (const source of sources) {
+        if (getGraphMarkdownFile(this.app, source.path) !== source.file) result.skipped.push(source.path);
+        else await write(source.file, source.path, [source]);
+      }
+    } else if (sources.length) {
+      await write(target, targetPath, sources);
+    }
+    return result;
   }
 
-  private async applyBadgeLinkMutation(
-    request: GraphLinkBadgeDropMutationRequest,
-    mode: "toggle" | "add",
+  private async applyBadgeLinkToggle(
+    request: GraphLinkBadgeDropMutationRequest
   ): Promise<GraphLinkBadgeDropMutationResult> {
     if (request.discoveryDirection === "incoming") {
-      return this.applyIncomingBadgeLinkMutation(request, mode);
+      return this.applyIncomingBadgeLinkToggle(request);
     }
 
     const targetFile = this.resolveFile(request.target.path);
@@ -62,26 +125,17 @@ export class ObsidianGraphLinkMutationHandler {
         }
 
         const readProperties = this.getReadProperties(request);
-        const matchingPropertyKeys = request.semantic === "lens" && mode === "toggle"
+        const matchingPropertyKeys = request.semantic === "lens"
           ? this.findMatchingPropertyKeys(frontmatter, readProperties, sourceFile.path, targetFile.path)
           : (this.frontmatterValueContainsLink(frontmatter[propertyKey], sourceFile.path, targetFile.path)
             ? [propertyKey]
             : []);
         const exists = matchingPropertyKeys.length > 0;
         if (exists) {
-          if (mode === "toggle") {
-            for (const matchingPropertyKey of matchingPropertyKeys) {
-              this.removeFrontmatterLinkValue(
-                frontmatter,
-                matchingPropertyKey,
-                sourceFile.path,
-                targetFile.path
-              );
-            }
-            result.removed.push(sourceFile.path);
-          } else {
-            result.skipped.push(sourceFile.path);
+          for (const matchingPropertyKey of matchingPropertyKeys) {
+            this.removeFrontmatterLinkValue(frontmatter, matchingPropertyKey, sourceFile.path, targetFile.path);
           }
+          result.removed.push(sourceFile.path);
         } else {
           this.addFrontmatterLinkValue(
             frontmatter,
@@ -98,9 +152,8 @@ export class ObsidianGraphLinkMutationHandler {
     return result;
   }
 
-  private async applyIncomingBadgeLinkMutation(
-    request: GraphLinkBadgeDropMutationRequest,
-    mode: "toggle" | "add",
+  private async applyIncomingBadgeLinkToggle(
+    request: GraphLinkBadgeDropMutationRequest
   ): Promise<GraphLinkBadgeDropMutationResult> {
     const parentFile = this.resolveFile(request.target.path);
     const property = String(request.property ?? "").trim();
@@ -121,12 +174,8 @@ export class ObsidianGraphLinkMutationHandler {
         const propertyKey = this.findFrontmatterPropertyKey(frontmatter, property) ?? property;
         const exists = this.frontmatterValueContainsLink(frontmatter[propertyKey], parentFile.path, childFile.path);
         if (exists) {
-          if (mode === "toggle") {
-            this.removeFrontmatterLinkValue(frontmatter, propertyKey, parentFile.path, childFile.path);
-            result.removed.push(child.path);
-          } else {
-            result.skipped.push(child.path);
-          }
+          this.removeFrontmatterLinkValue(frontmatter, propertyKey, parentFile.path, childFile.path);
+          result.removed.push(child.path);
           return;
         }
 
@@ -143,7 +192,7 @@ export class ObsidianGraphLinkMutationHandler {
     return result;
   }
 
-  private normalizeSources(sources: GraphLinkMutationNodeRef[], targetPath: string): GraphLinkMutationNodeRef[] {
+  private normalizeSources(sources: readonly GraphLinkMutationNodeRef[], targetPath: string): GraphLinkMutationNodeRef[] {
     const seen = new Set<string>();
     const out: GraphLinkMutationNodeRef[] = [];
     for (const source of sources) {
@@ -189,16 +238,9 @@ export class ObsidianGraphLinkMutationHandler {
     targetPath: string,
     sourcePath: string
   ): string[] {
-    const keys: string[] = [];
-    const seen = new Set<string>();
-    for (const property of properties) {
-      const key = this.findFrontmatterPropertyKey(frontmatter, property);
-      if (!key || seen.has(key)) continue;
-      if (!this.frontmatterValueContainsLink(frontmatter[key], targetPath, sourcePath)) continue;
-      seen.add(key);
-      keys.push(key);
-    }
-    return keys;
+    const names = new Set(properties.map((property) => this.normalizeProperty(property)));
+    return Object.keys(frontmatter).filter((key) => names.has(this.normalizeProperty(key))
+      && this.frontmatterValueContainsLink(frontmatter[key], targetPath, sourcePath));
   }
 
   private addFrontmatterLinkValue(
@@ -208,19 +250,22 @@ export class ObsidianGraphLinkMutationHandler {
     targetPath: string,
     sourcePath: string,
   ): void {
-    const current = frontmatter[propertyKey];
-    if (this.frontmatterValueContainsLink(current, targetPath, sourcePath)) {
-      return;
-    }
-    if (Array.isArray(current)) {
-      frontmatter[propertyKey] = [...current, reference];
-      return;
-    }
-    if (typeof current === "undefined" || current === null || current === "") {
-      frontmatter[propertyKey] = [reference];
-      return;
-    }
-    frontmatter[propertyKey] = [current, reference];
+    if (this.frontmatterValueContainsLink(frontmatter[propertyKey], targetPath, sourcePath)) return;
+    this.appendFrontmatterLinks(frontmatter, propertyKey, [reference], false);
+  }
+
+  private appendFrontmatterLinks(
+    frontmatter: Record<string, unknown>,
+    key: string,
+    references: string[],
+    preserveEmpty: boolean
+  ): void {
+    const current = Object.prototype.hasOwnProperty.call(frontmatter, key) ? frontmatter[key] : undefined;
+    const entries = Array.isArray(current) ? current
+      : current === undefined || (!preserveEmpty && (current === null || current === "")) ? [] : [current];
+    Object.defineProperty(frontmatter, key, {
+      value: [...entries, ...references], enumerable: true, configurable: true, writable: true
+    });
   }
 
   private removeFrontmatterLinkValue(
@@ -245,13 +290,7 @@ export class ObsidianGraphLinkMutationHandler {
   }
 
   private frontmatterValueContainsLink(value: unknown, targetPath: string, sourcePath: string): boolean {
-    for (const candidate of extractInternalLinkCandidates(value)) {
-      const resolved = this.app.metadataCache.getFirstLinkpathDest(candidate, sourcePath);
-      if (resolved?.path === targetPath) {
-        return true;
-      }
-    }
-    return false;
+    return graphPropertyContainsNote(this.app, value, targetPath, sourcePath);
   }
 
   private normalizeProperty(property: string): string {

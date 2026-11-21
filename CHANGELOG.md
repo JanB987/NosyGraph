@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0 - 2026-11-21
+
+### Added
+
+- Graph Tabs can switch between the graph and Obsidian's editable Markdown view in the same tab. A right-side selected-note list switches between multiple selected notes; its resizable width is saved per graph note.
+- Link a Graph Tab to one exact source tab, or follow the graph pane last used in Automatic mode. Per-tab mode and source bindings survive workspace restoration; closed sources are reported explicitly.
+- Cut selected property-backed nodes through the context menu, Ctrl/Cmd+X, or the Cut command, across graph roots, classic/nested lenses, Lens LinkType viewports, and active property expansions.
+- Preview and submit batches of pasted note links in the Alt-click badge input. Respect equivalent properties and relationship direction, skip duplicates, and retry failed additions without repeating successful writes.
+- Persist the default-on Also add to graph membership preference in plugin settings and the badge input. Resolve membership from the enclosing graph or Lens source and choose a destination when several properties match.
+- Customize LinkType badge icons with registered icon names, emoji, symbols, or short text. Default icons distinguish Lens, Force Based, Direction Based, and Parent badges.
+- Create graph notes from an optional Templater template, preserving rendered content and configured graph identifiers.
+
+### Fixed
+
+- Lens LinkType viewports show linked targets without injecting the source node. Lens membership no longer creates ordinary relationship edges or springs; separately enabled ordinary LinkTypes retain their behavior.
+- Keep LinkType definitions and their badge/icon identities separate when they share relationship properties.
+- Share Copy/Cut link serialization and paste integration across note bodies, properties, and badge inputs. Cut writes the clipboard before removing references, reports partial failures, and refreshes open views and embeds.
+- Preserve unrelated property values and note bodies during Cut, and explain skipped body-link-only, filter-only, missing or ambiguous memberships. Reconcile saved graph state so removed members do not return.
+- Avoid requesting a Style Settings reparse while its restored view is still deferred.
+
 ## 0.2.15 - 2026-10-30
 
 ### Fixed

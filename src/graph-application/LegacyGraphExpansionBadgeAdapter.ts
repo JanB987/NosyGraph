@@ -1,6 +1,7 @@
 import {
   createGraphBadgeId,
   type GraphBadge,
+  type GraphBadgeIconKind,
   type GraphBadgeSemantic
 } from "../graph-domain/GraphBadge";
 import type { GraphContextId, LinkTypeId, NoteId } from "../graph-domain/graph-identifiers";
@@ -15,6 +16,8 @@ export interface GraphExpansionBadgeDefinition {
   label: string;
   color: string;
   semantic: GraphBadgeSemantic;
+  iconKind?: GraphBadgeIconKind;
+  linkTypeIcon?: string;
   duplicateNodes: boolean;
 }
 
@@ -48,6 +51,8 @@ export class LegacyGraphExpansionBadgeAdapter
         color: definition.color,
         state: "collapsed",
         semantic: definition.semantic,
+        ...(definition.iconKind ? { iconKind: definition.iconKind } : {}),
+        ...(definition.linkTypeIcon ? { linkTypeIcon: definition.linkTypeIcon } : {}),
         hasRelationships: this.options.hasRelationships(
           input.targetNote.id,
           definition.legacyLinkTypeId ?? linkTypeId

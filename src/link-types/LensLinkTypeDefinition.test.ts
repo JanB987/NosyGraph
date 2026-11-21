@@ -12,6 +12,7 @@ describe("LensLinkTypeDefinition", () => {
       property: ["Parts", "Deliverables", "parts"],
       properties: ["Milestones", "deliverables"],
       writeProperty: "Deliverables",
+      linkTypeIcon: "  👩🏽‍🔬  ",
     });
 
     expect(definition).toMatchObject({
@@ -23,6 +24,7 @@ describe("LensLinkTypeDefinition", () => {
       writeProperty: "deliverables",
       semantic: "lens",
       iconKind: "lens",
+      linkTypeIcon: "👩🏽‍🔬",
     });
     expect(definition?.activationPolicy).toEqual({
       allowsPropertyOverlap: true,

@@ -22,11 +22,17 @@ export interface O3GraphSimulationSettings {
   textFadeThreshold: number;
 }
 
+interface GraphStateWriteOptions {
+  forceEmptyOverwrite?: boolean;
+  allowNodeRemoval?: boolean;
+  requireExistingBlock?: boolean;
+}
+
 export class O3GraphStateStore {
   private isWriting = false;
   private queuedWrite: {
     persistedState: Record<string, unknown>;
-    options?: { forceEmptyOverwrite?: boolean; allowNodeRemoval?: boolean };
+    options?: GraphStateWriteOptions;
   } | null = null;
 
   constructor(
@@ -66,7 +72,7 @@ export class O3GraphStateStore {
 
   async write(
     graphState: O3GraphState,
-    options?: { forceEmptyOverwrite?: boolean; allowNodeRemoval?: boolean }
+    options?: GraphStateWriteOptions
   ): Promise<boolean> {
     const persistedState = O3GraphStateStore.clonePersistedState(graphState.toPersistedState());
     if (this.isWriting) {
@@ -91,7 +97,7 @@ export class O3GraphStateStore {
 
   private async writePersistedState(
     persistedState: Record<string, unknown>,
-    options?: { forceEmptyOverwrite?: boolean; allowNodeRemoval?: boolean }
+    options?: GraphStateWriteOptions
   ): Promise<boolean> {
     if (this.isWriting) {
       this.queuedWrite = {
@@ -115,7 +121,7 @@ export class O3GraphStateStore {
 
   private async writeOnce(
     persistedState: Record<string, unknown>,
-    options?: { forceEmptyOverwrite?: boolean; allowNodeRemoval?: boolean }
+    options?: GraphStateWriteOptions
   ): Promise<boolean> {
     const newJson = JSON.stringify(persistedState, null, 2);
     // Skip no-op writes before entering Vault.process, which may emit modify events.
@@ -124,6 +130,10 @@ export class O3GraphStateStore {
     if (O3GraphStateStore.replaceGraphStateBlock(current, newJson) === current) return false;
     let wrote = false;
     await this.app.vault.process(this.file, (content) => {
+      if (options?.requireExistingBlock) {
+        if (!GRAPH_STATE_BLOCK_REGEX.test(content)) throw Error("The existing graph state block was removed.");
+        O3GraphStateStore.assertReadableGraphStateBlock(content, this.file.path);
+      }
       if (!options?.forceEmptyOverwrite && O3GraphStateStore.isUnsafeGraphDocumentWriteTarget(content)) {
         console.warn("[GraphStateStore] Refused graph-state write because the current file content is empty.", {
           file: this.file.path
