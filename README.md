@@ -9,21 +9,6 @@ NosyGraph is an Obsidian plugin for building interactive, property-driven graph 
 
 **Beta warning:** This plugin is currently beta software. Use it first in a copied vault or with reliable backups enabled. Earlier development builds had a critical bug where an open graph note could sometimes be emptied when Obsidian reloaded while the graph view was active. This has not been seen recently, and safeguards have been added to block unsafe empty graph-state writes, but graph notes should still be treated as important data and backed up.
 
-## Updated in 0.3.1
-
-- Remove the regex lookbehind that could prevent loading on older iOS WebKit, while preserving clipboard parsing and diagnostic offsets.
-- Keep keyboard focus in the source graph when a Graph Tab follows selections, including previously viewed notes.
-- Address the automatic checker's timer, callback, Promise, global-access and regex warnings, and enforce the corresponding rules locally.
-
-## New in 0.3.0
-
-- Switch a Graph Tab between graph navigation and editable Markdown, with a resizable list for multiple selected notes.
-- Link a Graph Tab to one specific source tab, or follow the graph pane you last used automatically.
-- Cut property-backed nodes from graphs, lenses, nested lenses, and expanded relationships, then paste their links elsewhere.
-- Paste batches of note links into an Alt-click badge input, review them, and press Enter to add the relationships.
-- Choose whether badge additions also add graph or Lens membership, and customize LinkType badge icons.
-- Create graph notes from a Templater template. Lens LinkType views now show only their linked targets and no longer generate ordinary relationship edges.
-
 ## Screenshots
 
 ![NosyGraph graph with connected base and link types](docs/images/nosygraph-linktype-badges.png)
