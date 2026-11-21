@@ -10,7 +10,7 @@ export function inspectMembershipReference(value: unknown, referencePath: string
     const safe = candidates.length === 1 && text !== "" && (
       /^\[\[[^[\]]+\]\]$/.test(text)
       || /^\[[^\]]*\]\([^()]+\)$/.test(text)
-      || !/[\[\]{},;\n]/.test(text)
+      || !/[[\]{},;\n]/.test(text)
     );
     return { item, matches, safe };
   });

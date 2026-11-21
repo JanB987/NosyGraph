@@ -1592,7 +1592,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
   private viewportPersistTimer: number | null = null;
   private readonly graphTabSurface = Symbol();
   private stopGraphTabSubscription?: () => void;
-  private graphTabSelectionTimer?: ReturnType<typeof setTimeout>;
+  private graphTabSelectionTimer?: number;
 
   constructor(
     containerEl: HTMLElement,
@@ -1711,7 +1711,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
   private stopGraphTabObservation(): void {
     this.stopGraphTabSubscription?.();
     this.stopGraphTabSubscription = undefined;
-    if (this.graphTabSelectionTimer !== undefined) clearTimeout(this.graphTabSelectionTimer);
+    if (this.graphTabSelectionTimer !== undefined) window.clearTimeout(this.graphTabSelectionTimer);
     this.graphTabSelectionTimer = undefined;
   }
 
@@ -1852,7 +1852,7 @@ class O3GraphEmbedRenderChild extends MarkdownRenderChild {
     const publish = (interacted = false) => publishSelection(this.graphFile.path, engine.readGraphTabSelection(), interacted);
     this.stopGraphTabSubscription = engine.observeGraphTab(() => publish(true), () => {
       if (this.graphTabSelectionTimer !== undefined) return;
-      this.graphTabSelectionTimer = setTimeout(() => {
+      this.graphTabSelectionTimer = window.setTimeout(() => {
         this.graphTabSelectionTimer = undefined;
         publish();
       }, 32);
@@ -3089,6 +3089,9 @@ class BasesGraphSettingTab extends PluginSettingTab {
 export function normalizeGraphNoteTemplatePath(raw: unknown): string {
   if (typeof raw !== "string") return "";
   const path = raw.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").replace(/\/{2,}/g, "/");
-  if (/^[a-z]:/i.test(path) || path.split("/").some((part) => part === "." || part === "..") || /[\x00-\x1f]/.test(path)) return "";
+  if (/^[a-z]:/i.test(path) || path.split("/").some((part) => part === "." || part === "..")) return "";
+  for (let index = 0; index < path.length; index++) {
+    if (path.charCodeAt(index) < 0x20) return "";
+  }
   return path;
 }

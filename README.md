@@ -2,12 +2,18 @@
 
 Build and explore structured, expandable graphs from your Obsidian notes.
 
-Version **0.3.0**. See the [release notes](docs/releases/0.3.0.md)
-and [release/verification guide](docs/releases/0.3.0-release-guide.md).
+Version **0.3.1**. See the [release notes](docs/releases/0.3.1.md)
+and [release/verification guide](docs/releases/0.3.1-release-guide.md).
 
 NosyGraph is an Obsidian plugin for building interactive, property-driven graph views from Markdown notes. It reads relationships from note frontmatter, LinkType notes, group notes, graph notes, graph-capable notes, and Obsidian Bases views, then renders them as an explorable canvas graph with expandable links, embedded graph lenses, typed edges, grouping, and persistent graph-note state.
 
 **Beta warning:** This plugin is currently beta software. Use it first in a copied vault or with reliable backups enabled. Earlier development builds had a critical bug where an open graph note could sometimes be emptied when Obsidian reloaded while the graph view was active. This has not been seen recently, and safeguards have been added to block unsafe empty graph-state writes, but graph notes should still be treated as important data and backed up.
+
+## Updated in 0.3.1
+
+- Remove the regex lookbehind that could prevent loading on older iOS WebKit, while preserving clipboard parsing and diagnostic offsets.
+- Keep keyboard focus in the source graph when a Graph Tab follows selections, including previously viewed notes.
+- Address the automatic checker's timer, callback, Promise, global-access and regex warnings, and enforce the corresponding rules locally.
 
 ## New in 0.3.0
 
@@ -444,7 +450,7 @@ The plugin manifest uses the id `nosygraph`, the name `NosyGraph`, and Jan Bergh
 
 ## Release Status
 
-Current status: beta. Current release: [0.3.0](https://github.com/JanB987/NosyGraph/releases/tag/0.3.0). See the [release notes](docs/releases/0.3.0.md) for the changes and the [verification guide](docs/releases/0.3.0-release-guide.md) for checks and known limitations.
+Current status: beta. Current release: [0.3.1](https://github.com/JanB987/NosyGraph/releases/tag/0.3.1). See the [release notes](docs/releases/0.3.1.md) and [verification guide](docs/releases/0.3.1-release-guide.md) for the changes and known limitations.
 
 Release history is recorded in [CHANGELOG.md](CHANGELOG.md).
 

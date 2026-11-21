@@ -135,7 +135,9 @@ export class ObsidianGraphNodeCutHost {
     const surfaces = [...new Set([surface, ...this.getSurfaces()])];
     activeCuts.set(this.app, new Set());
     try {
-      await Promise.all(surfaces.map(host => host.waitForCutWrites?.()));
+      await Promise.all(surfaces.map(async host => {
+        if (host.waitForCutWrites) await host.waitForCutWrites();
+      }));
       await drainGraphDocumentMutations(this.app);
       const result = await cutGraphNodes(selection, {
         isCurrent: () => surface.getCutSource() === source && markdownFile(this.app, sourcePath) === source,

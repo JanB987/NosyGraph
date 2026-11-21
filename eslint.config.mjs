@@ -21,6 +21,13 @@ export default [{
     "@typescript-eslint/no-unsafe-assignment": "error",
     "@typescript-eslint/no-misused-promises": "error",
     "@typescript-eslint/no-deprecated": "error",
-    "no-alert": "error"
+    "no-alert": "error",
+    "obsidianmd/regex-lookbehind": "error",
+    "no-useless-escape": "error",
+    "obsidianmd/prefer-window-timers": "error",
+    "@typescript-eslint/unbound-method": "error",
+    "@typescript-eslint/await-thenable": "error",
+    "obsidianmd/no-global-this": "error",
+    "no-control-regex": "error"
   }
 }];

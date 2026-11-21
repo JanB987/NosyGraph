@@ -28,7 +28,7 @@ interface TabRuntime {
   nativeHistory?: boolean;
   lastRequest?: string;
   layoutState: string;
-  markdownMemory: Map<string, { state: Record<string, unknown>; ephemeral: unknown }>;
+  markdownMemory: Map<string, { state: Record<string, unknown>; position: ReturnType<GraphTabMarkdownView["captureGraphTabPosition"]> }>;
 }
 
 interface SourceSnapshot {
@@ -69,7 +69,7 @@ export class ObsidianGraphTabController {
     if (previous && (previous.appliedState === state
       || graphTabRecord(state.graphTabSession).sessionId === previous.session.sessionId)) return previous.session;
     previous?.transitions.cancel();
-    const newId = () => globalThis.crypto.randomUUID();
+    const newId = () => window.crypto.randomUUID();
     const session = readGraphTabSession(state, mode, newId);
     if ([...this.tabs].some(([tab, entry]) => tab !== leaf && entry.session.sessionId === session.sessionId)) {
       session.sessionId = newId();
@@ -302,10 +302,10 @@ export class ObsidianGraphTabController {
 
   private watchLeaf(leaf: WorkspaceLeaf): void {
     if (this.hooks.has(leaf)) return;
-    const original = leaf.setViewState;
     const own = Object.getOwnPropertyDescriptor(leaf, "setViewState");
-    const originalOpen = leaf.openFile;
     const ownOpen = Object.getOwnPropertyDescriptor(leaf, "openFile");
+    const original = leaf.setViewState.bind(leaf);
+    const originalOpen = typeof leaf.openFile === "function" ? leaf.openFile.bind(leaf) : undefined;
     const wrapped = async (state: ViewState, ephemeral?: unknown): Promise<void> => {
       const entry = this.tabs.get(leaf);
       const file = state.state?.file ?? entry?.session.activeMarkdownPath ?? entry?.session.graphSourcePath;
@@ -319,25 +319,25 @@ export class ObsidianGraphTabController {
         await this.reconcile(leaf, entry);
         return;
       }
-      await original.call(leaf, state, ephemeral);
+      await original(state, ephemeral);
       this.refresh();
     };
-    const wrappedOpen: WorkspaceLeaf["openFile"] = (file, options) => {
+    const wrappedOpen: WorkspaceLeaf["openFile"] | undefined = originalOpen && ((file, options) => {
       if (this.tabs.has(leaf) && file.extension === "md") {
         return wrapped({
           type: GRAPH_TAB_MARKDOWN_VIEW, state: { ...options?.state, file: file.path }, active: options?.active
         }, options?.eState);
       }
-      return originalOpen.call(leaf, file, options);
-    };
+      return originalOpen(file, options);
+    });
     leaf.setViewState = wrapped;
-    if (typeof originalOpen === "function") leaf.openFile = wrappedOpen;
+    if (wrappedOpen) leaf.openFile = wrappedOpen;
     this.hooks.set(leaf, () => {
       if (leaf.setViewState === wrapped) {
         if (own) Object.defineProperty(leaf, "setViewState", own);
         else Reflect.deleteProperty(leaf, "setViewState");
       }
-      if (leaf.openFile === wrappedOpen) {
+      if (wrappedOpen && leaf.openFile === wrappedOpen) {
         if (ownOpen) Object.defineProperty(leaf, "openFile", ownOpen);
         else Reflect.deleteProperty(leaf, "openFile");
       }
@@ -510,7 +510,7 @@ export class ObsidianGraphTabController {
       if (currentFile) {
         entry.markdownMemory.delete(currentFile);
         entry.markdownMemory.set(currentFile, {
-          state: view.getNativeState(), ephemeral: view.getEphemeralState()
+          state: view.getNativeState(), position: view.captureGraphTabPosition()
         });
         if (entry.markdownMemory.size > 12) {
           const oldest = entry.markdownMemory.keys().next().value;
@@ -544,7 +544,11 @@ export class ObsidianGraphTabController {
       await leaf.setViewState({
         ...outer, ...native?.state, type: mode === "graph" ? BASES_GRAPH_VIEW : GRAPH_TAB_MARKDOWN_VIEW,
         state, active: native?.state.active ?? false, group: undefined
-      }, native ? native.ephemeral : mode === "markdown" ? memory?.ephemeral ?? false : false);
+      }, native ? native.ephemeral : false);
+      const nextView = leaf.view;
+      if (!native && memory && current() && nextView instanceof GraphTabMarkdownView && nextView.file?.path === target) {
+        nextView.restoreGraphTabPosition(memory.position);
+      }
       session.mode = mode;
       if (mode === "markdown") session.activeMarkdownPath = target;
     } finally {

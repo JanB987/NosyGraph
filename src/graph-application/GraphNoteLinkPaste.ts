@@ -74,10 +74,10 @@ function scanLine(
       diagnostics.push({ ...span(begin, begin + trimmed.length), status: "ignored" });
     };
     let cursor = start;
-    for (const match of value.slice(start, end).matchAll(/(?:^|(?<=\s))(?:[a-z][a-z\d+.-]*:|\/\/)\S+/gi)) {
-      const begin = start + match.index;
+    for (const match of value.slice(start, end).matchAll(/(^|\s)((?:[a-z][a-z\d+.-]*:|\/\/)\S+)/gi)) {
+      const begin = start + match.index + match[1].length;
       addIgnored(cursor, begin);
-      cursor = begin + match[0].length;
+      cursor = begin + match[2].length;
       diagnostics.push({ ...span(begin, cursor), status: "external" });
     }
     addIgnored(cursor, end);
@@ -121,7 +121,7 @@ type ParsedLink =
 function readLink(value: string, start: number): ParsedLink | undefined {
   const recover = () => {
     const nextWiki = value.indexOf("[[", start + 2);
-    const nextMarkdown = /!?\[(?!\[)[^\[\]]*\]\s*\(/.exec(value.slice(start + 2));
+    const nextMarkdown = /!?\[(?!\[)[^[\]]*\]\s*\(/.exec(value.slice(start + 2));
     return { kind: "invalid" as const, end: Math.min(
       nextWiki < 0 ? value.length : nextWiki,
       nextMarkdown ? start + 2 + nextMarkdown.index : value.length
@@ -142,7 +142,7 @@ function readLink(value: string, start: number): ParsedLink | undefined {
 
   const labelEnd = findBalancedEnd(value, start, "[", "]");
   if (labelEnd < 0) {
-    return value.slice(start).includes("](") || /^\[[^\[\]]*\(/.test(value.slice(start)) ? recover() : undefined;
+    return value.slice(start).includes("](") || /^\[[^[\]]*\(/.test(value.slice(start)) ? recover() : undefined;
   }
   if (value[labelEnd + 1] !== "(") {
     return /^\s+\(/.test(value.slice(labelEnd + 1)) ? recover() : undefined;
@@ -188,7 +188,7 @@ function findUnescaped(value: string, char: string, start = 0): number {
 
 function decodeMarkdownPath(path: string): string | null {
   try {
-    return decodeURIComponent(path.replace(/\\([!-/:-@\[-`{-~])/g, "$1"));
+    return decodeURIComponent(path.replace(/\\([!-/:-@[-`{-~])/g, "$1"));
   } catch {
     return null;
   }

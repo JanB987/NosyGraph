@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 - 2026-11-21
+
+### Fixed
+
+- Keep focus in the source graph when a Graph Tab follows a node selection, including when it restores a previously viewed note.
+- Use lookbehind-free clipboard parsing for older WebKit, preserving link recovery and spans in the original pasted text.
+- Address Obsidian checker findings in Graph Tab timers, workspace callbacks and session IDs, Cut write ordering, and template path validation. Enforce all seven affected rules in local production lint.
+
 ## 0.3.0 - 2026-11-21
 
 ### Added

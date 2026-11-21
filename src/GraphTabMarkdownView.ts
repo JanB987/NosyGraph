@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Notice, type EditorSelection, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { setStyle, setStyles } from "./domStyle";
 import { graphTabRecord, type GraphTabNote } from "./graph-application/GraphTabSession";
 import { constrainGraphTabPanelWidth, MIN_GRAPH_TAB_PANEL_WIDTH, MAX_GRAPH_TAB_PANEL_WIDTH } from "./graph-application/GraphTabPanelWidths";
@@ -11,6 +11,11 @@ const PANEL_WIDTH_LIMIT = `max(50%, calc(100% - ${EDITOR_WIDTH_RESERVE}px))`;
 interface GraphTabPanelWidths {
   read(path: string): number | undefined;
   save(path: string, width: number): Promise<void>;
+}
+
+interface GraphTabMarkdownPosition {
+  selection?: EditorSelection;
+  scroll?: number;
 }
 
 interface PanelResize {
@@ -43,6 +48,25 @@ export class GraphTabMarkdownView extends MarkdownView {
 
   getNativeState(): Record<string, unknown> {
     return super.getState();
+  }
+
+  captureGraphTabPosition(): GraphTabMarkdownPosition {
+    const { scroll } = this.getEphemeralState();
+    const position: GraphTabMarkdownPosition = { scroll: typeof scroll === "number" ? scroll : undefined };
+    if (this.getMode() === "source") {
+      position.selection = { anchor: this.editor.getCursor("anchor"), head: this.editor.getCursor("head") };
+    }
+    return position;
+  }
+
+  restoreGraphTabPosition({ selection, scroll }: GraphTabMarkdownPosition): void {
+    if (selection && this.getMode() === "source") {
+      // Obsidian's native ephemeral cursor restore can focus the editor on desktop.
+      const { left, top } = this.editor.getScrollInfo();
+      this.editor.setSelection(selection.anchor, selection.head);
+      this.editor.scrollTo(left, top);
+    }
+    if (scroll !== undefined) this.setEphemeralState({ scroll });
   }
 
   getState(): Record<string, unknown> {

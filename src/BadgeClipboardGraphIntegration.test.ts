@@ -94,7 +94,19 @@ function engineFor(f: ReturnType<typeof fixture>, options: Partial<GraphEngineMe
   return { engine, runtime: engine as unknown as EngineInternals };
 }
 
+function stubWindowTimers() {
+  vi.useFakeTimers();
+  const timers = {
+    setTimeout: vi.fn((callback: () => void, delay: number) => Number(setTimeout(callback, delay))),
+    clearTimeout: vi.fn((handle: number) => clearTimeout(handle)),
+    requestAnimationFrame: vi.fn()
+  };
+  vi.stubGlobal("window", timers);
+  return timers;
+}
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -318,11 +330,47 @@ describe("production badge input and refresh routing", () => {
     }));
   });
 
+  it("coalesces Graph View selection updates and cancels pending publication on close", async () => {
+    const timers = stubWindowTimers();
+    const unsubscribe = vi.fn();
+    const observeGraphTab = vi.fn((_interact: () => void, _change: () => void) => unsubscribe);
+    const publishGraphTabSelection = vi.fn();
+    const view: BasesGraphView = Object.assign(Object.create(BasesGraphView.prototype), {
+      graphTabs: { refresh: vi.fn() },
+      engine: { observeGraphTab },
+      publishGraphTabSelection,
+      syncGraphTabActions: vi.fn(), loadLinkTypeRegistry: vi.fn(), mountViewShell: vi.fn(),
+      installHeaderFileMenuHandlers: vi.fn(), attachResizeObserver: vi.fn(),
+      flushGroupingStateWrite: vi.fn(), uninstallHeaderFileMenuHandlers: vi.fn(),
+      graphHydrationToken: 0, embeddedGraphStateWriteQueue: Promise.resolve(),
+      metadataDebounceTimers: new Map(), resizeObserver: null, viewportPersistTimer: null,
+      badgeFarViewThresholdWriteTimer: null, graphOpenRetryTimer: null, graphTruthReconciliationTimer: null,
+      viewContainer: { removeEventListener: vi.fn() }
+    });
+    await view.onOpen();
+    expect(publishGraphTabSelection).toHaveBeenCalledTimes(1);
+    const [, change] = observeGraphTab.mock.calls[0];
+    change();
+    change();
+    expect(timers.setTimeout).toHaveBeenCalledExactlyOnceWith(expect.any(Function), 32);
+    vi.advanceTimersByTime(31);
+    expect(publishGraphTabSelection).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(publishGraphTabSelection).toHaveBeenCalledTimes(2);
+    change();
+    expect(timers.setTimeout).toHaveBeenCalledTimes(2);
+    await view.onClose();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(timers.clearTimeout).toHaveBeenCalledExactlyOnceWith(timers.setTimeout.mock.results[1].value);
+    vi.advanceTimersByTime(32);
+    expect(publishGraphTabSelection).toHaveBeenCalledTimes(2);
+  });
+
   it("uses one session association and broadcasts committed paths through the main view and mounted embed", async () => {
     const f = fixture();
     const hostElement = { style: { setProperty() {} }, getBoundingClientRect: () => ({ width: 600, height: 400 }) };
     const container = { empty() {}, createDiv: () => hostElement };
-    vi.stubGlobal("window", { setTimeout: vi.fn(), clearTimeout: vi.fn() });
+    const timers = stubWindowTimers();
     vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
     vi.spyOn(GraphEngine.prototype, "init").mockImplementation(() => {});
     vi.spyOn(GraphEngine.prototype, "setBadgeFarViewThreshold").mockImplementation(() => {});
@@ -334,9 +382,12 @@ describe("production badge input and refresh routing", () => {
     vi.spyOn(GraphEngine.prototype, "centerViewportOnGravityCenter").mockImplementation(() => {});
     vi.spyOn(GraphEngine.prototype, "reheatSimulation").mockImplementation(() => {});
     vi.spyOn(GraphEngine.prototype, "getNodeCount").mockReturnValue(1);
+    vi.spyOn(GraphEngine.prototype, "destroy").mockImplementation(() => {});
+    const observe = vi.spyOn(GraphEngine.prototype, "observeGraphTab");
     const engineRefresh = vi.spyOn(GraphEngine.prototype, "refreshAfterBadgeClipboardBatch").mockImplementation(() => {});
     interface Embed {
       mountAsync(): Promise<void>;
+      onunload(): void;
       engine: EngineInternals;
       cleanups: Array<() => void>;
     }
@@ -348,11 +399,14 @@ describe("production badge input and refresh routing", () => {
       defaultRootNodeProperties: [], defaultVisibleLinkTypes: [], defaultSourceLimit: 100, defaultNodeLimit: 100
     } });
     const ports = plugin as unknown as {
+      graphTabs: { embedPublisher(): (path: string, selection: unknown, interacted: boolean) => void };
       graphNodeClipboard: { remember(paths: string[], text: string): void; match: MatchGraphNodeClipboard };
       refreshAfterBadgeClipboardBatch: GraphBadgeBatchCommitted;
       getBadgeInputIntegration(): GraphBadgeInputIntegration;
       createRenderedGraphEmbed(container: unknown, file: TFile): Embed;
     };
+    const publish = vi.fn();
+    vi.spyOn(ports.graphTabs, "embedPublisher").mockReturnValue(publish);
     const text = "[Pasted](./Pasted.md)";
     ports.graphNodeClipboard.remember([f.pasted.path], text);
     const mainView = new BasesGraphView({ app: f.app, containerEl: container } as unknown as WorkspaceLeaf);
@@ -388,5 +442,26 @@ describe("production badge input and refresh routing", () => {
     ports.refreshAfterBadgeClipboardBatch(write, mutation);
     expect(engineRefresh.mock.instances.at(-1)).toBe(main.engine);
     expect(engineRefresh).toHaveBeenCalledTimes(5);
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    const [, change] = observe.mock.calls[0];
+    change();
+    change();
+    expect(timers.setTimeout).toHaveBeenCalledExactlyOnceWith(expect.any(Function), 32);
+    vi.advanceTimersByTime(32);
+    expect(publish).toHaveBeenCalledTimes(2);
+    change();
+    await embed.mountAsync();
+    expect(timers.clearTimeout).toHaveBeenCalledExactlyOnceWith(timers.setTimeout.mock.results[1].value);
+    vi.advanceTimersByTime(32);
+    expect(publish).toHaveBeenCalledTimes(3); // The rebuilt embed's initial publication only.
+
+    const [, rebuiltChange] = observe.mock.calls[1];
+    rebuiltChange();
+    expect(timers.setTimeout).toHaveBeenCalledTimes(3);
+    embed.onunload();
+    expect(timers.clearTimeout).toHaveBeenLastCalledWith(timers.setTimeout.mock.results[2].value);
+    vi.advanceTimersByTime(32);
+    expect(publish).toHaveBeenCalledTimes(3);
   });
 });

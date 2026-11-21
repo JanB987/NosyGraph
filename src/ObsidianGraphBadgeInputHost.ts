@@ -41,7 +41,7 @@ export function requestGraphBadgeInput(
         sources: notes.map(({ path }) => ({ nodeId: path, path })),
         origin
       }),
-      addMembership: planner.append,
+      addMembership: (destination, entries) => planner.append(destination, entries),
       onRelationshipsChanged: (result) => reportRefresh(() => host.onBatchCommitted?.(write, result)),
       onMembershipChanged: (result) => reportRefresh(() => host.onMembershipCommitted?.(result))
     });

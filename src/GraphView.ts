@@ -125,7 +125,7 @@ export class BasesGraphView extends FileView {
   private publishedGraphTabPath: string | null = null;
   private graphTabRestorePath: string | null = null;
   private stopGraphTabObservation?: () => void;
-  private graphTabSelectionTimer?: ReturnType<typeof setTimeout>;
+  private graphTabSelectionTimer?: number;
 
   private engine: GraphEngine;
   private initialized = false;
@@ -1077,7 +1077,7 @@ export class BasesGraphView extends FileView {
     if (this.graphTabs) {
       this.stopGraphTabObservation = this.engine.observeGraphTab(() => this.publishGraphTabSelection(true), () => {
         if (this.graphTabSelectionTimer !== undefined) return;
-        this.graphTabSelectionTimer = setTimeout(() => {
+        this.graphTabSelectionTimer = window.setTimeout(() => {
           this.graphTabSelectionTimer = undefined;
           this.publishGraphTabSelection();
         }, 32);
@@ -1137,7 +1137,7 @@ export class BasesGraphView extends FileView {
   private stopGraphTabObserver(): void {
     this.stopGraphTabObservation?.();
     this.stopGraphTabObservation = undefined;
-    if (this.graphTabSelectionTimer !== undefined) clearTimeout(this.graphTabSelectionTimer);
+    if (this.graphTabSelectionTimer !== undefined) window.clearTimeout(this.graphTabSelectionTimer);
     this.graphTabSelectionTimer = undefined;
   }
 

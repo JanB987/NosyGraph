@@ -63,11 +63,12 @@ function fixture(initial: Record<string, Record<string, unknown>>, selection: Gr
   } satisfies GraphCutSurface);
   const view = surface(true);
   const embed = surface();
+  const surfaces: GraphCutSurface[] = [view, embed];
   const host = new ObsidianGraphNodeCutHost(app as never,
     () => ({ graphPropertyKeys: DEFAULT_GRAPH_PROPERTY_KEYS, defaultRootNodeProperties: defaults, linkTypePropertyKeys: DEFAULT_LINK_TYPE_PROPERTY_KEYS }),
-    () => [view, embed],
+    () => surfaces,
     (paths, text) => clipboard.remember(paths, text));
-  return { docs, files, host, view, embed, write, processFrontMatter, clipboard, events };
+  return { docs, files, host, view, embed, write, processFrontMatter, clipboard, events, surfaces };
 }
 
 afterEach(() => {
@@ -105,6 +106,49 @@ describe("property reference edits", () => {
 });
 
 describe("shared view and embed Cut host", () => {
+  it("waits for connected surfaces concurrently before publishing or writing properties", async () => {
+    const f = fixture({ "Owner.md": { rootNodes: ["[[A]]"] }, "A.md": {} }, [root("Owner.md")]);
+    let release!: () => void;
+    const pendingWrite = new Promise<void>(resolve => { release = resolve; });
+    const wait = vi.fn(function (this: GraphCutSurface) {
+      return this === f.view ? pendingWrite : Promise.resolve();
+    });
+    f.surfaces.push({ ...f.embed });
+    Object.assign(f.view, { waitForCutWrites: wait });
+    Object.assign(f.embed, { waitForCutWrites: wait });
+
+    const cut = f.host.cut(f.view);
+    expect(wait.mock.contexts).toEqual([f.view, f.embed]);
+    expect(f.write).not.toHaveBeenCalled();
+    expect(f.processFrontMatter).not.toHaveBeenCalled();
+    release();
+    await cut;
+    expect(f.events.slice(0, 2)).toEqual(["clipboard", "Owner.md"]);
+    expect(f.docs["Owner.md"].rootNodes).toEqual([]);
+  });
+
+  it("aborts on a rejected surface wait and releases the guard for a retry", async () => {
+    const f = fixture({ "Owner.md": { rootNodes: ["[[A]]"] }, "A.md": {} }, [root("Owner.md")]);
+    const error = Error("pending surface write failed");
+    const wait = vi.fn<() => Promise<void>>().mockRejectedValueOnce(error).mockResolvedValue(undefined);
+    Object.assign(f.embed, { waitForCutWrites: wait });
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await f.host.cut(f.view);
+      expect(report).toHaveBeenCalledWith("[NosyGraph] Cut failed", error);
+      expect(notices).toEqual(["Cut failed. Check graph memberships before retrying."]);
+      expect(f.write).not.toHaveBeenCalled();
+      expect(f.processFrontMatter).not.toHaveBeenCalled();
+      expect(f.host.canCut(f.view)).toBe(true);
+
+      await f.host.cut(f.view);
+      expect(f.write).toHaveBeenCalledTimes(1);
+      expect(f.processFrontMatter).toHaveBeenCalledTimes(1);
+    } finally {
+      report.mockRestore();
+    }
+  });
+
   it("edits a mixed root, classic lens, and nested Lens from the captured plan and publishes each selected path once", async () => {
     const scope = definition("Scope.md", ["scope", "extra"], "outgoing", "lens");
     const otherScope = definition("Scope2.md", ["secondary"], "outgoing", "lens");

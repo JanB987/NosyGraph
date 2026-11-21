@@ -33,6 +33,42 @@ describe("note link clipboard syntax", () => {
     expect(parseNoteLinkPaste("[bad](%ZZ.md)")).toMatchObject({ kind: "invalid", tokens: [{ issue: "invalid" }] });
   });
 
+  it("reports URI offsets in the original clipboard across text slices and decoded wrappers", () => {
+    const first = "HTTPS://first.test";
+    const second = "//second.test/file";
+    const third = "custom+scheme:third";
+    const fourth = 'https://fourth.test/a\\"b';
+    const fifth = "https://fifth.test/it''s";
+    const text = first + "\t  " + second + " \tprose [[Internal]]" + third + "\r\n"
+      + '  - "[[A|\\"Alias\\"]] \t' + fourth + '"\r\n'
+      + "  - '[[B|It''s a label]]  " + fifth + "'";
+    const parsed = parseNoteLinkPaste(text);
+    expect(parsed.kind).toBe("links");
+    if (parsed.kind === "search") throw new Error("Expected links");
+    expect(parsed.tokens.map(({ target, label }) => ({ target, label }))).toEqual([
+      { target: "Internal" }, { target: "A", label: '"Alias"' }, { target: "B", label: "It's a label" }
+    ]);
+    expect(parsed.diagnostics).toEqual(
+      [first, second, "prose", third, fourth, fifth].map(raw => ({
+        raw, start: text.indexOf(raw), end: text.indexOf(raw) + raw.length,
+        status: raw === "prose" ? "ignored" : "external"
+      }))
+    );
+    for (const { raw, start, end } of [...parsed.tokens, ...parsed.diagnostics]) {
+      expect(text.slice(start, end)).toBe(raw);
+    }
+  });
+
+  it("recovers a Markdown link after malformed wiki syntax and decodes escaped punctuation", () => {
+    const link = "[nested](Folder/A\\[B\\]\\(C\\)\\\\\\\x60D.md)";
+    const text = "[[broken " + link;
+    expect(parseNoteLinkPaste(text)).toMatchObject({
+      kind: "links",
+      tokens: [{ raw: link, start: 9, end: text.length, target: "Folder/A[B](C)\\\x60D.md" }],
+      diagnostics: [{ raw: "[[broken ", start: 0, end: 9, status: "invalid" }]
+    });
+  });
+
   it("reports malformed syntax, stray prose and external URIs without swallowing later links", () => {
     expect(parseNoteLinkPaste("See https://example.org [[broken [[Valid]]\n[bad](broken\n[other](obsidian://open?file=X)"))
       .toMatchObject({

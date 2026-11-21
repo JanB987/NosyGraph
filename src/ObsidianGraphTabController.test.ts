@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { App, ViewState, WorkspaceLeaf } from "obsidian";
 
 const host = vi.hoisted(() => ({
@@ -29,7 +29,15 @@ vi.mock("obsidian", () => ({
     mode = "source";
     save = vi.fn(async () => undefined);
     onLoadFile = async (file: { path: string }) => { this.file = file; };
-    getEphemeralState = () => ({ cursor: { line: 2 } });
+    editor = {
+      getCursor: (side: string) => ({ line: 2, ch: side === "head" ? 5 : 1 }),
+      getScrollInfo: () => ({ left: 8, top: 24 }),
+      setSelection: vi.fn(),
+      scrollTo: vi.fn()
+    };
+    getMode() { return this.mode; }
+    getEphemeralState = () => ({ cursor: { from: { line: 2, ch: 1 }, to: { line: 2, ch: 5 } }, scroll: 42 });
+    setEphemeralState = vi.fn();
     containerEl = new MockElement();
     headerEl = this.containerEl.createDiv();
     contentEl = this.containerEl.createDiv();
@@ -135,7 +143,8 @@ class MockLeaf {
   readonly changes: Array<{ type: string; file: unknown; active?: boolean; ephemeral?: unknown; history: boolean }> = [];
   view: MockView;
   constructor(readonly id: string, readonly controller: ObsidianGraphTabController,
-    readonly files: Map<string, TFile>, path: string, private readonly panelWidths: ConstructorParameters<typeof GraphTabMarkdownView>[2]) {
+    readonly files: Map<string, TFile>, path: string, private readonly panelWidths: ConstructorParameters<typeof GraphTabMarkdownView>[2],
+    private readonly requestFocus: (leaf: WorkspaceLeaf) => void) {
     this.view = this.plainView(path);
   }
   private plainView(path: string): MockView {
@@ -143,8 +152,8 @@ class MockLeaf {
   }
   setGroup(group: string) { this.group = group; }
   getViewState() { return { type: this.type, state: this.view.getState(), group: this.group }; }
-  openFile(file: TFile, options?: { state?: Record<string, unknown>; eState?: unknown }) {
-    return this.setViewState({ type: "markdown", state: { ...options?.state, file: file.path } }, options?.eState);
+  openFile(file: TFile, options?: { state?: Record<string, unknown>; eState?: unknown; active?: boolean }) {
+    return this.setViewState({ type: "markdown", state: { ...options?.state, file: file.path }, active: options?.active }, options?.eState);
   }
   async setViewState(state: ViewState, ephemeral?: unknown) {
     const input = state.state ?? {};
@@ -163,6 +172,11 @@ class MockLeaf {
       this.view = this.plainView(String(input.file ?? ""));
     }
     await this.view.setState?.({ ...input }, result);
+    const editorState = ephemeral as { cursor?: { from?: unknown }; focus?: boolean } | undefined;
+    // Obsidian's desktop Markdown cursor restoration can focus the editor even with active: false.
+    if (state.active || editorState?.focus || this.view instanceof GraphTabMarkdownView && editorState?.cursor?.from) {
+      this.requestFocus(leafPort(this));
+    }
     this.changes.push({ type: state.type, file: input.file, active: state.active, ephemeral, history: result.history });
   }
 }
@@ -175,6 +189,7 @@ function fixture(ready = true) {
     path, Object.assign(new TFile(), { path, extension: path.endsWith(".md") ? "md" : "canvas" })
   ]));
   const leaves = new Map<string, MockLeaf>();
+  let focusedLeaf: WorkspaceLeaf | undefined;
   const workspace = {
     layoutReady: ready,
     iterateAllLeaves: (callback: (leaf: WorkspaceLeaf) => void) => {
@@ -182,7 +197,7 @@ function fixture(ready = true) {
     },
     getLeafById: (id: string) => leaves.get(id) ?? null,
     requestSaveLayout: vi.fn(async () => undefined),
-    setActiveLeaf: vi.fn(),
+    setActiveLeaf: vi.fn((leaf: WorkspaceLeaf) => { focusedLeaf = leaf; }),
     getLeaf: vi.fn()
   };
   const app = { workspace, vault: { getAbstractFileByPath: (path: string) => files.get(path) } };
@@ -190,7 +205,8 @@ function fixture(ready = true) {
   const widths = new Map<string, number>();
   const saveWidth = vi.fn(async (path: string, width: number) => { widths.set(path, width); });
   const add = (id: string, path: string) => {
-    const leaf = new MockLeaf(id, controller, files, path, { read: path => widths.get(path), save: saveWidth });
+    const leaf = new MockLeaf(id, controller, files, path, { read: path => widths.get(path), save: saveWidth },
+      leaf => workspace.setActiveLeaf(leaf));
     leaves.set(id, leaf);
     return leaf;
   };
@@ -205,7 +221,7 @@ function fixture(ready = true) {
     controller.publishGraph(leafPort(tab), path,
       graphTabSelection(selections.map((path, index) => ({ path, nodeId: `lens:${index}` }))), interacted);
   };
-  return { files, leaves, workspace, controller, add, openFollower, surface, saveWidth };
+  return { files, leaves, workspace, controller, add, openFollower, surface, saveWidth, focusedLeaf: () => focusedLeaf };
 }
 
 async function settle() {
@@ -222,7 +238,49 @@ function chooseSource(tab: MockLeaf, label: string) {
   option?.click?.();
 }
 
+beforeEach(() => vi.stubGlobal("window", { crypto: globalThis.crypto }));
+afterEach(() => vi.unstubAllGlobals());
+
 describe("registered Graph Tab controller and native Markdown adapter", () => {
+  it("preserves native receivers, arguments and rejection and restores owned hooks only", async () => {
+    const f = fixture();
+    const tab = f.add("hooked", "G.md");
+    const error = Error("native navigation failed");
+    const nativeState = vi.fn(MockLeaf.prototype.setViewState);
+    const nativeOpen = vi.fn(function (this: MockLeaf, file: TFile) {
+      expect(this).toBe(tab);
+      expect(file).toBe(f.files.get("bad.canvas"));
+      return Promise.reject(error);
+    });
+    Object.defineProperty(tab, "setViewState", { value: nativeState, configurable: true, writable: true });
+    Object.defineProperty(tab, "openFile", { value: nativeOpen, enumerable: true, configurable: true, writable: true });
+    const stateDescriptor = Object.getOwnPropertyDescriptor(tab, "setViewState");
+    const openDescriptor = Object.getOwnPropertyDescriptor(tab, "openFile");
+    await tab.setViewState({ type: BASES_GRAPH_VIEW, state: { file: "G.md", graphTab: true } });
+    const other = await f.openFollower("other", "G2.md");
+    const replacement = vi.fn(other.openFile);
+    other.openFile = replacement;
+
+    const options = { eState: { cursor: 4 } };
+    const rejected = tab.openFile(f.files.get("bad.canvas")!, options);
+    expect(rejected).toBe(nativeOpen.mock.results[0].value);
+    await expect(rejected).rejects.toBe(error);
+    expect(nativeOpen).toHaveBeenCalledWith(f.files.get("bad.canvas"), options);
+    nativeState.mockRejectedValueOnce(error);
+    const native = { type: "canvas" };
+    await expect(tab.setViewState(native, options.eState)).rejects.toBe(error);
+    expect(nativeState).toHaveBeenLastCalledWith(native, options.eState);
+    expect(nativeState.mock.contexts.at(-1)).toBe(tab);
+    expect(Object.getOwnPropertyDescriptor(other, "setViewState") !== undefined).toBe(true);
+
+    f.controller.dispose();
+    expect(Object.getOwnPropertyDescriptor(tab, "setViewState")).toEqual(stateDescriptor);
+    expect(Object.getOwnPropertyDescriptor(tab, "openFile")).toEqual(openDescriptor);
+    expect(Object.getOwnPropertyDescriptor(other, "setViewState") !== undefined).toBe(false);
+    expect(other.setViewState).toBe(MockLeaf.prototype.setViewState);
+    expect(other.openFile).toBe(replacement);
+  });
+
   it("previews resizing, saves once on release by graph root, and restores on reopening", async () => {
     const f = fixture();
     const source = f.add("source", "G.md");
@@ -288,6 +346,33 @@ describe("registered Graph Tab controller and native Markdown adapter", () => {
     expect(tab.view.file?.path).toBe("G.md");
     expect(f.workspace.setActiveLeaf).not.toHaveBeenCalled();
     expect(f.workspace.getLeaf).not.toHaveBeenCalled();
+  });
+
+  it("follows a new selection and restores a revisited note without taking focus from the source graph", async () => {
+    const f = fixture();
+    const source = f.add("source", "G.md");
+    const tab = await f.openFollower();
+    f.controller.toggle(leafPort(tab));
+    await settle();
+    const editor = tab.view as unknown as GraphTabMarkdownView;
+
+    f.workspace.setActiveLeaf(leafPort(source));
+    f.surface(source, "G.md", ["A.md"], true);
+    await settle();
+    expect(tab.view.file?.path).toBe("A.md");
+    expect(f.focusedLeaf() === leafPort(source)).toBe(true);
+    f.surface(source, "G.md", ["B.md"], true);
+    await settle();
+    expect(tab.view.file?.path).toBe("B.md");
+
+    f.surface(source, "G.md", ["A.md"], true);
+    await settle();
+    expect(tab.view).toBe(editor);
+    expect(tab.view.file?.path).toBe("A.md");
+    expect(f.focusedLeaf() === leafPort(source)).toBe(true);
+    expect(editor.editor.setSelection).toHaveBeenLastCalledWith({ line: 2, ch: 1 }, { line: 2, ch: 5 });
+    expect(editor.editor.scrollTo).toHaveBeenLastCalledWith(8, 24);
+    expect(editor.setEphemeralState).toHaveBeenLastCalledWith({ scroll: 42 });
   });
 
   it("links to one of two duplicate-file tabs, follows inactive navigation, and fails closed on closure", async () => {
@@ -366,12 +451,12 @@ describe("registered Graph Tab controller and native Markdown adapter", () => {
     chooseSource(tab, "Tab 1");
     await settle();
     const before = tab.view;
-    await tab.openFile(f.files.get("A.md")!, { state: { mode: "preview" }, eState: { subpath: "#heading" } });
+    await tab.openFile(f.files.get("A.md")!, { active: true, state: { mode: "preview" }, eState: { subpath: "#heading", focus: true } });
     await settle();
     expect(tab.view).toBe(before);
     expect(tab.type).toBe(GRAPH_TAB_MARKDOWN_VIEW);
     expect(tab.view.getState()).toMatchObject({ file: "A.md", mode: "preview" });
-    expect(tab.changes[tab.changes.length - 1]).toMatchObject({ ephemeral: { subpath: "#heading" }, history: true });
+    expect(tab.changes[tab.changes.length - 1]).toMatchObject({ active: true, ephemeral: { subpath: "#heading", focus: true }, history: true });
     expect(session(tab)).toMatchObject({ graphSourcePath: "G.md", binding: { sourceTabId: "source" } });
     expect(source.changes).toEqual([]);
     expect(tab.actions).toHaveLength(2);

@@ -37,6 +37,16 @@ describe("graph note template creation", () => {
     expect(normalizeGraphNoteTemplatePath({})).toBe("");
     expect(normalizeGraphNoteTemplatePath("../x.md")).toBe("");
   });
+  it("rejects every embedded C0 code unit after normalizing the path", () => {
+    for (let code = 0; code < 0x20; code++) {
+      expect(normalizeGraphNoteTemplatePath("Templates/A" + String.fromCharCode(code) + "B.md"),
+        "embedded code unit " + code).toBe("");
+    }
+    expect(normalizeGraphNoteTemplatePath("\t /Templates\\\\日本語 graph.md/ \r\n")).toBe("Templates/日本語 graph.md");
+    expect(normalizeGraphNoteTemplatePath("C:\\Templates\\graph.md")).toBe("");
+    expect(normalizeGraphNoteTemplatePath("Templates/./graph.md")).toBe("");
+    expect(normalizeGraphNoteTemplatePath("Templates/../graph.md")).toBe("");
+  });
   it("loads a normalized template setting and persists it", async () => {
     const plugin = Object.assign(Object.create(Plugin.prototype), {
       settings: {}, settingsWriteQueue: Promise.resolve(), loadData: vi.fn(async () => ({ graphNoteTemplatePath: " /Templates\\graph.md " })), saveData: vi.fn(async () => {})

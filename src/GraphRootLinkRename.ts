@@ -64,7 +64,7 @@ function renameLink(value: string, options: RootLinkRename): string {
   if (tokens) {
     return value.replace(/\[\[[^\]]+\]\]|\[[^\]]*\]\([^)]+\)/g, (link) => renameLink(link, options));
   }
-  if (/[\[\]]/.test(value)) return value;
+  if (/[[\]]/.test(value)) return value;
   const [linkpath, ...fragment] = value.split("#");
   if (!referencesOldPath(linkpath, options)) return value;
   return (/\.md$/i.test(linkpath) ? normalize(options.newPath) : withoutExtension(normalize(options.newPath)))
